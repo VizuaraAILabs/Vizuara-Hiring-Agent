@@ -61,6 +61,7 @@ export class DockerManager {
       Env: [
         `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        'CLAUDE_CODE_USE_API_KEY=1',
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
       ],
