@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install system dependencies (no nodejs here — we install it separately)
 RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-venv \
-    curl git wget \
+    curl git wget sudo \
     build-essential ca-certificates gnupg \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,13 +24,15 @@ RUN npm install -g @anthropic-ai/claude-code && \
     printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
     chmod +x "$CLAUDE_BIN"
 
-# Pre-configure Claude Code: tool permissions + completed onboarding
-RUN mkdir -p /root/.claude && \
-    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json && \
-    echo '{"hasCompletedOnboarding":true}' > /root/.claude.json
+# Create non-root candidate user (--dangerously-skip-permissions requires non-root)
+RUN useradd -m -s /bin/bash candidate && \
+    echo 'candidate ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# Entrypoint: keep container alive. Terminal server attaches via docker exec.
-RUN printf '#!/bin/bash\nexec sleep infinity\n' > /entrypoint.sh && chmod +x /entrypoint.sh
+# Pre-configure Claude Code for candidate user
+RUN mkdir -p /home/candidate/.claude && \
+    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
+    echo '{"hasCompletedOnboarding":true}' > /home/candidate/.claude.json && \
+    chown -R candidate:candidate /home/candidate/.claude /home/candidate/.claude.json
 
 # Pre-install RAG challenge Python deps
 COPY challenges/rag-retrieval/requirements.txt /tmp/rag-reqs.txt
@@ -39,9 +41,12 @@ RUN pip3 install --no-cache-dir -r /tmp/rag-reqs.txt && rm /tmp/rag-reqs.txt
 # Download NLTK data commonly needed
 RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('stopwords')"
 
-# Create workspace directory
-RUN mkdir -p /workspace
+# Create workspace directory owned by candidate
+RUN mkdir -p /workspace && chown candidate:candidate /workspace
 WORKDIR /workspace
 
-# Entrypoint configures Claude Code with runtime API key, then sleeps
-CMD ["/entrypoint.sh"]
+# Run as candidate user
+USER candidate
+
+# Keep container alive. Terminal server attaches via docker exec.
+CMD ["sleep", "infinity"]

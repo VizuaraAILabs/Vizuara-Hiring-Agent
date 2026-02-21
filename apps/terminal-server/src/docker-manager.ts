@@ -80,9 +80,8 @@ export class DockerManager {
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
     console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
 
-    // Create an exec instance for interactive bash
-    // Pass env vars explicitly on exec too (belt and suspenders — ensures
-    // the login shell inherits them even if container-level env is lost)
+    // Create an exec instance for interactive bash as the candidate user
+    // (non-root required for --dangerously-skip-permissions)
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
@@ -90,6 +89,7 @@ export class DockerManager {
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
       ],
+      User: 'candidate',
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
