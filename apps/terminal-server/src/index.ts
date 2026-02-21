@@ -203,6 +203,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
         case 'input':
           dockerManager.write(sessionId, message.data);
           logger.logInput(sessionId, message.data);
+          costTracker.processInput(sessionId, message.data);
           break;
 
         case 'resize':
