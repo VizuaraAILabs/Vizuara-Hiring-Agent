@@ -1,4 +1,5 @@
-import type { Sql } from 'postgres';
+import postgres from 'postgres';
+type Sql = ReturnType<typeof postgres>;
 
 interface PendingInteraction {
   session_id: string;

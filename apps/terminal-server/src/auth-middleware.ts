@@ -1,5 +1,6 @@
 import * as jose from 'jose';
-import type { Sql } from 'postgres';
+import postgres from 'postgres';
+type Sql = ReturnType<typeof postgres>;
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'hiring-agent-jwt-secret-change-in-production'
