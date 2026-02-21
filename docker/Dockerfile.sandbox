@@ -21,7 +21,8 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # Pre-configure Claude Code: create config dirs and tool permissions
 RUN mkdir -p /root/.claude && \
-    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json
+    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json && \
+    echo "alias claude='claude --dangerously-skip-permissions'" >> /root/.bashrc
 
 # Entrypoint script: writes Claude Code config with the runtime API key,
 # then keeps the container alive. The terminal server attaches via exec.
