@@ -158,15 +158,12 @@ export class InteractionLogger {
     this.buffer = [];
 
     try {
-      // Batch insert using a transaction
-      await this.sql.begin(async (tx) => {
-        for (const item of toInsert) {
-          await tx`
-            INSERT INTO interactions (session_id, sequence_num, timestamp, direction, content, content_type, metadata)
-            VALUES (${item.session_id}, ${item.sequence_num}, NOW(), ${item.direction}, ${item.content}, ${item.content_type}, ${item.metadata}::jsonb)
-          `;
-        }
-      });
+      for (const item of toInsert) {
+        await this.sql`
+          INSERT INTO interactions (session_id, sequence_num, timestamp, direction, content, content_type, metadata)
+          VALUES (${item.session_id}, ${item.sequence_num}, NOW(), ${item.direction}, ${item.content}, ${item.content_type}, ${item.metadata}::jsonb)
+        `;
+      }
     } catch (err) {
       console.error('Failed to flush interactions:', err);
       // Put items back in buffer
