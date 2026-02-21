@@ -28,14 +28,9 @@ RUN npm install -g @anthropic-ai/claude-code && \
 RUN useradd -m -s /bin/bash candidate && \
     echo 'candidate ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# API key helper script — reads key from a file written by the entrypoint
-# (avoids relying on env var inheritance through exec → bash → claude → script)
-RUN printf '#!/bin/bash\ncat /home/candidate/.claude/.api-key\n' > /usr/local/bin/get-api-key.sh && \
-    chmod +x /usr/local/bin/get-api-key.sh
-
 # Pre-configure Claude Code for candidate user
 RUN mkdir -p /home/candidate/.claude && \
-    echo '{"skipDangerousModePermissionPrompt":true,"apiKeyHelper":"/usr/local/bin/get-api-key.sh","permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
+    echo '{"skipDangerousModePermissionPrompt":true,"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
     echo '{"hasCompletedOnboarding":true}' > /home/candidate/.claude.json && \
     chown -R candidate:candidate /home/candidate/.claude /home/candidate/.claude.json
 

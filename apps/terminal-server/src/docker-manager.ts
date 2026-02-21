@@ -91,6 +91,7 @@ export class DockerManager {
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
+        `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
         `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
