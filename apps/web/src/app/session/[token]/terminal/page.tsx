@@ -1,0 +1,84 @@
+'use client';
+
+import { useParams, useRouter } from 'next/navigation';
+import { useState, useCallback } from 'react';
+import { useSession } from '@/hooks/useSession';
+import dynamic from 'next/dynamic';
+import TerminalToolbar from '@/components/terminal/TerminalToolbar';
+
+// Dynamic imports to avoid SSR issues with xterm.js
+const Terminal = dynamic(() => import('@/components/terminal/Terminal'), { ssr: false });
+const FileExplorer = dynamic(() => import('@/components/terminal/FileExplorer'), { ssr: false });
+
+export default function TerminalPage() {
+  const params = useParams();
+  const router = useRouter();
+  const token = params.token as string;
+  const { session, loading, error, endSession } = useSession(token);
+  const [ending, setEnding] = useState(false);
+
+  const handleEnd = useCallback(async () => {
+    if (ending) return;
+    setEnding(true);
+
+    const confirmed = window.confirm(
+      'Are you sure you want to end the session? This cannot be undone.'
+    );
+
+    if (!confirmed) {
+      setEnding(false);
+      return;
+    }
+
+    const success = await endSession();
+    if (success) {
+      router.push(`/session/${token}`);
+    } else {
+      setEnding(false);
+    }
+  }, [ending, endSession, router, token]);
+
+  const handleExpired = useCallback(async () => {
+    if (ending) return;
+    setEnding(true);
+    await endSession();
+    router.push(`/session/${token}`);
+  }, [ending, endSession, router, token]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (error || !session || session.status !== 'active') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">Session Unavailable</h1>
+          <p className="text-slate-400">This session is not currently active.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-950">
+      <TerminalToolbar
+        challengeTitle={session.challenge_title}
+        durationMinutes={session.time_limit_min}
+        startedAt={session.started_at}
+        onEnd={handleEnd}
+        onExpired={handleExpired}
+      />
+      <div className="flex-1 flex overflow-hidden">
+        <FileExplorer token={token} />
+        <div className="flex-1 overflow-hidden">
+          <Terminal token={token} />
+        </div>
+      </div>
+    </div>
+  );
+}

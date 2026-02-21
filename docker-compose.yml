@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: hiring_agent
+      POSTGRES_USER: hiring
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hiring -d hiring_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
+      JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_TERMINAL_WS_URL: wss://${DOMAIN}/terminal
+      NEXT_PUBLIC_TERMINAL_HTTP_URL: https://${DOMAIN}/terminal
+      ANALYSIS_ENGINE_URL: http://analysis:8000
+      NODE_ENV: production
+
+  terminal:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.terminal
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
+      JWT_SECRET: ${JWT_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SANDBOX_IMAGE: hiring-sandbox
+      NODE_ENV: production
+
+  analysis:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.analysis
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GOOGLE_API_KEY: ${GEMINI_API_KEY}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - web
+      - terminal
+      - analysis
+
+volumes:
+  pgdata:
+  caddy-data:
+  caddy-config:

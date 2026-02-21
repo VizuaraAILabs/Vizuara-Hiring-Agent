@@ -1,0 +1,13 @@
+{
+  "name": "hiring-agent",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/terminal-server"
+  ],
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "setup": "bash scripts/setup.sh",
+    "seed": "bash scripts/seed.sh"
+  }
+}

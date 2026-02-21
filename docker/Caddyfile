@@ -1,0 +1,17 @@
+{$DOMAIN} {
+    # Terminal WebSocket + HTTP — must come before the catch-all
+    handle /terminal/* {
+        uri strip_prefix /terminal
+        reverse_proxy terminal:3001
+    }
+
+    # Analysis API (for admin/debug)
+    handle /api/analyze/* {
+        reverse_proxy analysis:8000
+    }
+
+    # Web UI — catch-all
+    handle {
+        reverse_proxy web:3000
+    }
+}

@@ -1,0 +1,180 @@
+import Docker from 'dockerode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { Readable, Writable, Duplex } from 'stream';
+
+const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+export interface DockerSession {
+  containerId: string;
+  sessionId: string;
+  workDir: string;
+  stream: Duplex;
+  exec: Docker.Exec;
+  onData: ((data: string) => void) | null;
+  onExit: ((code: number) => void) | null;
+}
+
+export class DockerManager {
+  private docker: Docker;
+  private sessions: Map<string, DockerSession> = new Map();
+
+  constructor() {
+    this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+  }
+
+  async spawn(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
+    // Create a temporary host directory with starter files
+    const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
+    fs.mkdirSync(hostWorkDir, { recursive: true });
+
+    // Seed workspace with starter files if provided
+    if (starterFilesDir) {
+      const workDirContents = fs.readdirSync(hostWorkDir);
+      if (workDirContents.length === 0) {
+        const resolvedSrc = path.isAbsolute(starterFilesDir)
+          ? starterFilesDir
+          : path.resolve(__dirname, '..', '..', '..', starterFilesDir);
+        if (fs.existsSync(resolvedSrc)) {
+          this.copyDirRecursive(resolvedSrc, hostWorkDir);
+          console.log(`[Docker] Seeded workspace for ${sessionId} from ${resolvedSrc}`);
+        } else {
+          // Try looking in /challenges (Docker volume mount)
+          const challengePath = path.join('/challenges', starterFilesDir);
+          if (fs.existsSync(challengePath)) {
+            this.copyDirRecursive(challengePath, hostWorkDir);
+            console.log(`[Docker] Seeded workspace for ${sessionId} from ${challengePath}`);
+          } else {
+            console.warn(`[Docker] Starter files dir not found: ${resolvedSrc}`);
+          }
+        }
+      }
+    }
+
+    // Create container
+    const container = await this.docker.createContainer({
+      Image: SANDBOX_IMAGE,
+      name: `session-${sessionId}`,
+      Env: [
+        `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
+        'TERM=xterm-256color',
+        `SESSION_ID=${sessionId}`,
+      ],
+      HostConfig: {
+        Binds: [`${hostWorkDir}:/workspace`],
+        Memory: 2 * 1024 * 1024 * 1024, // 2GB
+        NanoCpus: 2 * 1e9, // 2 CPUs
+        NetworkMode: 'bridge',
+        AutoRemove: false,
+      },
+      Tty: true,
+      OpenStdin: true,
+      WorkingDir: '/workspace',
+    });
+
+    await container.start();
+    console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
+
+    // Create an exec instance for interactive bash
+    const exec = await container.exec({
+      Cmd: ['/bin/bash', '-l'],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: true,
+    });
+
+    const stream = await exec.start({
+      hijack: true,
+      stdin: true,
+      Tty: true,
+    });
+
+    const session: DockerSession = {
+      containerId: container.id,
+      sessionId,
+      workDir: hostWorkDir,
+      stream,
+      exec,
+      onData: null,
+      onExit: null,
+    };
+
+    // Stream output → callback
+    stream.on('data', (chunk: Buffer) => {
+      session.onData?.(chunk.toString('utf-8'));
+    });
+
+    stream.on('end', () => {
+      console.log(`[Docker] Exec stream ended for session ${sessionId}`);
+      session.onExit?.(0);
+      this.sessions.delete(sessionId);
+    });
+
+    stream.on('error', (err: Error) => {
+      console.error(`[Docker] Stream error for session ${sessionId}:`, err);
+    });
+
+    this.sessions.set(sessionId, session);
+    return session;
+  }
+
+  getSession(sessionId: string): DockerSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  write(sessionId: string, data: string) {
+    const session = this.sessions.get(sessionId);
+    if (session && session.stream.writable) {
+      session.stream.write(data);
+    }
+  }
+
+  resize(sessionId: string, cols: number, rows: number) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      // Resize the exec TTY
+      session.exec.resize({ h: rows, w: cols }).catch((err: Error) => {
+        console.warn(`[Docker] Resize failed for session ${sessionId}:`, err.message);
+      });
+    }
+  }
+
+  async kill(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      try {
+        const container = this.docker.getContainer(session.containerId);
+        await container.stop({ t: 5 }).catch(() => {});
+        await container.remove({ force: true }).catch(() => {});
+        console.log(`[Docker] Container removed for session ${sessionId}`);
+      } catch (err: any) {
+        console.warn(`[Docker] Failed to cleanup container for ${sessionId}:`, err.message);
+      }
+      this.sessions.delete(sessionId);
+    }
+  }
+
+  async killAll() {
+    const promises = [];
+    for (const [id] of this.sessions) {
+      promises.push(this.kill(id));
+    }
+    await Promise.all(promises);
+  }
+
+  private copyDirRecursive(src: string, dest: string) {
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      if (entry.isDirectory()) {
+        fs.mkdirSync(destPath, { recursive: true });
+        this.copyDirRecursive(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    }
+  }
+}

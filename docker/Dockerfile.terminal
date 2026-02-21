@@ -1,0 +1,24 @@
+FROM node:20 AS builder
+WORKDIR /app
+COPY apps/terminal-server/package.json ./
+RUN npm install
+COPY apps/terminal-server/ ./
+RUN npm run build
+
+FROM node:20-slim
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Install Docker CLI for health checks (optional)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+# Copy challenge starter files so they're accessible in the container
+COPY challenges/ /challenges/
+
+EXPOSE 3001
+
+CMD ["node", "dist/index.js"]

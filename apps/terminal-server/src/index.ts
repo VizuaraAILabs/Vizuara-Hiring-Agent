@@ -1,0 +1,238 @@
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import postgres from 'postgres';
+import path from 'path';
+import dotenv from 'dotenv';
+import { DockerManager } from './docker-manager';
+import { InteractionLogger } from './interaction-logger';
+import { validateSessionToken } from './auth-middleware';
+import { buildFileTree, readFileContent } from './file-service';
+
+// Load env from root — __dirname is apps/terminal-server/src, root is ../../..
+const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
+dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
+
+const PORT = parseInt(process.env.TERMINAL_PORT || '3001');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://hiring:hiring@localhost:5432/hiring_agent';
+
+// Initialize postgres connection
+const sql = postgres(DATABASE_URL, {
+  max: 10,
+  idle_timeout: 20,
+  connect_timeout: 10,
+});
+
+const dockerManager = new DockerManager();
+const logger = new InteractionLogger(sql);
+
+// HTTP server for health checks and file API
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url || '', `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+
+  // CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
+  // File API endpoints
+  if (pathname === '/api/files/tree' || pathname === '/api/files/read') {
+    const token = url.searchParams.get('token');
+    if (!token) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'No token provided' }));
+      return;
+    }
+
+    const sessionInfo = await validateSessionToken(token, sql);
+    if (!sessionInfo) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid or expired session token' }));
+      return;
+    }
+
+    const session = dockerManager.getSession(sessionInfo.sessionId);
+    if (!session) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Session not found — terminal may not be started yet' }));
+      return;
+    }
+
+    const workDir = session.workDir;
+
+    if (pathname === '/api/files/tree') {
+      try {
+        const tree = buildFileTree(workDir);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ tree }));
+      } catch (err: any) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message || 'Failed to read file tree' }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/read') {
+      const filePath = url.searchParams.get('path');
+      if (!filePath) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing path parameter' }));
+        return;
+      }
+
+      try {
+        const result = readFileContent(workDir, filePath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err: any) {
+        const message = err.message || 'Failed to read file';
+        const status = message === 'File not found' ? 404
+          : message === 'Path traversal detected' ? 403
+          : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+  }
+
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', async (ws: WebSocket, req) => {
+  // Extract token from URL query parameter
+  const url = new URL(req.url || '', `http://localhost:${PORT}`);
+  const token = url.searchParams.get('token');
+
+  if (!token) {
+    ws.send(JSON.stringify({ type: 'error', message: 'No session token provided' }));
+    ws.close();
+    return;
+  }
+
+  // Validate session token
+  const sessionInfo = await validateSessionToken(token, sql);
+  if (!sessionInfo) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Invalid or expired session token' }));
+    ws.close();
+    return;
+  }
+
+  const { sessionId, challengeId } = sessionInfo;
+
+  console.log(`[Terminal] Session connected: ${sessionId}`);
+
+  // Look up starter files directory for this challenge
+  let starterFilesDir: string | undefined;
+  try {
+    const [challenge] = await sql<{ starter_files_dir: string | null }[]>`
+      SELECT starter_files_dir FROM challenges WHERE id = ${challengeId}
+    `;
+    if (challenge?.starter_files_dir) {
+      starterFilesDir = challenge.starter_files_dir;
+    }
+  } catch (err) {
+    console.warn(`[Terminal] Failed to query starter_files_dir for challenge ${challengeId}:`, err);
+  }
+
+  // Spawn Docker container
+  let dockerSession;
+  try {
+    dockerSession = await dockerManager.spawn(sessionId, starterFilesDir);
+  } catch (err) {
+    console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
+    ws.send(JSON.stringify({ type: 'error', message: 'Failed to start terminal' }));
+    ws.close();
+    return;
+  }
+
+  // Send initial message
+  ws.send(JSON.stringify({ type: 'connected', sessionId }));
+
+  // Container output → WebSocket + Logger
+  dockerSession.onData = (data: string) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'output', data }));
+    }
+    logger.logOutput(sessionId, data);
+  };
+
+  dockerSession.onExit = (exitCode: number) => {
+    console.log(`[Terminal] Container exited for session ${sessionId} with code ${exitCode}`);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'exit', exitCode }));
+    }
+  };
+
+  // WebSocket messages → Container + Logger
+  ws.on('message', (rawMessage) => {
+    try {
+      const message = JSON.parse(rawMessage.toString());
+
+      switch (message.type) {
+        case 'input':
+          dockerManager.write(sessionId, message.data);
+          logger.logInput(sessionId, message.data);
+          break;
+
+        case 'resize':
+          if (message.cols && message.rows) {
+            dockerManager.resize(sessionId, message.cols, message.rows);
+          }
+          break;
+
+        case 'ping':
+          ws.send(JSON.stringify({ type: 'pong' }));
+          break;
+
+        default:
+          console.warn(`[Terminal] Unknown message type: ${message.type}`);
+      }
+    } catch (err) {
+      console.error('[Terminal] Failed to parse message:', err);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log(`[Terminal] Session disconnected: ${sessionId}`);
+    logger.flush();
+    dockerManager.kill(sessionId);
+  });
+
+  ws.on('error', (err) => {
+    console.error(`[Terminal] WebSocket error for session ${sessionId}:`, err);
+  });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => shutdown());
+process.on('SIGINT', () => shutdown());
+
+async function shutdown() {
+  console.log('[Terminal] Shutting down...');
+  await logger.destroy();
+  await dockerManager.killAll();
+  wss.close();
+  server.close();
+  await sql.end();
+  process.exit(0);
+}
+
+server.listen(PORT, () => {
+  console.log(`[Terminal] Server listening on port ${PORT}`);
+});

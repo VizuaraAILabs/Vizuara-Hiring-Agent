@@ -1,0 +1,14 @@
+{
+  "name": "data-pipeline",
+  "version": "1.0.0",
+  "description": "Data processing pipeline",
+  "main": "src/pipeline.js",
+  "scripts": {
+    "test": "jest --verbose",
+    "start": "node src/pipeline.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
