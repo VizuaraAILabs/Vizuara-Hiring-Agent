@@ -116,3 +116,59 @@ export interface SessionWithChallenge extends Session {
   challenge_description: string;
   time_limit_min: number;
 }
+
+// Cost tracking types
+
+export interface UsageEvent {
+  id: number;
+  session_id: string | null;
+  company_id: string | null;
+  provider: 'anthropic' | 'gemini' | 'docker' | 'vps';
+  event_type: 'api_call' | 'container_run' | 'fixed_monthly';
+  input_tokens: number | null;
+  output_tokens: number | null;
+  model: string | null;
+  duration_seconds: number | null;
+  cost_usd: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CostSettings {
+  company_id: string;
+  vps_monthly_cost_usd: number;
+  anthropic_input_rate: number;
+  anthropic_output_rate: number;
+  gemini_input_rate: number;
+  gemini_output_rate: number;
+  updated_at: string;
+}
+
+export interface DailyCostSummary {
+  date: string;
+  anthropic: number;
+  gemini: number;
+  docker: number;
+  vps: number;
+  total: number;
+}
+
+export interface ProviderBreakdown {
+  provider: string;
+  total_cost: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  event_count: number;
+}
+
+export interface SessionCostSummary {
+  session_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  challenge_title: string;
+  anthropic_cost: number;
+  gemini_cost: number;
+  docker_cost: number;
+  total_cost: number;
+  created_at: string;
+}

@@ -269,13 +269,26 @@ or fabricate any actions or content."""
             ),
         )
 
+        # Capture token usage from Gemini response
+        pass1_usage = {}
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            um = response.usage_metadata
+            pass1_usage = {
+                "input_tokens": getattr(um, 'prompt_token_count', 0) or 0,
+                "output_tokens": getattr(um, 'candidates_token_count', 0) or 0,
+            }
+            logger.info(
+                "Pass 1 token usage: input=%d, output=%d",
+                pass1_usage["input_tokens"], pass1_usage["output_tokens"],
+            )
+
         observations = json.loads(response.text)
         logger.info(
             "Pass 1 complete: %d candidate actions, %d AI interactions",
             len(observations.get("candidate_actions", [])),
             len(observations.get("ai_interactions", [])),
         )
-        return observations
+        return observations, pass1_usage
 
     # ------------------------------------------------------------------
     # Pass 2: Score based on observations
@@ -374,6 +387,20 @@ Now produce the complete evaluation."""
                 result["_raw_response"] = raw_text
                 result["_model_used"] = self.MODEL
 
+                # Capture token usage from Gemini response
+                pass2_usage = {}
+                if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                    um = response.usage_metadata
+                    pass2_usage = {
+                        "input_tokens": getattr(um, 'prompt_token_count', 0) or 0,
+                        "output_tokens": getattr(um, 'candidates_token_count', 0) or 0,
+                    }
+                    logger.info(
+                        "Pass 2 token usage: input=%d, output=%d",
+                        pass2_usage["input_tokens"], pass2_usage["output_tokens"],
+                    )
+                result["_pass2_usage"] = pass2_usage
+
                 return result
 
             except (json.JSONDecodeError, ValueError, TypeError) as exc:
@@ -434,7 +461,7 @@ Now produce the complete evaluation."""
         can only reference facts it explicitly extracted in Pass 1.
         """
         # Pass 1: Extract observations
-        observations = self._run_pass1(
+        observations, pass1_usage = self._run_pass1(
             challenge_description, session_metadata, transcript
         )
 
@@ -445,5 +472,23 @@ Now produce the complete evaluation."""
 
         # Attach observations for transparency/debugging
         result["_observations"] = observations
+
+        # Aggregate Gemini token usage across both passes
+        pass2_usage = result.pop("_pass2_usage", {})
+        total_input = pass1_usage.get("input_tokens", 0) + pass2_usage.get("input_tokens", 0)
+        total_output = pass1_usage.get("output_tokens", 0) + pass2_usage.get("output_tokens", 0)
+        result["_gemini_usage"] = {
+            "model": self.MODEL,
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+            "pass1_input": pass1_usage.get("input_tokens", 0),
+            "pass1_output": pass1_usage.get("output_tokens", 0),
+            "pass2_input": pass2_usage.get("input_tokens", 0),
+            "pass2_output": pass2_usage.get("output_tokens", 0),
+        }
+        logger.info(
+            "Total Gemini usage: input=%d, output=%d tokens",
+            total_input, total_output,
+        )
 
         return result

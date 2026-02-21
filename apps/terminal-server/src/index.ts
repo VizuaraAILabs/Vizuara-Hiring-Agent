@@ -7,6 +7,7 @@ import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import { buildFileTree, readFileContent } from './file-service';
+import { CostTracker } from './cost-tracker';
 
 // Load env from root — __dirname is apps/terminal-server/src, root is ../../..
 const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
@@ -24,6 +25,7 @@ const sql = postgres(DATABASE_URL, {
 
 const dockerManager = new DockerManager();
 const logger = new InteractionLogger(sql);
+const costTracker = new CostTracker(sql);
 
 // HTTP server for health checks and file API
 const server = http.createServer(async (req, res) => {
@@ -161,15 +163,28 @@ wss.on('connection', async (ws: WebSocket, req) => {
     return;
   }
 
+  // Start cost tracking for this session
+  try {
+    const [challengeRow] = await sql<{ company_id: string }[]>`
+      SELECT company_id FROM challenges WHERE id = ${challengeId}
+    `;
+    if (challengeRow) {
+      costTracker.startSession(sessionId, challengeRow.company_id);
+    }
+  } catch (err) {
+    console.warn(`[Terminal] Failed to start cost tracking for session ${sessionId}:`, err);
+  }
+
   // Send initial message
   ws.send(JSON.stringify({ type: 'connected', sessionId }));
 
-  // Container output → WebSocket + Logger
+  // Container output → WebSocket + Logger + CostTracker
   dockerSession.onData = (data: string) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'output', data }));
     }
     logger.logOutput(sessionId, data);
+    costTracker.processOutput(sessionId, data);
   };
 
   dockerSession.onExit = (exitCode: number) => {
@@ -210,6 +225,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   ws.on('close', async () => {
     console.log(`[Terminal] Session disconnected: ${sessionId}`);
+    await costTracker.endSession(sessionId);
     await logger.flush();
     await dockerManager.kill(sessionId);
 
@@ -233,6 +249,7 @@ process.on('SIGINT', () => shutdown());
 
 async function shutdown() {
   console.log('[Terminal] Shutting down...');
+  await costTracker.destroy();
   await logger.destroy();
   await dockerManager.killAll();
   wss.close();

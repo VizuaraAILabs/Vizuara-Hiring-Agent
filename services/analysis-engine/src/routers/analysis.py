@@ -209,6 +209,41 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
         analysis_id = await report_gen.save(session_id=session_id, analysis=analysis)
         logger.info("Analysis saved with ID: %s", analysis_id)
 
+        # -- Step 7b: Record Gemini cost event --
+        gemini_usage = analysis.get("_gemini_usage")
+        if gemini_usage:
+            company_id = challenge.get("company_id")
+            input_tokens = gemini_usage.get("input_tokens", 0)
+            output_tokens = gemini_usage.get("output_tokens", 0)
+            cost_usd = (input_tokens / 1_000_000) * 0.15 + (output_tokens / 1_000_000) * 0.60
+            try:
+                await pool.execute(
+                    """
+                    INSERT INTO usage_events
+                        (session_id, company_id, provider, event_type,
+                         input_tokens, output_tokens, model, cost_usd, metadata)
+                    VALUES ($1, $2, 'gemini', 'api_call', $3, $4, $5, $6, $7)
+                    """,
+                    session_id,
+                    company_id,
+                    input_tokens,
+                    output_tokens,
+                    gemini_usage.get("model", "gemini-2.5-flash"),
+                    cost_usd,
+                    json.dumps({
+                        "pass1_input": gemini_usage.get("pass1_input", 0),
+                        "pass1_output": gemini_usage.get("pass1_output", 0),
+                        "pass2_input": gemini_usage.get("pass2_input", 0),
+                        "pass2_output": gemini_usage.get("pass2_output", 0),
+                    }),
+                )
+                logger.info(
+                    "Recorded Gemini cost event: $%.6f (%d in / %d out tokens)",
+                    cost_usd, input_tokens, output_tokens,
+                )
+            except Exception as cost_err:
+                logger.warning("Failed to record Gemini cost event: %s", cost_err)
+
         # -- Step 8: Build and return response --
         response = {k: v for k, v in analysis.items() if not k.startswith("_")}
         response["analysis_id"] = analysis_id

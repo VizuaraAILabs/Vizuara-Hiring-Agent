@@ -7,6 +7,7 @@ import VizuaraLogo from '@/components/VizuaraLogo';
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
+  { label: 'Costs', href: '/dashboard/costs', icon: '$' },
 ];
 
 export default function Sidebar() {
