@@ -40,6 +40,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/sessions:/tmp/sessions
     environment:
       DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
       JWT_SECRET: ${JWT_SECRET}
