@@ -1,7 +1,6 @@
 {$DOMAIN} {
-    # Terminal WebSocket + HTTP — must come before the catch-all
-    handle /terminal/* {
-        uri strip_prefix /terminal
+    # Terminal WebSocket + HTTP
+    handle_path /terminal* {
         reverse_proxy terminal:3001
     }
 
