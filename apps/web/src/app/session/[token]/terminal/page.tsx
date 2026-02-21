@@ -47,25 +47,25 @@ export default function TerminalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-[#00a854] border-t-transparent rounded-full" />
       </div>
     );
   }
 
   if (error || !session || session.status !== 'active') {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-2">Session Unavailable</h1>
-          <p className="text-slate-400">This session is not currently active.</p>
+          <h1 className="text-2xl font-serif italic text-white mb-2">Session Unavailable</h1>
+          <p className="text-neutral-500">This session is not currently active.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950">
+    <div className="h-screen flex flex-col bg-[#0a0a0a]">
       <TerminalToolbar
         challengeTitle={session.challenge_title}
         durationMinutes={session.time_limit_min}

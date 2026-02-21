@@ -53,54 +53,54 @@ export default function CreateChallengeForm() {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Challenge Title</label>
+        <label className="block text-sm font-medium text-neutral-400 mb-2">Challenge Title</label>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
           placeholder="e.g., Build a REST API with Claude"
           required
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Description</label>
-        <p className="text-xs text-slate-500 mb-2">
+        <label className="block text-sm font-medium text-neutral-400 mb-2">Description</label>
+        <p className="text-xs text-neutral-600 mb-2">
           Describe the challenge in detail. This will be shown to candidates before they start. Supports markdown.
         </p>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={10}
-          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-sm"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 font-mono text-sm transition-all"
           placeholder={"## Objective\nBuild a...\n\n## Requirements\n- ...\n- ...\n\n## Evaluation Criteria\n- How you break down the problem\n- How you collaborate with the AI assistant"}
           required
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Time Limit (minutes)</label>
+        <label className="block text-sm font-medium text-neutral-400 mb-2">Time Limit (minutes)</label>
         <input
           type="number"
           value={timeLimit}
           onChange={(e) => setTimeLimit(parseInt(e.target.value) || 60)}
           min={15}
           max={180}
-          className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+          className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-2">Starter Files Directory <span className="text-slate-500">(optional)</span></label>
-        <p className="text-xs text-slate-500 mb-2">
+        <label className="block text-sm font-medium text-neutral-400 mb-2">Starter Files Directory <span className="text-neutral-600">(optional)</span></label>
+        <p className="text-xs text-neutral-600 mb-2">
           Path to a directory (relative to project root) containing files to pre-populate the candidate&apos;s workspace.
         </p>
         <input
           type="text"
           value={starterFilesDir}
           onChange={(e) => setStarterFilesDir(e.target.value)}
-          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-sm"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 font-mono text-sm transition-all"
           placeholder="e.g., challenges/fix-the-pipeline"
         />
       </div>
@@ -108,7 +108,7 @@ export default function CreateChallengeForm() {
       <button
         type="submit"
         disabled={loading}
-        className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-cyan-800 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg transition-colors"
+        className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-xl transition-all btn-glow"
       >
         {loading ? 'Creating...' : 'Create Challenge'}
       </button>

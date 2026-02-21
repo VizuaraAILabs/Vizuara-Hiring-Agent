@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Interaction } from '@/types';
 
 interface TranscriptViewerProps {
@@ -9,10 +9,10 @@ interface TranscriptViewerProps {
 }
 
 const typeStyles: Record<string, { label: string; color: string; bg: string }> = {
-  prompt: { label: 'PROMPT', color: 'text-cyan-400', bg: 'bg-cyan-500/5 border-l-cyan-500' },
+  prompt: { label: 'PROMPT', color: 'text-[#00a854]', bg: 'bg-[#00a854]/5 border-l-[#00a854]' },
   command: { label: 'CMD', color: 'text-amber-400', bg: 'bg-amber-500/5 border-l-amber-500' },
   response: { label: 'AI', color: 'text-violet-400', bg: 'bg-violet-500/5 border-l-violet-500' },
-  terminal: { label: 'OUT', color: 'text-slate-500', bg: 'bg-slate-500/5 border-l-slate-700' },
+  terminal: { label: 'OUT', color: 'text-neutral-500', bg: 'bg-neutral-500/5 border-l-neutral-700' },
 };
 
 export default function TranscriptViewer({ interactions, highlightIndex }: TranscriptViewerProps) {
@@ -38,7 +38,7 @@ export default function TranscriptViewer({ interactions, highlightIndex }: Trans
   ];
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white">Transcript</h3>
         <div className="flex gap-1">
@@ -48,8 +48,8 @@ export default function TranscriptViewer({ interactions, highlightIndex }: Trans
               onClick={() => setFilter(f.value)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 filter === f.value
-                  ? 'bg-cyan-500/20 text-cyan-400'
-                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                  ? 'bg-[#00a854]/10 text-[#00a854]'
+                  : 'text-neutral-600 hover:text-neutral-300 hover:bg-white/5'
               }`}
             >
               {f.label}
@@ -67,22 +67,22 @@ export default function TranscriptViewer({ interactions, highlightIndex }: Trans
             <div
               key={interaction.id || i}
               ref={isHighlighted ? highlightRef : undefined}
-              className={`border-l-2 rounded-r-lg p-3 ${style.bg} ${
-                isHighlighted ? 'ring-2 ring-cyan-400' : ''
+              className={`border-l-2 rounded-r-xl p-3 ${style.bg} ${
+                isHighlighted ? 'ring-2 ring-[#00a854]' : ''
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-[10px] font-bold uppercase ${style.color}`}>
                   {style.label}
                 </span>
-                <span className="text-[10px] text-slate-600">
+                <span className="text-[10px] text-neutral-600">
                   #{interaction.sequence_num}
                 </span>
-                <span className="text-[10px] text-slate-700">
+                <span className="text-[10px] text-neutral-700">
                   {interaction.timestamp}
                 </span>
               </div>
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
+              <pre className="text-xs text-neutral-300 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
                 {interaction.content}
               </pre>
             </div>
@@ -90,7 +90,7 @@ export default function TranscriptViewer({ interactions, highlightIndex }: Trans
         })}
 
         {filtered.length === 0 && (
-          <p className="text-center text-slate-600 py-8 text-sm">No interactions to display</p>
+          <p className="text-center text-neutral-600 py-8 text-sm">No interactions to display</p>
         )}
       </div>
     </div>

@@ -33,21 +33,18 @@ export default function ReportPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        // Fetch analysis results
         const analysisRes = await fetch(`/api/analysis/${sessionId}`);
         if (analysisRes.ok) {
           const data = await analysisRes.json();
           setAnalysis(data);
         }
 
-        // Fetch challenge details to get session info
         const challengeRes = await fetch(`/api/challenges/${challengeId}`);
         if (challengeRes.ok) {
           const challengeData = await challengeRes.json();
           const sess = challengeData.sessions?.find((s: Session) => s.id === sessionId);
           if (sess) setSession(sess);
 
-          // Fetch interactions using token
           if (sess?.token) {
             const interactionsRes = await fetch(`/api/sessions/${sess.token}/interactions`);
             if (interactionsRes.ok) {
@@ -73,10 +70,10 @@ export default function ReportPage() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-40 bg-slate-900 rounded-xl" />
+        <div className="h-40 bg-[#111] rounded-2xl" />
         <div className="grid grid-cols-2 gap-4">
-          <div className="h-80 bg-slate-900 rounded-xl" />
-          <div className="h-80 bg-slate-900 rounded-xl" />
+          <div className="h-80 bg-[#111] rounded-2xl" />
+          <div className="h-80 bg-[#111] rounded-2xl" />
         </div>
       </div>
     );
@@ -85,13 +82,13 @@ export default function ReportPage() {
   if (!analysis || !session) {
     return (
       <div className="text-center py-20">
-        <h2 className="text-xl font-bold text-white mb-2">Report Not Available</h2>
-        <p className="text-slate-400 mb-4">
+        <h2 className="text-xl font-serif italic text-white mb-2">Report Not Available</h2>
+        <p className="text-neutral-500 mb-4">
           The analysis may still be in progress or hasn&apos;t been triggered yet.
         </p>
         <Link
           href={`/dashboard/challenges/${challengeId}`}
-          className="text-cyan-400 hover:text-cyan-300 text-sm"
+          className="text-[#00a854] hover:text-[#00c96b] text-sm"
         >
           Back to challenge
         </Link>
@@ -122,7 +119,7 @@ export default function ReportPage() {
       {/* Back link */}
       <Link
         href={`/dashboard/challenges/${challengeId}`}
-        className="text-slate-500 hover:text-slate-300 text-sm mb-6 block"
+        className="text-neutral-600 hover:text-neutral-300 text-sm mb-6 block transition-colors"
       >
         &larr; Back to challenge
       </Link>
@@ -131,15 +128,15 @@ export default function ReportPage() {
       <ReportHeader session={session} analysis={analysis} />
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-6 mb-6 bg-slate-900 rounded-xl p-1 border border-slate-800">
+      <div className="flex gap-1 mt-6 mb-6 bg-[#111] rounded-2xl p-1 border border-white/5">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
               activeTab === tab.key
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'bg-white/5 text-white'
+                : 'text-neutral-600 hover:text-neutral-300'
             }`}
           >
             {tab.label}

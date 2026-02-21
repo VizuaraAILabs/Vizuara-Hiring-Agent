@@ -45,7 +45,6 @@ export default function ChallengeDetailPage() {
       if (res.ok) {
         setInviteLink(`${window.location.origin}${data.invite_url}`);
         setInviteForm({ name: '', email: '' });
-        // Refresh challenge data
         const refreshed = await fetch(`/api/challenges/${params.id}`).then((r) => r.json());
         setChallenge(refreshed);
       }
@@ -59,26 +58,26 @@ export default function ChallengeDetailPage() {
   const statusColors: Record<string, string> = {
     pending: 'bg-amber-500/10 text-amber-400',
     active: 'bg-blue-500/10 text-blue-400',
-    completed: 'bg-slate-700 text-slate-300',
-    analyzed: 'bg-emerald-500/10 text-emerald-400',
+    completed: 'bg-neutral-800 text-neutral-400',
+    analyzed: 'bg-[#00a854]/10 text-[#00a854]',
   };
 
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-slate-800 rounded w-1/3" />
-        <div className="h-4 bg-slate-800 rounded w-2/3" />
+        <div className="h-8 bg-white/5 rounded w-1/3" />
+        <div className="h-4 bg-white/5 rounded w-2/3" />
       </div>
     );
   }
 
-  if (!challenge) return <p className="text-slate-400">Challenge not found</p>;
+  if (!challenge) return <p className="text-neutral-500">Challenge not found</p>;
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">{challenge.title}</h1>
-        <p className="text-slate-400 mt-1">{challenge.time_limit_min} minute time limit</p>
+        <h1 className="text-2xl font-serif italic text-white">{challenge.title}</h1>
+        <p className="text-neutral-500 mt-1">{challenge.time_limit_min} minute time limit</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -89,21 +88,21 @@ export default function ChallengeDetailPage() {
           </h2>
 
           {challenge.sessions.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
-              <p className="text-slate-500">No candidates invited yet</p>
+            <div className="bg-[#111] border border-white/5 rounded-2xl p-8 text-center">
+              <p className="text-neutral-600">No candidates invited yet</p>
             </div>
           ) : (
             <div className="space-y-3">
               {challenge.sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center justify-between"
+                  className="bg-[#111] border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:border-white/10 transition-colors"
                 >
                   <div>
                     <p className="text-white font-medium">{session.candidate_name}</p>
-                    <p className="text-slate-500 text-sm">{session.candidate_email}</p>
+                    <p className="text-neutral-600 text-sm">{session.candidate_email}</p>
                     {session.started_at && (
-                      <p className="text-slate-600 text-xs mt-1">
+                      <p className="text-neutral-700 text-xs mt-1">
                         Started {formatDateTime(session.started_at)}
                       </p>
                     )}
@@ -115,7 +114,7 @@ export default function ChallengeDetailPage() {
                     {session.status === 'analyzed' && (
                       <Link
                         href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`}
-                        className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
+                        className="text-[#00a854] hover:text-[#00c96b] text-sm font-medium transition-colors"
                       >
                         View Report
                       </Link>
@@ -167,50 +166,50 @@ export default function ChallengeDetailPage() {
           <h2 className="text-lg font-semibold text-white mb-4">Invite Candidate</h2>
           <form
             onSubmit={handleInvite}
-            className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4"
+            className="bg-[#111] border border-white/5 rounded-2xl p-6 space-y-4"
           >
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Name</label>
+              <label className="block text-sm text-neutral-500 mb-1">Name</label>
               <input
                 type="text"
                 value={inviteForm.name}
                 onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Email</label>
+              <label className="block text-sm text-neutral-500 mb-1">Email</label>
               <input
                 type="email"
                 value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={inviteLoading}
-              className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-cyan-800 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+              className="w-full bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
             >
               {inviteLoading ? 'Sending...' : 'Generate Invite Link'}
             </button>
           </form>
 
           {inviteLink && (
-            <div className="mt-4 bg-slate-900 border border-cyan-800 rounded-xl p-4">
-              <p className="text-xs text-slate-400 mb-2">Share this link with the candidate:</p>
+            <div className="mt-4 bg-[#111] border border-[#00a854]/20 rounded-2xl p-4 glow-green">
+              <p className="text-xs text-neutral-500 mb-2">Share this link with the candidate:</p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={inviteLink}
                   readOnly
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-cyan-400 text-xs font-mono"
+                  className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-[#00a854] text-xs font-mono"
                 />
                 <button
                   onClick={() => navigator.clipboard.writeText(inviteLink)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs transition-colors"
+                  className="bg-white/5 hover:bg-white/10 text-neutral-400 px-3 py-2 rounded-xl text-xs transition-colors"
                 >
                   Copy
                 </button>

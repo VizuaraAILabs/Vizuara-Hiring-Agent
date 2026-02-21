@@ -23,7 +23,7 @@ export default function ScoreSummary({ dimensions, scores }: ScoreSummaryProps) 
   const entries = Object.entries(dimensionLabels);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-6">Score Breakdown</h3>
       <div className="space-y-5">
         {entries.map(([key, label]) => {
@@ -32,19 +32,19 @@ export default function ScoreSummary({ dimensions, scores }: ScoreSummaryProps) 
           return (
             <div key={key}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-slate-300">{label}</span>
+                <span className="text-sm text-neutral-300">{label}</span>
                 <span className={`text-sm font-bold ${getScoreColor(score)}`}>
                   {score.toFixed(0)}
                 </span>
               </div>
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${getScoreBgColor(score)}`}
                   style={{ width: `${score}%` }}
                 />
               </div>
               {detail?.narrative && (
-                <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{detail.narrative}</p>
+                <p className="text-xs text-neutral-600 mt-1.5 line-clamp-2">{detail.narrative}</p>
               )}
             </div>
           );

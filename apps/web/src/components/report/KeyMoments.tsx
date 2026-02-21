@@ -8,20 +8,20 @@ interface KeyMomentsProps {
 }
 
 const typeConfig: Record<string, { color: string; bg: string; label: string }> = {
-  strength: { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20', label: 'Strength' },
-  weakness: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20', label: 'Weakness' },
-  pivot: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20', label: 'Pivot' },
-  insight: { color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20', label: 'Insight' },
+  strength: { color: 'text-[#00a854]', bg: 'bg-[#00a854]/5 border-[#00a854]/20', label: 'Strength' },
+  weakness: { color: 'text-red-400', bg: 'bg-red-500/5 border-red-500/20', label: 'Weakness' },
+  pivot: { color: 'text-amber-400', bg: 'bg-amber-500/5 border-amber-500/20', label: 'Pivot' },
+  insight: { color: 'text-violet-400', bg: 'bg-violet-500/5 border-violet-500/20', label: 'Insight' },
 };
 
 export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsProps) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-6">Key Moments</h3>
 
       <div className="relative">
         {/* Vertical line */}
-        <div className="absolute left-4 top-0 bottom-0 w-px bg-slate-800" />
+        <div className="absolute left-4 top-0 bottom-0 w-px bg-white/5" />
 
         <div className="space-y-4">
           {moments.map((moment, i) => {
@@ -33,27 +33,27 @@ export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsPr
                   className={`absolute left-2.5 top-3 w-3 h-3 rounded-full border-2 ${config.bg} border-current ${config.color}`}
                 />
 
-                <div className={`border rounded-lg p-4 ${config.bg}`}>
+                <div className={`border rounded-xl p-4 ${config.bg}`}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-medium ${config.color}`}>
                         {config.label}
                       </span>
                       {moment.timestamp && (
-                        <span className="text-xs text-slate-600">{moment.timestamp}</span>
+                        <span className="text-xs text-neutral-600">{moment.timestamp}</span>
                       )}
                     </div>
                     {moment.interaction_index !== undefined && onViewInTranscript && (
                       <button
                         onClick={() => onViewInTranscript(moment.interaction_index!)}
-                        className="text-xs text-cyan-400 hover:text-cyan-300"
+                        className="text-xs text-[#00a854] hover:text-[#00c96b]"
                       >
                         View in transcript
                       </button>
                     )}
                   </div>
                   <h4 className="text-sm font-medium text-white mb-1">{moment.title}</h4>
-                  <p className="text-xs text-slate-400">{moment.description}</p>
+                  <p className="text-xs text-neutral-500">{moment.description}</p>
                 </div>
               </div>
             );

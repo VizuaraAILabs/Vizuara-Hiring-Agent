@@ -17,9 +17,9 @@ interface PromptComplexityProps {
 
 export default function PromptComplexity({ data }: PromptComplexityProps) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-2">Prompt Complexity Over Time</h3>
-      <p className="text-xs text-slate-500 mb-4">
+      <p className="text-xs text-neutral-600 mb-4">
         How the candidate&apos;s prompting sophistication evolved during the session
       </p>
 
@@ -27,27 +27,27 @@ export default function PromptComplexity({ data }: PromptComplexityProps) {
         <AreaChart data={data}>
           <defs>
             <linearGradient id="complexityGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+              <stop offset="5%" stopColor="#00a854" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#00a854" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
           <XAxis
             dataKey="sequence"
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            label={{ value: 'Prompt #', position: 'bottom', fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#555', fontSize: 10 }}
+            label={{ value: 'Prompt #', position: 'bottom', fill: '#555', fontSize: 11 }}
           />
           <YAxis
             domain={[0, 100]}
-            tick={{ fill: '#64748b', fontSize: 10 }}
-            label={{ value: 'Complexity', angle: -90, position: 'insideLeft', fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#555', fontSize: 10 }}
+            label={{ value: 'Complexity', angle: -90, position: 'insideLeft', fill: '#555', fontSize: 11 }}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              color: '#e2e8f0',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              color: '#ddd',
             }}
             labelFormatter={(val) => `Prompt #${val}`}
             formatter={(value, _name, props) => {
@@ -59,10 +59,10 @@ export default function PromptComplexity({ data }: PromptComplexityProps) {
           <Area
             type="monotone"
             dataKey="complexity"
-            stroke="#8b5cf6"
+            stroke="#00a854"
             fill="url(#complexityGradient)"
             strokeWidth={2}
-            dot={{ fill: '#8b5cf6', r: 3 }}
+            dot={{ fill: '#00a854', r: 3 }}
           />
         </AreaChart>
       </ResponsiveContainer>

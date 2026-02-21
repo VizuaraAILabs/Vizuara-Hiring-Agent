@@ -22,7 +22,7 @@ export default function SessionTimer({ durationMinutes, startedAt, onExpired }: 
           ? 'bg-red-500/20 text-red-400 animate-pulse'
           : isWarning
             ? 'bg-amber-500/20 text-amber-400'
-            : 'bg-slate-800 text-white'
+            : 'bg-white/5 text-white'
       }`}
     >
       {formattedTime}

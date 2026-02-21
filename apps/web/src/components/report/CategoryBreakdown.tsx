@@ -8,11 +8,11 @@ interface CategoryBreakdownProps {
 
 const categoryColors: Record<string, string> = {
   planning: '#a78bfa',
-  coding: '#22d3ee',
+  coding: '#00a854',
   debugging: '#f87171',
-  prompting: '#4ade80',
+  prompting: '#0099b8',
   reviewing: '#fbbf24',
-  other: '#64748b',
+  other: '#555',
 };
 
 export default function CategoryBreakdown({ data }: CategoryBreakdownProps) {
@@ -23,9 +23,9 @@ export default function CategoryBreakdown({ data }: CategoryBreakdownProps) {
   }));
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-2">Activity Distribution</h3>
-      <p className="text-xs text-slate-500 mb-4">Time spent across activity categories</p>
+      <p className="text-xs text-neutral-600 mb-4">Time spent across activity categories</p>
 
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
@@ -44,16 +44,16 @@ export default function CategoryBreakdown({ data }: CategoryBreakdownProps) {
           </Pie>
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #334155',
-              borderRadius: '8px',
-              color: '#e2e8f0',
+              backgroundColor: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: '12px',
+              color: '#ddd',
             }}
             formatter={(value) => [`${value}%`, 'Percentage']}
           />
           <Legend
             formatter={(value: string) => (
-              <span style={{ color: '#94a3b8', fontSize: '12px' }}>{value}</span>
+              <span style={{ color: '#888', fontSize: '12px' }}>{value}</span>
             )}
           />
         </PieChart>

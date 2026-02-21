@@ -30,12 +30,12 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Challenges</h1>
-          <p className="text-slate-400 mt-1">Manage your AI-collaboration assessments</p>
+          <h1 className="text-2xl font-serif italic text-white">Challenges</h1>
+          <p className="text-neutral-500 mt-1">Manage your AI-collaboration assessments</p>
         </div>
         <Link
           href="/dashboard/challenges/new"
-          className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          className="bg-[#00a854] hover:bg-[#00c96b] text-black px-5 py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
         >
           New Challenge
         </Link>
@@ -44,19 +44,19 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-6 animate-pulse">
-              <div className="h-5 bg-slate-800 rounded w-2/3 mb-3" />
-              <div className="h-4 bg-slate-800 rounded w-full mb-2" />
-              <div className="h-4 bg-slate-800 rounded w-1/2" />
+            <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-6 animate-pulse">
+              <div className="h-5 bg-white/5 rounded w-2/3 mb-3" />
+              <div className="h-4 bg-white/5 rounded w-full mb-2" />
+              <div className="h-4 bg-white/5 rounded w-1/2" />
             </div>
           ))}
         </div>
       ) : challenges.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-slate-500 text-lg mb-4">No challenges yet</p>
+          <p className="text-neutral-600 text-lg mb-4">No challenges yet</p>
           <Link
             href="/dashboard/challenges/new"
-            className="text-cyan-400 hover:text-cyan-300 text-sm"
+            className="text-[#00a854] hover:text-[#00c96b] text-sm"
           >
             Create your first challenge
           </Link>

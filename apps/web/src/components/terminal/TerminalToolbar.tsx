@@ -18,12 +18,12 @@ export default function TerminalToolbar({
   onExpired,
 }: TerminalToolbarProps) {
   return (
-    <div className="flex items-center justify-between bg-slate-900 border-b border-slate-800 px-6 py-3">
+    <div className="flex items-center justify-between bg-[#111] border-b border-white/5 px-6 py-3">
       <div className="flex items-center gap-4">
         <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-          <div className="w-3 h-3 rounded-full bg-amber-500" />
-          <div className="w-3 h-3 rounded-full bg-emerald-500" />
+          <div className="w-3 h-3 rounded-full bg-red-500/60" />
+          <div className="w-3 h-3 rounded-full bg-amber-500/60" />
+          <div className="w-3 h-3 rounded-full bg-green-500/60" />
         </div>
         <h2 className="text-white font-medium text-sm">{challengeTitle}</h2>
       </div>

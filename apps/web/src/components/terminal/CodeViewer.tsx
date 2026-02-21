@@ -12,7 +12,7 @@ interface CodeViewerProps {
 export default function CodeViewer({ selectedFile, fileContent, fileLoading, fileError }: CodeViewerProps) {
   if (!selectedFile) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-xs">
+      <div className="flex items-center justify-center h-full text-neutral-600 text-xs">
         Select a file to view
       </div>
     );
@@ -21,7 +21,7 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
   if (fileLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-5 w-5 border-2 border-cyan-400 border-t-transparent rounded-full" />
+        <div className="animate-spin h-5 w-5 border-2 border-[#00a854] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -41,8 +41,8 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 py-1.5 border-b border-slate-700/50 bg-slate-900/50">
-        <span className="text-xs text-slate-400 truncate block">{fileContent.path}</span>
+      <div className="flex-shrink-0 px-3 py-1.5 border-b border-white/5 bg-[#111]">
+        <span className="text-xs text-neutral-500 truncate block">{fileContent.path}</span>
       </div>
 
       {/* Truncation warning */}
@@ -61,10 +61,10 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
             <tbody>
               {lines.map((line, i) => (
                 <tr key={i}>
-                  <td className="text-right pr-3 pl-2 text-slate-600 select-none align-top" style={{ minWidth: '3rem' }}>
+                  <td className="text-right pr-3 pl-2 text-neutral-700 select-none align-top" style={{ minWidth: '3rem' }}>
                     {i + 1}
                   </td>
-                  <td className="text-slate-300 pr-3 whitespace-pre">{line}</td>
+                  <td className="text-neutral-300 pr-3 whitespace-pre">{line}</td>
                 </tr>
               ))}
             </tbody>

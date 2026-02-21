@@ -1,12 +1,79 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-instrument);
   --font-mono: var(--font-geist-mono);
+
+  --color-primary: #00a854;
+  --color-primary-light: #00c96b;
+  --color-accent: #0099b8;
+  --color-surface: #111111;
+  --color-surface-light: #1a1a1a;
+  --color-border: #222222;
+  --color-border-light: #333333;
 }
 
 body {
   font-family: var(--font-sans), system-ui, sans-serif;
+  background: #0a0a0a;
+}
+
+/* Serif heading utility */
+.font-serif {
+  font-family: var(--font-instrument), Georgia, serif;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #00a854 0%, #0099b8 50%, #00a854 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, #00c96b 0%, #00a854 50%, #0099b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 20px rgba(0, 168, 84, 0.15), 0 0 60px rgba(0, 168, 84, 0.05);
+}
+
+.glow-green-strong {
+  box-shadow: 0 0 30px rgba(0, 168, 84, 0.25), 0 0 80px rgba(0, 168, 84, 0.08);
+}
+
+.glow-text {
+  text-shadow: 0 0 40px rgba(0, 168, 84, 0.3);
+}
+
+/* Grid background pattern */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.bg-dots {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+/* Smooth gradient fade at section edges */
+.fade-bottom {
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+/* Button glow on hover */
+.btn-glow:hover {
+  box-shadow: 0 0 25px rgba(0, 168, 84, 0.4), 0 0 50px rgba(0, 168, 84, 0.15);
 }
 
 /* xterm.js styles */
@@ -19,11 +86,11 @@ body {
 }
 
 .xterm-viewport::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #0a0a0a;
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #333;
   border-radius: 4px;
 }
 
@@ -35,11 +102,11 @@ body {
 
 .file-tree-scroll::-webkit-scrollbar-track,
 .code-viewer-scroll::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #0a0a0a;
 }
 
 .file-tree-scroll::-webkit-scrollbar-thumb,
 .code-viewer-scroll::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #333;
   border-radius: 3px;
 }

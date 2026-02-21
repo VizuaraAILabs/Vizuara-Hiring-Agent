@@ -49,10 +49,10 @@ export default function FileTreeNode({ node, depth, selectedFile, onSelectFile }
       <div>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full text-left flex items-center gap-1 py-0.5 hover:bg-slate-800/50 text-slate-300 text-xs"
+          className="w-full text-left flex items-center gap-1 py-0.5 hover:bg-white/5 text-neutral-300 text-xs"
           style={{ paddingLeft }}
         >
-          <span className="text-slate-500 w-3 text-center flex-shrink-0">
+          <span className="text-neutral-600 w-3 text-center flex-shrink-0">
             {expanded ? '▼' : '▶'}
           </span>
           <span className="truncate">{node.name}</span>
@@ -77,13 +77,13 @@ export default function FileTreeNode({ node, depth, selectedFile, onSelectFile }
       onClick={() => onSelectFile(node.path)}
       className={`w-full text-left flex items-center gap-1 py-0.5 text-xs ${
         isSelected
-          ? 'bg-cyan-900/30 text-cyan-300'
-          : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'
+          ? 'bg-[#00a854]/10 text-[#00a854]'
+          : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-300'
       }`}
       style={{ paddingLeft }}
     >
       {extLabel ? (
-        <span className="text-[9px] font-bold text-slate-500 w-5 text-center flex-shrink-0">{extLabel}</span>
+        <span className="text-[9px] font-bold text-neutral-600 w-5 text-center flex-shrink-0">{extLabel}</span>
       ) : (
         <span className="w-5 flex-shrink-0" />
       )}
