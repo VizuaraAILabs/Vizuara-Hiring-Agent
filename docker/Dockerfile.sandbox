@@ -19,10 +19,23 @@ RUN mkdir -p /etc/apt/keyrings \
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Pre-configure Claude Code: create config dirs and bypass first-run onboarding
+# Pre-configure Claude Code: create config dirs and tool permissions
 RUN mkdir -p /root/.claude && \
-    echo '{"hasCompletedOnboarding":true}' > /root/.claude.json && \
     echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json
+
+# Entrypoint script: writes Claude Code config with the runtime API key,
+# then keeps the container alive. The terminal server attaches via exec.
+RUN cat > /entrypoint.sh << 'SCRIPT'
+#!/bin/bash
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+    cat > /root/.claude.json << EOF
+{"hasCompletedOnboarding":true,"primaryApiKey":"$ANTHROPIC_API_KEY"}
+EOF
+fi
+# Keep container alive (terminal server attaches via docker exec)
+exec sleep infinity
+SCRIPT
+RUN chmod +x /entrypoint.sh
 
 # Pre-install RAG challenge Python deps
 COPY challenges/rag-retrieval/requirements.txt /tmp/rag-reqs.txt
@@ -35,5 +48,5 @@ RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab');
 RUN mkdir -p /workspace
 WORKDIR /workspace
 
-# Default shell
-CMD ["/bin/bash", "-l"]
+# Entrypoint configures Claude Code with runtime API key, then sleeps
+CMD ["/entrypoint.sh"]
