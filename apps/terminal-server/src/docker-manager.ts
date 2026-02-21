@@ -5,6 +5,8 @@ import { Readable, Writable, Duplex } from 'stream';
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+// Force Claude Code to use Sonnet (cheapest capable model) inside sandbox containers
+const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-sonnet-4-20250514';
 
 export interface DockerSession {
   containerId: string;
@@ -58,6 +60,7 @@ export class DockerManager {
       name: `session-${sessionId}`,
       Env: [
         `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
+        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
       ],
