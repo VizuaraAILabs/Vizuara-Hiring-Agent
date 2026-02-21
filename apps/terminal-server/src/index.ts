@@ -208,10 +208,18 @@ wss.on('connection', async (ws: WebSocket, req) => {
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log(`[Terminal] Session disconnected: ${sessionId}`);
-    logger.flush();
-    dockerManager.kill(sessionId);
+    await logger.flush();
+    await dockerManager.kill(sessionId);
+
+    // Mark session as completed when candidate disconnects (e.g. closes tab)
+    try {
+      await sql`UPDATE sessions SET status = 'completed', ended_at = NOW() WHERE id = ${sessionId} AND status = 'active'`;
+      console.log(`[Terminal] Session marked as completed: ${sessionId}`);
+    } catch (err) {
+      console.error(`[Terminal] Failed to update session status for ${sessionId}:`, err);
+    }
   });
 
   ws.on('error', (err) => {
