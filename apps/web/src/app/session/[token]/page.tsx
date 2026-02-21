@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
+import VizuaraLogo from '@/components/VizuaraLogo';
 
 export default function SessionPage() {
   const params = useParams();
@@ -65,12 +66,10 @@ export default function SessionPage() {
 
       <div className="max-w-2xl w-full relative">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="w-7 h-7 rounded-lg bg-[#00a854] flex items-center justify-center text-xs font-bold text-black">
-              H
-            </div>
+          <div className="inline-flex items-center gap-2.5 mb-4">
+            <VizuaraLogo size={26} />
             <span className="text-sm font-semibold text-white">
-              Hiring<span className="text-[#00a854]">Agent</span>
+              Arc<span className="text-[#00a854]">Eval</span>
             </span>
           </div>
           <h1 className="text-3xl font-serif italic text-white mb-2">{session.challenge_title}</h1>

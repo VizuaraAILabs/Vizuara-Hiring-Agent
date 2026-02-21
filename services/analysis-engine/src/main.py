@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 from .routers.analysis import router as analysis_router  # noqa: E402
 
 app = FastAPI(
-    title="Hiring Agent Analysis Engine",
+    title="ArcEval Analysis Engine",
     description="Analyzes candidate terminal interaction transcripts using Gemini API",
     version="0.1.0",
 )

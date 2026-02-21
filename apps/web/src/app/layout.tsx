@@ -20,8 +20,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HiringAgent - AI-Native Assessment Platform",
+  title: "ArcEval - AI Collaboration Assessment Platform",
   description: "Evaluate how candidates collaborate with AI coding assistants",
+  icons: {
+    icon: "/vizuara-logo.svg",
+  },
 };
 
 export default function RootLayout({

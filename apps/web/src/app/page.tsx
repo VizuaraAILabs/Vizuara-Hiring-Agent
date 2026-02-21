@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import VizuaraLogo from '@/components/VizuaraLogo';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -48,12 +49,10 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#00a854] flex items-center justify-center text-sm font-bold text-black">
-              H
-            </div>
+          <Link href="/" className="flex items-center gap-2.5">
+            <VizuaraLogo size={30} />
             <span className="text-lg font-semibold text-white">
-              Hiring<span className="text-[#00a854]">Agent</span>
+              Arc<span className="text-[#00a854]">Eval</span>
             </span>
           </Link>
           <div className="flex items-center gap-3">
@@ -75,9 +74,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-6">
-        {/* Background grid */}
         <div className="absolute inset-0 bg-grid opacity-50" />
-        {/* Gradient orb */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-[#00a854]/5 blur-[120px] pointer-events-none" />
 
         <motion.div
@@ -88,16 +85,14 @@ export default function LandingPage() {
         >
           <motion.div
             variants={fadeUp}
-
             className="inline-flex items-center gap-2 border border-[#00a854]/20 bg-[#00a854]/5 rounded-full px-4 py-1.5 mb-8"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-[#00a854] animate-pulse" />
-            <span className="text-[#00a854] text-sm font-medium">AI-Native Hiring Platform</span>
+            <span className="text-[#00a854] text-sm font-medium">AI Collaboration Assessment Platform</span>
           </motion.div>
 
           <motion.h1
             variants={fadeUp}
-
             className="text-5xl sm:text-6xl md:text-7xl font-serif italic leading-[1.1] mb-6 tracking-tight"
           >
             Evaluate how engineers{' '}
@@ -106,7 +101,6 @@ export default function LandingPage() {
 
           <motion.p
             variants={fadeUp}
-
             className="text-lg md:text-xl text-neutral-400 mb-12 max-w-2xl mx-auto leading-relaxed"
           >
             Resumes and LeetCode are unreliable in the AI era. Assess what actually matters &mdash;
@@ -115,7 +109,6 @@ export default function LandingPage() {
 
           <motion.div
             variants={fadeUp}
-
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Link
@@ -175,7 +168,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Platform Preview / Demo Section */}
+      {/* Platform Preview */}
       <section className="relative px-6 py-24">
         <div className="max-w-5xl mx-auto">
           <motion.div
@@ -200,7 +193,6 @@ export default function LandingPage() {
             transition={{ duration: 0.7 }}
             className="relative rounded-2xl border border-white/5 bg-[#111] p-1 glow-green"
           >
-            {/* Fake terminal preview */}
             <div className="rounded-xl bg-[#0a0a0a] overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
                 <div className="flex gap-1.5">
@@ -343,16 +335,14 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-white/5 px-6 py-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-[#00a854] flex items-center justify-center text-xs font-bold text-black">
-              H
-            </div>
+          <div className="flex items-center gap-2.5">
+            <VizuaraLogo size={22} />
             <span className="text-sm text-neutral-500">
-              HiringAgent
+              Arc<span className="text-neutral-400">Eval</span>
             </span>
           </div>
           <p className="text-xs text-neutral-600">
-            AI-Native Assessment Platform
+            Powered by <span className="text-neutral-400">Vizuara AI</span>
           </p>
         </div>
       </footer>

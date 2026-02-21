@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import VizuaraLogo from '@/components/VizuaraLogo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,12 +51,10 @@ export default function LoginPage() {
         className="w-full max-w-md relative"
       >
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-[#00a854] flex items-center justify-center text-sm font-bold text-black">
-              H
-            </div>
+          <Link href="/" className="inline-flex items-center gap-2.5 mb-6">
+            <VizuaraLogo size={30} />
             <span className="text-lg font-semibold text-white">
-              Hiring<span className="text-[#00a854]">Agent</span>
+              Arc<span className="text-[#00a854]">Eval</span>
             </span>
           </Link>
           <h1 className="text-3xl font-serif italic text-white">Welcome back</h1>
