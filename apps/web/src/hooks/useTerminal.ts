@@ -18,7 +18,11 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_TERMINAL_WS_URL || 'ws://localhost:3001';
+    // NEXT_PUBLIC_* vars are inlined at build time. In production Docker builds
+    // they may be absent, so derive from the current page URL (Caddy routes
+    // /terminal to the terminal service).
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = process.env.NEXT_PUBLIC_TERMINAL_WS_URL || `${protocol}//${window.location.host}/terminal`;
     const ws = new WebSocket(`${wsUrl}?token=${token}`);
     wsRef.current = ws;
 

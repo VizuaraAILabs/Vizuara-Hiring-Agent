@@ -17,10 +17,20 @@ export interface FileContent {
   size: number;
 }
 
-const TERMINAL_HTTP_URL = process.env.NEXT_PUBLIC_TERMINAL_HTTP_URL || 'http://localhost:3001';
 const POLL_INTERVAL = 10_000;
 
+function getTerminalHttpUrl(): string {
+  if (process.env.NEXT_PUBLIC_TERMINAL_HTTP_URL) {
+    return process.env.NEXT_PUBLIC_TERMINAL_HTTP_URL;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/terminal`;
+  }
+  return 'http://localhost:3001';
+}
+
 export function useFileExplorer(token: string) {
+  const TERMINAL_HTTP_URL = getTerminalHttpUrl();
   const [tree, setTree] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
