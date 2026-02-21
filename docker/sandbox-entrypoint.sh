@@ -1,12 +1,10 @@
 #!/bin/bash
-# Set the real ANTHROPIC_API_KEY from the hidden env var
-export ANTHROPIC_API_KEY="$_SANDBOX_API_KEY"
-
-# Pre-initialize Claude Code auth by running a quick non-interactive command.
-# The -p flag handles auth without interactive prompts, saving the acceptance
-# state so the interactive 'claude' command won't ask again.
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-    HOME=/home/candidate claude-real -p "hello" --output-format json --max-turns 1 > /dev/null 2>&1 || true
+# Write the API key to a file that the apiKeyHelper script reads.
+# We do NOT set ANTHROPIC_API_KEY as an env var — that triggers
+# Claude Code's "Do you want to use this API key?" prompt.
+if [ -n "$_SANDBOX_API_KEY" ]; then
+    printf '%s' "$_SANDBOX_API_KEY" > /home/candidate/.claude/.api-key
+    chmod 600 /home/candidate/.claude/.api-key
 fi
 
 # Keep container alive — terminal server attaches via docker exec
