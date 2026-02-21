@@ -30,7 +30,7 @@ RUN useradd -m -s /bin/bash candidate && \
 
 # Create API key helper script — Claude Code calls this to get the key
 # without detecting it as an env var (which triggers a confirmation prompt)
-RUN printf '#!/bin/bash\necho "$_SANDBOX_API_KEY"\n' > /usr/local/bin/get-api-key.sh && \
+RUN printf '#!/bin/bash\nprintf "%%s" "$_SANDBOX_API_KEY"\n' > /usr/local/bin/get-api-key.sh && \
     chmod +x /usr/local/bin/get-api-key.sh
 
 # Pre-configure Claude Code for candidate user
