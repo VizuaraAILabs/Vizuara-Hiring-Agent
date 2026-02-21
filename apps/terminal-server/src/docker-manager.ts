@@ -83,6 +83,9 @@ export class DockerManager {
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
     console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
 
+    // Wait for entrypoint to write the API key file before attaching exec
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     // Create an exec instance for interactive bash as the candidate user
     // (non-root required for --dangerously-skip-permissions)
     const exec = await container.exec({
