@@ -59,7 +59,10 @@ export class DockerManager {
       Image: SANDBOX_IMAGE,
       name: `session-${sessionId}`,
       Env: [
-        `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
+        // Use _SANDBOX_API_KEY so Claude Code doesn't detect it as an env var
+        // and show the "Do you want to use this API key?" prompt.
+        // The entrypoint script writes it to ~/.claude.json as primaryApiKey.
+        `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
@@ -85,7 +88,6 @@ export class DockerManager {
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
-        `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
       ],

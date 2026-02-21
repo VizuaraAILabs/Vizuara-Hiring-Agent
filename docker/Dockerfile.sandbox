@@ -30,7 +30,7 @@ RUN useradd -m -s /bin/bash candidate && \
 
 # Pre-configure Claude Code for candidate user
 RUN mkdir -p /home/candidate/.claude && \
-    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
+    echo '{"skipDangerousModePermissionPrompt":true,"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
     echo '{"hasCompletedOnboarding":true}' > /home/candidate/.claude.json && \
     chown -R candidate:candidate /home/candidate/.claude /home/candidate/.claude.json
 
@@ -45,8 +45,11 @@ RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab');
 RUN mkdir -p /workspace && chown candidate:candidate /workspace
 WORKDIR /workspace
 
-# Run as candidate user
+# Entrypoint: write API key to Claude Code config (avoids env var detection
+# prompt), then keep container alive. Terminal server attaches via docker exec.
+COPY docker/sandbox-entrypoint.sh /entrypoint.sh
+USER root
+RUN chmod +x /entrypoint.sh
 USER candidate
 
-# Keep container alive. Terminal server attaches via docker exec.
-CMD ["sleep", "infinity"]
+CMD ["/entrypoint.sh"]
