@@ -19,6 +19,11 @@ RUN mkdir -p /etc/apt/keyrings \
 # Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
+# Pre-configure Claude Code: create config dirs and bypass first-run onboarding
+RUN mkdir -p /root/.claude && \
+    echo '{"hasCompletedOnboarding":true}' > /root/.claude.json && \
+    echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json
+
 # Pre-install RAG challenge Python deps
 COPY challenges/rag-retrieval/requirements.txt /tmp/rag-reqs.txt
 RUN pip3 install --no-cache-dir -r /tmp/rag-reqs.txt && rm /tmp/rag-reqs.txt

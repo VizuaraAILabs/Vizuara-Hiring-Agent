@@ -61,7 +61,6 @@ export class DockerManager {
       Env: [
         `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
-        'CLAUDE_CODE_USE_API_KEY=1',
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
       ],
@@ -79,10 +78,18 @@ export class DockerManager {
 
     await container.start();
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
+    console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
 
     // Create an exec instance for interactive bash
+    // Pass env vars explicitly on exec too (belt and suspenders — ensures
+    // the login shell inherits them even if container-level env is lost)
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
+      Env: [
+        `ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}`,
+        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        'TERM=xterm-256color',
+      ],
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
