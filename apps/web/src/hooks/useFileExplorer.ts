@@ -81,6 +81,12 @@ export function useFileExplorer(token: string) {
     }
   }, [token]);
 
+  const closeFile = useCallback(() => {
+    setSelectedFile(null);
+    setFileContent(null);
+    setFileError(null);
+  }, []);
+
   const refresh = useCallback(async () => {
     await fetchTree();
     if (selectedFile) {
@@ -107,6 +113,7 @@ export function useFileExplorer(token: string) {
     fileLoading,
     fileError,
     selectFile,
+    closeFile,
     refresh,
   };
 }

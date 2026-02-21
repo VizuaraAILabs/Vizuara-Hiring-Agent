@@ -10,13 +10,7 @@ interface CodeViewerProps {
 }
 
 export default function CodeViewer({ selectedFile, fileContent, fileLoading, fileError }: CodeViewerProps) {
-  if (!selectedFile) {
-    return (
-      <div className="flex items-center justify-center h-full text-neutral-600 text-xs">
-        Select a file to view
-      </div>
-    );
-  }
+  if (!selectedFile) return null;
 
   if (fileLoading) {
     return (
@@ -40,11 +34,6 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex-shrink-0 px-3 py-1.5 border-b border-white/5 bg-[#111]">
-        <span className="text-xs text-neutral-500 truncate block">{fileContent.path}</span>
-      </div>
-
       {/* Truncation warning */}
       {fileContent.truncated && (
         <div className="flex-shrink-0 px-3 py-1 bg-amber-900/30 border-b border-amber-700/30">
@@ -56,15 +45,15 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
 
       {/* Code */}
       <div className="code-viewer-scroll flex-1 overflow-auto">
-        <pre className="text-xs leading-relaxed font-mono">
-          <table className="border-collapse">
+        <pre className="text-xs leading-relaxed font-mono py-2">
+          <table className="border-collapse w-full">
             <tbody>
               {lines.map((line, i) => (
-                <tr key={i}>
-                  <td className="text-right pr-3 pl-2 text-neutral-700 select-none align-top" style={{ minWidth: '3rem' }}>
+                <tr key={i} className="hover:bg-white/[0.02]">
+                  <td className="text-right pr-4 pl-3 text-neutral-700 select-none align-top sticky left-0 bg-[#0d0d0d]" style={{ minWidth: '3.5rem' }}>
                     {i + 1}
                   </td>
-                  <td className="text-neutral-300 pr-3 whitespace-pre">{line}</td>
+                  <td className="text-neutral-300 pr-4 whitespace-pre">{line}</td>
                 </tr>
               ))}
             </tbody>
