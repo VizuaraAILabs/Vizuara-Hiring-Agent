@@ -16,27 +16,21 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get update && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install Claude Code globally, then create a wrapper that auto-skips
+# all interactive prompts (safe because sandbox is fully isolated in Docker)
+RUN npm install -g @anthropic-ai/claude-code && \
+    CLAUDE_BIN=$(which claude) && \
+    mv "$CLAUDE_BIN" "${CLAUDE_BIN}-real" && \
+    printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
+    chmod +x "$CLAUDE_BIN"
 
-# Pre-configure Claude Code: create config dirs and tool permissions
+# Pre-configure Claude Code: tool permissions + completed onboarding
 RUN mkdir -p /root/.claude && \
     echo '{"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /root/.claude/settings.json && \
-    echo "alias claude='claude --dangerously-skip-permissions'" >> /root/.bashrc
+    echo '{"hasCompletedOnboarding":true}' > /root/.claude.json
 
-# Entrypoint script: writes Claude Code config with the runtime API key,
-# then keeps the container alive. The terminal server attaches via exec.
-RUN cat > /entrypoint.sh << 'SCRIPT'
-#!/bin/bash
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-    cat > /root/.claude.json << EOF
-{"hasCompletedOnboarding":true,"primaryApiKey":"$ANTHROPIC_API_KEY"}
-EOF
-fi
-# Keep container alive (terminal server attaches via docker exec)
-exec sleep infinity
-SCRIPT
-RUN chmod +x /entrypoint.sh
+# Entrypoint: keep container alive. Terminal server attaches via docker exec.
+RUN printf '#!/bin/bash\nexec sleep infinity\n' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Pre-install RAG challenge Python deps
 COPY challenges/rag-retrieval/requirements.txt /tmp/rag-reqs.txt
