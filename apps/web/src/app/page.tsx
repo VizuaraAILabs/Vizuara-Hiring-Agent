@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import FPLLogo from '@/components/FPLLogo';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -132,8 +132,222 @@ const faqs = [
   },
 ];
 
+const roleCategories = [
+  {
+    id: 'fullstack',
+    name: 'Full-Stack',
+    description: 'End-to-end engineers who work across the entire stack.',
+    challenges: [
+      {
+        title: 'Fix the Broken Checkout Flow',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'An e-commerce checkout has 5 interrelated bugs across frontend validation, API error handling, database transactions, and Stripe integration. Fixing one bug reveals the next — requiring systematic debugging across React, Node.js, and PostgreSQL.',
+        tags: ['React', 'Node.js', 'PostgreSQL', 'Stripe'],
+      },
+      {
+        title: 'Add Real-Time Collaboration to a Doc Editor',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'A working collaborative document editor has no live presence. Add WebSocket-based cursor tracking, user avatars, and operational-transform conflict resolution to an existing Slate.js + Express codebase without breaking the save pipeline.',
+        tags: ['WebSockets', 'Slate.js', 'Express', 'OT/CRDT'],
+      },
+      {
+        title: 'Debug the Performance Crisis',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A full-stack dashboard loads in 14 seconds. The candidate must identify and fix N+1 queries in the API, excessive React re-renders, a missing database index, an uncompressed 3MB bundle, and a memory-leaking useEffect — each fix depends on profiling the previous one.',
+        tags: ['React', 'SQL', 'Webpack', 'Profiling'],
+      },
+      {
+        title: 'Implement Multi-Tenant Data Isolation',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'An existing SaaS app is leaking data between tenants. The candidate must audit the codebase, implement row-level security in PostgreSQL, scope API middleware, fix the frontend context provider, and verify isolation with existing test suites — all without breaking current functionality.',
+        tags: ['PostgreSQL RLS', 'Express', 'React Context', 'Auth'],
+      },
+      {
+        title: 'Migrate REST Endpoints to GraphQL',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Convert 6 REST endpoints to a GraphQL API while keeping the existing REST routes working for backward compatibility. Requires understanding the data model, designing the schema, implementing resolvers with DataLoader for batching, and updating the React frontend to use Apollo Client.',
+        tags: ['GraphQL', 'Apollo', 'DataLoader', 'REST'],
+      },
+    ],
+  },
+  {
+    id: 'backend',
+    name: 'Backend',
+    description: 'Server-side engineers building APIs, services, and infrastructure.',
+    challenges: [
+      {
+        title: 'Design a Retrieval Strategy for RAG',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A Retrieval-Augmented Generation system returns irrelevant results. Implement hybrid search combining BM25 and semantic embeddings, add Reciprocal Rank Fusion, tune chunking strategies, and build an evaluation harness — each component must be validated before integrating with the next.',
+        tags: ['Python', 'Embeddings', 'BM25', 'RAG'],
+      },
+      {
+        title: 'Refactor the Monolith Into Services',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'Extract the notification system from a tightly-coupled Django monolith into a standalone service. Requires tracing dependencies through 12 files, designing an async message contract, implementing a Celery-based bridge for backward compatibility, and ensuring zero downtime during the migration.',
+        tags: ['Django', 'Celery', 'Message Queues', 'API Design'],
+      },
+      {
+        title: 'Build a Distributed Rate Limiter',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Implement a production-grade rate limiter using Redis sliding windows. Handle edge cases: burst allowance, per-user vs per-IP limits, race conditions under concurrent requests, graceful degradation when Redis is down, and proper HTTP 429 responses with Retry-After headers.',
+        tags: ['Redis', 'Lua Scripts', 'Node.js', 'Concurrency'],
+      },
+      {
+        title: 'Debug the Silent Data Corruption',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'A data processing pipeline produces incorrect totals intermittently. The candidate must trace the issue through a Kafka consumer, a timezone conversion bug, a floating-point accumulation error, and a race condition in the batch writer — each layer hiding the next.',
+        tags: ['Kafka', 'Python', 'PostgreSQL', 'Debugging'],
+      },
+      {
+        title: 'Implement Event Sourcing for Order System',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Convert a CRUD-based order management system to event sourcing. Design the event schema, implement the event store, build projections for read models, handle schema evolution for existing orders, and ensure idempotent event replay — the existing 200+ test suite must continue to pass.',
+        tags: ['Event Sourcing', 'Node.js', 'PostgreSQL', 'CQRS'],
+      },
+    ],
+  },
+  {
+    id: 'frontend',
+    name: 'Frontend',
+    description: 'UI/UX engineers building responsive, accessible interfaces.',
+    challenges: [
+      {
+        title: 'Fix the Accessibility Audit Failures',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A component library is failing 15+ WCAG 2.1 AA violations. Fix keyboard navigation traps in modals, missing ARIA labels on dynamic content, color contrast issues in the theme system, broken screen reader announcements for live regions, and focus management in the dropdown menu — each fix requires understanding how assistive technologies parse the DOM.',
+        tags: ['ARIA', 'WCAG 2.1', 'React', 'Screen Readers'],
+      },
+      {
+        title: 'Build a Complex Multi-Step Form Wizard',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Implement a 5-step application form with conditional step logic (Step 3 varies based on Step 1 answers), cross-field validation, autosave to localStorage, resume-from-draft, animated transitions, and graceful error recovery. The form schema is provided but the validation rules have interdependencies.',
+        tags: ['React Hook Form', 'Zod', 'Framer Motion', 'TypeScript'],
+      },
+      {
+        title: 'Optimize the Rendering Nightmare',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A React dashboard re-renders 400+ components on every keystroke in the search bar. Identify and fix: missing memo boundaries, an incorrectly structured context provider causing cascade re-renders, an expensive filter running on every render, virtualization needed for a 10K-row table, and a bundle with 800KB of unused lodash.',
+        tags: ['React.memo', 'useMemo', 'Virtualization', 'Bundle Analysis'],
+      },
+      {
+        title: 'Implement Offline-First Data Sync',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'Add offline support to an existing task management app. Implement IndexedDB storage, a sync queue for pending mutations, conflict resolution when the server state diverges, optimistic UI updates, and a connection status banner — the tricky part is handling merge conflicts when two offline users edit the same task.',
+        tags: ['IndexedDB', 'Service Workers', 'Conflict Resolution', 'React'],
+      },
+      {
+        title: 'Debug the State Management Chaos',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A React app has tangled global state causing 6 distinct UI bugs: stale closures in event handlers, a race condition between two useEffect hooks, zombie child component subscriptions, incorrect optimistic update rollbacks, localStorage hydration mismatch, and a context value that triggers infinite re-renders.',
+        tags: ['React', 'Zustand', 'useEffect', 'Debugging'],
+      },
+    ],
+  },
+  {
+    id: 'data',
+    name: 'Data / ML',
+    description: 'Engineers building data pipelines, ML systems, and analytics.',
+    challenges: [
+      {
+        title: 'Debug the Training Pipeline',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A model training pipeline produces a model with 95% training accuracy but 52% test accuracy. The candidate must find and fix: data leakage in the preprocessing step, a label encoding bug that maps two classes to the same value, an incorrect train/test split that leaks temporal data, and a learning rate schedule that causes catastrophic forgetting.',
+        tags: ['PyTorch', 'scikit-learn', 'Pandas', 'Debugging'],
+      },
+      {
+        title: 'Build a Feature Store with Point-in-Time Correctness',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'Design and implement a feature store that serves both training (batch) and inference (real-time) workloads. Must handle point-in-time correctness to prevent data leakage, entity key lookups, feature versioning, and a backfill pipeline — the offline and online stores must stay consistent.',
+        tags: ['Python', 'Redis', 'PostgreSQL', 'Parquet'],
+      },
+      {
+        title: 'Fix the Recommendation System',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A collaborative-filtering recommender has three compounding issues: cold-start users get empty results, popular items dominate all recommendations (popularity bias), and embeddings go stale after 24 hours. Fix the fallback strategy, implement popularity dampening, add incremental embedding updates, and validate with the provided A/B test harness.',
+        tags: ['Python', 'Embeddings', 'A/B Testing', 'Redis'],
+      },
+      {
+        title: 'Optimize Model Inference Latency',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A model serving system has p99 latency of 2.3 seconds (target: 200ms). The candidate must profile and fix: an unoptimized preprocessing step doing redundant tokenization, no request batching, a model loaded in FP32 instead of FP16, synchronous I/O in the prediction loop, and missing caching for repeated inputs.',
+        tags: ['FastAPI', 'ONNX', 'Profiling', 'Caching'],
+      },
+      {
+        title: 'Design a Data Quality Monitoring System',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Build a monitoring framework for a data pipeline that processes 10M rows/day. Implement schema validation, statistical drift detection (comparing distributions against a baseline), anomaly detection for numeric columns, automated alerting with configurable thresholds, and a dashboard endpoint — each check must handle the previous day\'s edge cases (nulls, type changes, volume spikes).',
+        tags: ['Python', 'Great Expectations', 'Statistics', 'FastAPI'],
+      },
+    ],
+  },
+  {
+    id: 'devops',
+    name: 'DevOps / Platform',
+    description: 'Infrastructure engineers managing deployments, CI/CD, and reliability.',
+    challenges: [
+      {
+        title: 'Fix the Broken Kubernetes Deployment',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A 3-service Kubernetes deployment has pods in CrashLoopBackOff. The candidate must diagnose and fix: misconfigured resource limits causing OOMKills, a liveness probe hitting the wrong path, a missing ConfigMap mount, network policies blocking inter-service communication, and an incorrect rolling update strategy that causes downtime.',
+        tags: ['Kubernetes', 'YAML', 'Networking', 'Debugging'],
+      },
+      {
+        title: 'Build a CI/CD Pipeline from Scratch',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'Design and implement a complete GitHub Actions pipeline for a monorepo: parallel test jobs with matrix strategy, Docker image building with layer caching, security scanning with Trivy, staging deployment with smoke tests, production deployment with manual approval gates, and automatic rollback on health check failure.',
+        tags: ['GitHub Actions', 'Docker', 'Trivy', 'Bash'],
+      },
+      {
+        title: 'Debug the Monitoring Blind Spots',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A production system had a 45-minute outage that nobody was alerted about. The candidate must audit and fix: Prometheus scrape configs missing a critical service, Grafana dashboards using wrong PromQL aggregations, AlertManager routes silencing valid alerts, missing log correlation IDs across services, and no SLO-based alerting for the payments service.',
+        tags: ['Prometheus', 'Grafana', 'AlertManager', 'PromQL'],
+      },
+      {
+        title: 'Implement Zero-Downtime Database Migration',
+        difficulty: 'Expert',
+        duration: '75 min',
+        description: 'Migrate a PostgreSQL schema (rename columns, change types, split a table) on a live production database with zero downtime. Implement the expand-contract pattern: add new columns, dual-write migration, backfill script with batching, switch reads, drop old columns — with rollback scripts at each stage and a validation harness.',
+        tags: ['PostgreSQL', 'Migration Scripts', 'Bash', 'Python'],
+      },
+      {
+        title: 'Harden the Infrastructure Security',
+        difficulty: 'Hard',
+        duration: '60 min',
+        description: 'A security audit flagged 8 critical issues in a Docker Compose + Nginx infrastructure: secrets in environment variables, containers running as root, exposed debug ports, missing TLS between services, overly-permissive IAM policies, no network segmentation, unencrypted database backups, and missing rate limiting on public endpoints.',
+        tags: ['Docker', 'Nginx', 'TLS', 'Security'],
+      },
+    ],
+  },
+];
+
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [activeRole, setActiveRole] = useState('fullstack');
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
@@ -148,6 +362,7 @@ export default function LandingPage() {
           </Link>
           <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
+            <a href="#templates" className="hover:text-white transition-colors">Templates</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
             <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
             <Link href="/about" className="hover:text-white transition-colors">About Us</Link>
@@ -198,12 +413,26 @@ export default function LandingPage() {
 
           <motion.p
             variants={fadeUp}
-            className="text-lg md:text-xl text-neutral-400 mb-12 max-w-2xl mx-auto leading-relaxed"
+            className="text-lg md:text-xl text-neutral-400 mb-6 max-w-2xl mx-auto leading-relaxed"
           >
             Resumes and LeetCode can&apos;t measure what matters most in 2026 &mdash;
             how effectively engineers collaborate with AI. ArcEval gives candidates a real
             AI coding assistant and scores exactly how they use it.
           </motion.p>
+
+          <motion.div
+            variants={fadeUp}
+            className="flex flex-wrap items-center justify-center gap-2 mb-12"
+          >
+            {['Full-Stack', 'Backend', 'Frontend', 'Data / ML', 'DevOps'].map((role) => (
+              <span
+                key={role}
+                className="border border-white/10 rounded-full px-3.5 py-1 text-xs text-neutral-400 font-medium"
+              >
+                {role}
+              </span>
+            ))}
+          </motion.div>
 
           <motion.div
             variants={fadeUp}
@@ -469,6 +698,143 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Roles We Assess */}
+      <section className="px-6 py-24 border-t border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
+              Built for every{' '}
+              <span className="gradient-text">engineering role</span>
+            </h2>
+            <p className="text-neutral-500 text-lg max-w-2xl mx-auto">
+              Whether you&apos;re hiring full-stack developers, backend specialists, frontend experts,
+              data engineers, or DevOps teams &mdash; ArcEval has purpose-built challenges for each discipline.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {roleCategories.map((role, i) => (
+              <motion.div
+                key={role.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08, duration: 0.4 }}
+                className="bg-[#111] border border-white/5 rounded-xl p-6 text-center hover:border-[#00a854]/30 transition-all duration-300"
+              >
+                <h3 className="text-base font-semibold text-white mb-2">{role.name}</h3>
+                <p className="text-xs text-neutral-500 leading-relaxed">{role.description}</p>
+                <div className="mt-3 text-[#00a854] text-sm font-medium">{role.challenges.length} templates</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Challenge Templates */}
+      <section id="templates" className="relative px-6 py-24 border-t border-white/5">
+        <div className="absolute inset-0 bg-dots opacity-20" />
+        <div className="max-w-6xl mx-auto relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
+              Sample challenge{' '}
+              <span className="gradient-text">templates</span>
+            </h2>
+            <p className="text-neutral-500 text-lg max-w-2xl mx-auto">
+              Every challenge is designed to require iterative problem-solving with AI &mdash;
+              they cannot be solved with a single prompt. Candidates must debug, reason, and adapt.
+            </p>
+          </motion.div>
+
+          {/* Role Tabs */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+            {roleCategories.map((role) => (
+              <button
+                key={role.id}
+                onClick={() => setActiveRole(role.id)}
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeRole === role.id
+                    ? 'bg-[#00a854] text-black'
+                    : 'bg-[#111] border border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
+                }`}
+              >
+                {role.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Challenge Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {roleCategories
+              .find((r) => r.id === activeRole)
+              ?.challenges.map((challenge, i) => (
+                <motion.div
+                  key={challenge.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08, duration: 0.4 }}
+                  className="bg-[#111] border border-white/5 rounded-2xl p-6 hover:border-[#00a854]/20 transition-all duration-300 flex flex-col"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                      challenge.difficulty === 'Expert'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {challenge.difficulty}
+                    </span>
+                    <span className="text-xs text-neutral-600">{challenge.duration}</span>
+                  </div>
+
+                  <h3 className="text-base font-semibold text-white mb-2 leading-snug">{challenge.title}</h3>
+                  <p className="text-xs text-neutral-500 leading-relaxed mb-4 flex-grow">{challenge.description}</p>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {challenge.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] font-medium text-neutral-500 bg-white/5 border border-white/5 rounded px-2 py-0.5"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </motion.div>
+              ))}
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3, duration: 0.5 }}
+            className="text-center mt-10"
+          >
+            <p className="text-neutral-600 text-sm mb-4">
+              All templates are fully customizable. Create your own challenges or modify any template to match your tech stack.
+            </p>
+            <Link
+              href="/register"
+              className="inline-block bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-8 py-3.5 rounded-xl text-sm transition-all btn-glow"
+            >
+              Try These Challenges Free
+            </Link>
+          </motion.div>
         </div>
       </section>
 
