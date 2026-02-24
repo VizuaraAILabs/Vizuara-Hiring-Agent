@@ -28,6 +28,12 @@ const team = [
     photo: '/team/sreedath.jpg',
     links: { linkedin: 'https://linkedin.com/in/sreedathpanat' },
   },
+  {
+    name: 'Raj',
+    role: 'Co-Founder',
+    photo: '/team/raj.png',
+    links: { linkedin: '' },
+  },
 ];
 
 export default function AboutPage() {
@@ -182,7 +188,7 @@ export default function AboutPage() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {team.map((member, i) => (
               <motion.div
                 key={member.name}
