@@ -13,8 +13,8 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
   const [saving, setSaving] = useState(false);
 
   const [vpsCost, setVpsCost] = useState(settings?.vps_monthly_cost_usd ?? 0);
-  const [anthropicIn, setAnthropicIn] = useState(settings?.anthropic_input_rate ?? 3.0);
-  const [anthropicOut, setAnthropicOut] = useState(settings?.anthropic_output_rate ?? 15.0);
+  const [anthropicIn, setAnthropicIn] = useState(settings?.anthropic_input_rate ?? 1.0);
+  const [anthropicOut, setAnthropicOut] = useState(settings?.anthropic_output_rate ?? 5.0);
   const [geminiIn, setGeminiIn] = useState(settings?.gemini_input_rate ?? 0.15);
   const [geminiOut, setGeminiOut] = useState(settings?.gemini_output_rate ?? 0.60);
 

@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE TABLE IF NOT EXISTS cost_settings (
   company_id UUID UNIQUE REFERENCES companies(id),
   vps_monthly_cost_usd NUMERIC(10,2) NOT NULL DEFAULT 0,
-  anthropic_input_rate NUMERIC(10,4) NOT NULL DEFAULT 3.0,
-  anthropic_output_rate NUMERIC(10,4) NOT NULL DEFAULT 15.0,
+  anthropic_input_rate NUMERIC(10,4) NOT NULL DEFAULT 1.0,
+  anthropic_output_rate NUMERIC(10,4) NOT NULL DEFAULT 5.0,
   gemini_input_rate NUMERIC(10,4) NOT NULL DEFAULT 0.15,
   gemini_output_rate NUMERIC(10,4) NOT NULL DEFAULT 0.60,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -23,9 +23,9 @@ export class CostTracker {
   private sessions = new Map<string, SessionTracking>();
   private sql: Sql;
 
-  // Default rates: Claude Sonnet $3/$15 per M tokens
-  private static INPUT_RATE = 3.0;
-  private static OUTPUT_RATE = 15.0;
+  // Default rates: Claude Haiku $1/$5 per M tokens
+  private static INPUT_RATE = 1.0;
+  private static OUTPUT_RATE = 5.0;
   private static CHARS_PER_TOKEN = 4;
 
   constructor(sql: Sql) {
@@ -114,7 +114,7 @@ export class CostTracker {
             (session_id, company_id, provider, event_type, input_tokens, output_tokens, model, cost_usd, metadata)
           VALUES
             (${session.sessionId}, ${session.companyId}, 'anthropic', 'api_call',
-             ${inputTokens}, ${outputTokens}, 'claude-sonnet', ${anthropicCost},
+             ${inputTokens}, ${outputTokens}, 'claude-haiku', ${anthropicCost},
              ${JSON.stringify({ estimated })}::jsonb)
         `;
       }

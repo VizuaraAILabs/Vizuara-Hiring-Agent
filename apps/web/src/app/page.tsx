@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import VizuaraLogo from '@/components/VizuaraLogo';
+import { useState } from 'react';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -15,35 +16,125 @@ const stagger = {
 };
 
 const dimensions = [
-  { name: 'Problem Decomposition', desc: 'Breaking complex problems into AI-solvable chunks', icon: '{}' },
-  { name: 'First Principles', desc: 'Grounding prompts in fundamental understanding', icon: '>>>' },
-  { name: 'Creativity', desc: 'Novel approaches to prompt construction', icon: '***' },
-  { name: 'Iteration Quality', desc: 'Refining outputs through intelligent follow-ups', icon: '<=>' },
-  { name: 'Debugging', desc: 'Identifying and resolving AI-generated issues', icon: '!?' },
-  { name: 'Architecture', desc: 'Structuring code for AI-assisted development', icon: '#[]' },
-  { name: 'Communication', desc: 'Clarity and precision in human-AI dialogue', icon: '...' },
-  { name: 'Efficiency', desc: 'Minimizing tokens while maximizing output', icon: '->>' },
+  { name: 'Problem Decomposition', desc: 'Can the candidate break complex problems into AI-solvable chunks?', icon: '{}' },
+  { name: 'First-Principles Thinking', desc: 'Do they ground their prompts in fundamental understanding?', icon: '>>>' },
+  { name: 'Creative Problem Solving', desc: 'Do they find novel approaches to prompt construction?', icon: '***' },
+  { name: 'Iteration Quality', desc: 'Can they refine AI outputs through intelligent follow-ups?', icon: '<=>' },
+  { name: 'Debugging with AI', desc: 'How effectively do they identify and resolve AI-generated issues?', icon: '!?' },
+  { name: 'Architecture Decisions', desc: 'Do they structure code well for AI-assisted development?', icon: '#[]' },
+  { name: 'Communication Clarity', desc: 'How precise and effective is their human-AI dialogue?', icon: '...' },
+  { name: 'Token Efficiency', desc: 'Do they minimize tokens while maximizing output quality?', icon: '->>' },
 ];
 
 const steps = [
   {
     num: '01',
     title: 'Create a Challenge',
-    desc: 'Design a timed coding challenge. Candidates solve it using Claude Code as their AI pair-programmer.',
+    desc: 'Design timed coding challenges in minutes. Choose from templates or create custom assessments tailored to your role.',
   },
   {
     num: '02',
-    title: 'Candidates Solve',
-    desc: 'Candidates work in a sandboxed browser terminal. Every keystroke, prompt, and AI response is captured.',
+    title: 'Share One Link',
+    desc: 'Send a single assessment link to all candidates. They enter their details and begin immediately — no account setup required.',
   },
   {
     num: '03',
-    title: 'AI-Powered Analysis',
-    desc: 'Gemini analyzes the full session transcript and generates detailed reports scoring 8 collaboration dimensions.',
+    title: 'Get AI-Scored Reports',
+    desc: 'Every interaction is captured and analyzed. Receive detailed scoring across 8 dimensions with side-by-side candidate comparisons.',
+  },
+];
+
+const pricingPlans = [
+  {
+    name: 'Starter',
+    price: 149,
+    period: '/month',
+    assessments: '50 assessments/month',
+    desc: 'For teams starting to evaluate AI collaboration skills.',
+    features: [
+      'Up to 50 candidate assessments',
+      '8-dimension AI scoring reports',
+      'Shareable assessment links',
+      'Candidate comparison dashboard',
+      'Email support',
+    ],
+    cta: 'Start Free Trial',
+    popular: false,
+  },
+  {
+    name: 'Growth',
+    price: 499,
+    period: '/month',
+    assessments: '250 assessments/month',
+    desc: 'For scaling engineering teams with high-volume hiring.',
+    features: [
+      'Up to 250 candidate assessments',
+      'Everything in Starter, plus:',
+      'Custom challenge templates',
+      'Team collaboration & notes',
+      'Priority support',
+      'CSV & API data export',
+    ],
+    cta: 'Start Free Trial',
+    popular: true,
+  },
+  {
+    name: 'Enterprise',
+    price: null,
+    period: '',
+    assessments: 'Unlimited assessments',
+    desc: 'For organizations with custom security, compliance, and volume needs.',
+    features: [
+      'Unlimited candidate assessments',
+      'Everything in Growth, plus:',
+      'SSO / SAML integration',
+      'Custom branding',
+      'Dedicated account manager',
+      'SLA & uptime guarantee',
+      'On-premise deployment option',
+    ],
+    cta: 'Contact Sales',
+    popular: false,
+  },
+];
+
+const stats = [
+  { value: '8', label: 'Scoring Dimensions' },
+  { value: '< 2 min', label: 'Report Generation' },
+  { value: '90%+', label: 'Completion Rate' },
+  { value: '67%', label: 'Faster Time-to-Hire' },
+];
+
+const faqs = [
+  {
+    q: 'How is this different from HackerRank or Codility?',
+    a: 'Traditional platforms test if a candidate can solve algorithm puzzles alone. ArcEval tests how effectively they collaborate with AI — which is how modern engineering actually works. Candidates get a real AI coding assistant and solve real-world challenges, not contrived puzzles.',
+  },
+  {
+    q: 'What does the candidate experience look like?',
+    a: 'Candidates click a link, enter their details, and land in a browser-based terminal with an AI coding assistant. They solve a timed challenge using natural conversation with AI — no downloads, no IDE setup, no friction.',
+  },
+  {
+    q: 'How is the assessment scored?',
+    a: 'Our AI analysis engine reviews the complete session transcript — every prompt, response, edit, and command. It scores candidates across 8 dimensions of AI collaboration, from problem decomposition to token efficiency, producing a detailed report with evidence citations.',
+  },
+  {
+    q: 'Can I create custom challenges?',
+    a: 'Yes. You can create challenges tailored to your tech stack, difficulty level, and time constraints. Include starter files, test suites, and specific requirements. We also offer pre-built challenge templates.',
+  },
+  {
+    q: 'How long does a typical assessment take?',
+    a: 'Most challenges are designed for 30-60 minutes. You set the time limit when creating the challenge. Reports are generated automatically within 2 minutes of completion.',
+  },
+  {
+    q: 'Is candidate data secure?',
+    a: 'Each candidate works in an isolated, sandboxed container that is destroyed after the session. No candidate has access to another candidate\'s work. Session data is encrypted at rest and in transit.',
   },
 ];
 
 export default function LandingPage() {
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
       {/* Navigation */}
@@ -55,6 +146,11 @@ export default function LandingPage() {
               Arc<span className="text-[#00a854]">Eval</span>
             </span>
           </Link>
+          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
+            <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
+            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+          </div>
           <div className="flex items-center gap-3">
             <Link
               href="/login"
@@ -73,7 +169,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-6">
+      <section className="relative pt-36 pb-20 px-6">
         <div className="absolute inset-0 bg-grid opacity-50" />
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-[#00a854]/5 blur-[120px] pointer-events-none" />
 
@@ -88,23 +184,24 @@ export default function LandingPage() {
             className="inline-flex items-center gap-2 border border-[#00a854]/20 bg-[#00a854]/5 rounded-full px-4 py-1.5 mb-8"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-[#00a854] animate-pulse" />
-            <span className="text-[#00a854] text-sm font-medium">AI Collaboration Assessment Platform</span>
+            <span className="text-[#00a854] text-sm font-medium">The AI Collaboration Assessment Platform</span>
           </motion.div>
 
           <motion.h1
             variants={fadeUp}
             className="text-5xl sm:text-6xl md:text-7xl font-serif italic leading-[1.1] mb-6 tracking-tight"
           >
-            Evaluate how engineers{' '}
-            <span className="gradient-text glow-text">collaborate with AI</span>
+            Hire engineers who{' '}
+            <span className="gradient-text glow-text">think with AI</span>
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
             className="text-lg md:text-xl text-neutral-400 mb-12 max-w-2xl mx-auto leading-relaxed"
           >
-            Resumes and LeetCode are unreliable in the AI era. Assess what actually matters &mdash;
-            how effectively developers work with AI coding assistants, in real time.
+            Resumes and LeetCode can&apos;t measure what matters most in 2026 &mdash;
+            how effectively engineers collaborate with AI. ArcEval gives candidates a real
+            AI coding assistant and scores exactly how they use it.
           </motion.p>
 
           <motion.div
@@ -115,26 +212,125 @@ export default function LandingPage() {
               href="/register"
               className="bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-8 py-4 rounded-xl text-lg transition-all btn-glow"
             >
-              Start Evaluating
+              Start Free Trial
             </Link>
-            <Link
-              href="/login"
+            <a
+              href="#how-it-works"
               className="border border-white/10 hover:border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
-              Sign In
-            </Link>
+              See How It Works
+            </a>
           </motion.div>
         </motion.div>
       </section>
 
+      {/* Stats Bar */}
+      <section className="px-6 py-12 border-t border-b border-white/5">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
+          {stats.map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              className="text-center"
+            >
+              <div className="text-3xl md:text-4xl font-serif italic text-white mb-1">{stat.value}</div>
+              <div className="text-sm text-neutral-500">{stat.label}</div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Problem Statement */}
+      <section className="px-6 py-24">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-serif italic mb-6">
+              Traditional assessments are{' '}
+              <span className="gradient-text">broken</span>
+            </h2>
+            <p className="text-neutral-400 text-lg max-w-2xl mx-auto leading-relaxed">
+              85% of developers now use AI coding assistants daily. Yet every major hiring platform
+              still tests candidates in isolation — banning the very tools they&apos;ll use on the job.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="bg-[#111] border border-red-500/10 rounded-2xl p-8"
+            >
+              <div className="text-red-400/60 text-sm font-mono mb-4">LEGACY APPROACH</div>
+              <ul className="space-y-3 text-neutral-400 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="text-red-400/60 mt-0.5">x</span>
+                  <span>Algorithmic puzzles that don&apos;t reflect real work</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-red-400/60 mt-0.5">x</span>
+                  <span>AI tools banned — testing a reality that no longer exists</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-red-400/60 mt-0.5">x</span>
+                  <span>Pass/fail scoring with no insight into problem-solving process</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-red-400/60 mt-0.5">x</span>
+                  <span>Candidates memorize solutions — high false positive rates</span>
+                </li>
+              </ul>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="bg-[#111] border border-[#00a854]/20 rounded-2xl p-8"
+            >
+              <div className="text-[#00a854] text-sm font-mono mb-4">ARCEVAL APPROACH</div>
+              <ul className="space-y-3 text-neutral-400 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span>Real-world challenges that mirror actual engineering tasks</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span>AI assistant included — test the skill that actually matters</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span>8-dimension analysis of problem-solving and AI collaboration</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span>Every prompt, edit, and decision captured — impossible to fake</span>
+                </li>
+              </ul>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* How it works */}
-      <section className="relative px-6 py-24">
+      <section id="how-it-works" className="relative px-6 py-24">
         <div className="absolute inset-0 bg-dots opacity-30" />
         <div className="max-w-5xl mx-auto relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: '-100px' }}
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
@@ -152,7 +348,7 @@ export default function LandingPage() {
                 key={step.num}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
+                viewport={{ once: true, margin: '-50px' }}
                 transition={{ delay: i * 0.15, duration: 0.5 }}
                 className="group relative bg-[#111] border border-white/5 rounded-2xl p-8 hover:border-[#00a854]/20 transition-all duration-300"
               >
@@ -174,15 +370,16 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: '-100px' }}
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
             <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
-              The complete <span className="gradient-text">assessment pipeline</span>
+              A real <span className="gradient-text">engineering environment</span>
             </h2>
             <p className="text-neutral-500 text-lg max-w-xl mx-auto">
-              Sandboxed terminals, real-time interaction logging, and AI-powered analysis &mdash; all in one platform.
+              Candidates work in a sandboxed terminal with a real AI coding assistant.
+              No multiple choice. No contrived puzzles. Real engineering.
             </p>
           </motion.div>
 
@@ -205,20 +402,30 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="p-6 font-mono text-sm leading-relaxed">
-                <div className="text-neutral-600">$ claude &quot;Help me implement a RAG retrieval strategy&quot;</div>
+                <div className="text-neutral-600">$ claude &quot;Help me implement a rate limiter using a sliding window algorithm&quot;</div>
                 <div className="mt-2 text-[#00a854]">
-                  I&apos;ll help you build a RAG retrieval system. Let me start by analyzing the
+                  I&apos;ll implement a sliding window rate limiter. Let me start by designing the
                 </div>
                 <div className="text-[#00a854]">
-                  requirements and breaking this into components...
+                  data structure and then build the middleware...
                 </div>
-                <div className="mt-3 text-neutral-600">$ python test_retrieval.py</div>
-                <div className="mt-1 text-neutral-400">Running 12 test cases...</div>
-                <div className="text-[#00a854]">All tests passed (12/12)</div>
+                <div className="mt-3 text-neutral-600">$ npm test</div>
+                <div className="mt-1 text-neutral-400">Running 18 test cases...</div>
+                <div className="text-[#00a854]">All tests passed (18/18)</div>
                 <div className="mt-3 text-neutral-700 animate-pulse">_</div>
               </div>
             </div>
           </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3, duration: 0.5 }}
+            className="text-center text-neutral-600 text-sm mt-6"
+          >
+            Every prompt, response, and command is recorded and analyzed by our AI scoring engine.
+          </motion.p>
         </div>
       </section>
 
@@ -229,7 +436,7 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: '-100px' }}
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
@@ -238,7 +445,7 @@ export default function LandingPage() {
               <span className="gradient-text">AI collaboration</span>
             </h2>
             <p className="text-neutral-500 text-lg max-w-xl mx-auto">
-              Each candidate is scored across 8 dimensions that capture the full picture of effective human-AI collaboration.
+              Go beyond pass/fail. Understand exactly how each candidate thinks, communicates, and collaborates with AI.
             </p>
           </motion.div>
 
@@ -264,43 +471,191 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Built With Section */}
-      <section className="px-6 py-24 border-t border-white/5">
+      {/* Pricing */}
+      <section id="pricing" className="relative px-6 py-24 border-t border-white/5">
+        <div className="absolute inset-0 bg-dots opacity-20" />
+        <div className="max-w-5xl mx-auto relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
+              Simple, transparent{' '}
+              <span className="gradient-text">pricing</span>
+            </h2>
+            <p className="text-neutral-500 text-lg max-w-xl mx-auto">
+              Start with a 14-day free trial. No credit card required. Scale as your hiring grows.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {pricingPlans.map((plan, i) => (
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.12, duration: 0.5 }}
+                className={`relative bg-[#111] rounded-2xl p-8 flex flex-col ${
+                  plan.popular
+                    ? 'border-2 border-[#00a854]/40 ring-1 ring-[#00a854]/20'
+                    : 'border border-white/5'
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="bg-[#00a854] text-black text-xs font-bold px-4 py-1.5 rounded-full">
+                      MOST POPULAR
+                    </span>
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-white mb-1">{plan.name}</h3>
+                  <p className="text-neutral-500 text-sm">{plan.desc}</p>
+                </div>
+
+                <div className="mb-6">
+                  {plan.price !== null ? (
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-serif italic text-white">${plan.price}</span>
+                      <span className="text-neutral-500 text-sm">{plan.period}</span>
+                    </div>
+                  ) : (
+                    <div className="text-4xl font-serif italic text-white">Custom</div>
+                  )}
+                  <div className="text-[#00a854] text-sm font-medium mt-2">{plan.assessments}</div>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-grow">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-3 text-sm">
+                      <span className="text-[#00a854] mt-0.5 flex-shrink-0">+</span>
+                      <span className="text-neutral-400">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  href={plan.price !== null ? '/register' : 'mailto:raj@vizuara.ai'}
+                  className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
+                    plan.popular
+                      ? 'bg-[#00a854] hover:bg-[#00c96b] text-black btn-glow'
+                      : 'border border-white/10 hover:border-white/20 text-white hover:bg-white/5'
+                  }`}
+                >
+                  {plan.cta}
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="text-center text-neutral-600 text-sm mt-8"
+          >
+            All plans include a 14-day free trial. Billed annually for 20% savings.
+            Need a custom volume? <a href="mailto:raj@vizuara.ai" className="text-[#00a854] hover:underline">Talk to us</a>.
+          </motion.p>
+        </div>
+      </section>
+
+      {/* Social Proof / Why Companies Choose ArcEval */}
+      <section className="px-6 py-24">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            className="text-center mb-16"
           >
             <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
-              Powered by the <span className="gradient-text">best in class</span>
+              Why teams choose{' '}
+              <span className="gradient-text">ArcEval</span>
             </h2>
           </motion.div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                title: '10x More Signal',
+                desc: 'Traditional assessments capture a final answer. ArcEval captures the entire problem-solving journey — every prompt, every iteration, every decision.',
+              },
+              {
+                title: 'Zero Candidate Friction',
+                desc: 'No downloads, no IDE setup, no account creation. Candidates click a link and start coding in their browser within seconds.',
+              },
+              {
+                title: 'Unfakeable Results',
+                desc: 'When every interaction is recorded and analyzed, there\'s no way to memorize solutions or game the system. You see real collaboration skills.',
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.12, duration: 0.5 }}
+                className="bg-[#111] border border-white/5 rounded-2xl p-8"
+              >
+                <h3 className="text-lg font-semibold text-white mb-3">{item.title}</h3>
+                <p className="text-neutral-500 text-sm leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="px-6 py-24 border-t border-white/5">
+        <div className="max-w-3xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
           >
-            {[
-              { name: 'Claude Code', desc: 'AI coding assistant in sandbox' },
-              { name: 'Docker', desc: 'Isolated candidate environments' },
-              { name: 'Gemini', desc: 'Session analysis & scoring' },
-              { name: 'Next.js', desc: 'Dashboard & real-time UI' },
-            ].map((tech) => (
-              <div
-                key={tech.name}
-                className="bg-[#111] border border-white/5 rounded-xl p-5 text-center"
-              >
-                <p className="text-white font-semibold text-sm mb-1">{tech.name}</p>
-                <p className="text-neutral-600 text-xs">{tech.desc}</p>
-              </div>
-            ))}
+            <h2 className="text-4xl md:text-5xl font-serif italic mb-4">
+              Frequently asked{' '}
+              <span className="gradient-text">questions</span>
+            </h2>
           </motion.div>
+
+          <div className="space-y-3">
+            {faqs.map((faq, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.06, duration: 0.4 }}
+                className="bg-[#111] border border-white/5 rounded-xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full flex items-center justify-between p-5 text-left"
+                >
+                  <span className="text-sm font-medium text-white pr-4">{faq.q}</span>
+                  <span className={`text-neutral-500 text-lg flex-shrink-0 transition-transform duration-200 ${openFaq === i ? 'rotate-45' : ''}`}>
+                    +
+                  </span>
+                </button>
+                {openFaq === i && (
+                  <div className="px-5 pb-5 -mt-1">
+                    <p className="text-neutral-500 text-sm leading-relaxed">{faq.a}</p>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -317,33 +672,42 @@ export default function LandingPage() {
           className="max-w-3xl mx-auto text-center relative"
         >
           <h2 className="text-4xl md:text-5xl font-serif italic mb-6">
-            Ready to hire engineers who{' '}
-            <span className="gradient-text">think with AI</span>?
+            Ready to hire for the{' '}
+            <span className="gradient-text">AI era</span>?
           </h2>
           <p className="text-neutral-500 text-lg mb-10 max-w-xl mx-auto">
-            Stop guessing. Start measuring how candidates actually collaborate with AI coding assistants.
+            Join engineering teams that evaluate what actually matters. Start your free trial today.
           </p>
-          <Link
-            href="/register"
-            className="inline-block bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-10 py-4 rounded-xl text-lg transition-all btn-glow"
-          >
-            Get Started Free
-          </Link>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/register"
+              className="inline-block bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-10 py-4 rounded-xl text-lg transition-all btn-glow"
+            >
+              Start Free Trial
+            </Link>
+            <a
+              href="mailto:raj@vizuara.ai"
+              className="inline-block border border-white/10 hover:border-white/20 text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
+            >
+              Talk to Sales
+            </a>
+          </div>
         </motion.div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-white/5 px-6 py-8">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <VizuaraLogo size={22} />
             <span className="text-sm text-neutral-500">
               Arc<span className="text-neutral-400">Eval</span>
             </span>
           </div>
-          <p className="text-xs text-neutral-600">
-            Powered by <span className="text-neutral-400">Vizuara AI</span>
-          </p>
+          <div className="flex items-center gap-6 text-xs text-neutral-600">
+            <a href="mailto:raj@vizuara.ai" className="hover:text-neutral-400 transition-colors">Contact</a>
+            <span>Powered by <span className="text-neutral-400">Vizuara AI</span></span>
+          </div>
         </div>
       </footer>
     </div>

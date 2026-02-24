@@ -5,8 +5,8 @@ import { Readable, Writable, Duplex } from 'stream';
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-// Force Claude Code to use Sonnet (cheapest capable model) inside sandbox containers
-const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+// Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
+const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
 export interface DockerSession {
   containerId: string;
