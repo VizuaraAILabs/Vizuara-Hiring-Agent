@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
-import VizuaraLogo from '@/components/VizuaraLogo';
+import FPLLogo from '@/components/FPLLogo';
 
 export default function SessionPage() {
   const params = useParams();
@@ -67,7 +67,7 @@ export default function SessionPage() {
       <div className="max-w-2xl w-full relative">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
-            <VizuaraLogo size={26} />
+            <FPLLogo size={26} />
             <span className="text-sm font-semibold text-white">
               Arc<span className="text-[#00a854]">Eval</span>
             </span>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import VizuaraLogo from '@/components/VizuaraLogo';
+import FPLLogo from '@/components/FPLLogo';
 import { useState } from 'react';
 
 const fadeUp = {
@@ -141,7 +141,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <VizuaraLogo size={30} />
+            <FPLLogo size={30} />
             <span className="text-lg font-semibold text-white">
               Arc<span className="text-[#00a854]">Eval</span>
             </span>
@@ -150,6 +150,7 @@ export default function LandingPage() {
             <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
             <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
             <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+            <Link href="/about" className="hover:text-white transition-colors">About Us</Link>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -354,7 +355,7 @@ export default function LandingPage() {
               >
                 <div className="absolute inset-0 rounded-2xl bg-[#00a854]/0 group-hover:bg-[#00a854]/[0.02] transition-colors duration-300" />
                 <div className="relative">
-                  <div className="text-5xl font-serif italic text-[#00a854]/20 mb-4">{step.num}</div>
+                  <div className="text-5xl font-serif italic text-[#00a854]/40 mb-4">{step.num}</div>
                   <h3 className="text-xl font-semibold text-white mb-3">{step.title}</h3>
                   <p className="text-neutral-500 text-sm leading-relaxed">{step.desc}</p>
                 </div>
@@ -540,7 +541,7 @@ export default function LandingPage() {
                 </ul>
 
                 <Link
-                  href={plan.price !== null ? '/register' : 'mailto:raj@vizuara.ai'}
+                  href={plan.price !== null ? '/register' : 'mailto:raj@firstprinciplelabs.ai'}
                   className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
                     plan.popular
                       ? 'bg-[#00a854] hover:bg-[#00c96b] text-black btn-glow'
@@ -561,7 +562,7 @@ export default function LandingPage() {
             className="text-center text-neutral-600 text-sm mt-8"
           >
             All plans include a 14-day free trial. Billed annually for 20% savings.
-            Need a custom volume? <a href="mailto:raj@vizuara.ai" className="text-[#00a854] hover:underline">Talk to us</a>.
+            Need a custom volume? <a href="mailto:raj@firstprinciplelabs.ai" className="text-[#00a854] hover:underline">Talk to us</a>.
           </motion.p>
         </div>
       </section>
@@ -686,7 +687,7 @@ export default function LandingPage() {
               Start Free Trial
             </Link>
             <a
-              href="mailto:raj@vizuara.ai"
+              href="mailto:raj@firstprinciplelabs.ai"
               className="inline-block border border-white/10 hover:border-white/20 text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
               Talk to Sales
@@ -699,14 +700,15 @@ export default function LandingPage() {
       <footer className="border-t border-white/5 px-6 py-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <VizuaraLogo size={22} />
+            <FPLLogo size={22} />
             <span className="text-sm text-neutral-500">
               Arc<span className="text-neutral-400">Eval</span>
             </span>
           </div>
           <div className="flex items-center gap-6 text-xs text-neutral-600">
-            <a href="mailto:raj@vizuara.ai" className="hover:text-neutral-400 transition-colors">Contact</a>
-            <span>Powered by <span className="text-neutral-400">Vizuara AI</span></span>
+            <Link href="/about" className="hover:text-neutral-400 transition-colors">About Us</Link>
+            <a href="mailto:raj@firstprinciplelabs.ai" className="hover:text-neutral-400 transition-colors">Contact</a>
+            <span>Built by <span className="text-neutral-400">First Principle Labs</span></span>
           </div>
         </div>
       </footer>

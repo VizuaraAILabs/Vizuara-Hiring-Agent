@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import VizuaraLogo from '@/components/VizuaraLogo';
+import FPLLogo from '@/components/FPLLogo';
 
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
@@ -23,12 +23,12 @@ export default function Sidebar() {
     <aside className="w-64 bg-[#111] border-r border-white/5 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <VizuaraLogo size={26} />
+          <FPLLogo size={26} />
           <span className="text-lg font-semibold text-white">
             Arc<span className="text-[#00a854]">Eval</span>
           </span>
         </Link>
-        <p className="text-xs text-neutral-600 mt-1">Powered by Vizuara AI</p>
+        <p className="text-xs text-neutral-600 mt-1">By First Principle Labs</p>
       </div>
 
       <nav className="flex-1 p-4 space-y-1">

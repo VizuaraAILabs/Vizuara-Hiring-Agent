@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import VizuaraLogo from '@/components/VizuaraLogo';
+import FPLLogo from '@/components/FPLLogo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,7 +52,7 @@ export default function LoginPage() {
       >
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2.5 mb-6">
-            <VizuaraLogo size={30} />
+            <FPLLogo size={30} />
             <span className="text-lg font-semibold text-white">
               Arc<span className="text-[#00a854]">Eval</span>
             </span>
