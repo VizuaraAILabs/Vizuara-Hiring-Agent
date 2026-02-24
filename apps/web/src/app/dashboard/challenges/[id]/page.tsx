@@ -18,6 +18,7 @@ export default function ChallengeDetailPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [copiedShareable, setCopiedShareable] = useState(false);
 
   useEffect(() => {
     fetch(`/api/challenges/${params.id}`)
@@ -78,6 +79,34 @@ export default function ChallengeDetailPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-serif italic text-white">{challenge.title}</h1>
         <p className="text-neutral-500 mt-1">{challenge.time_limit_min} minute time limit</p>
+      </div>
+
+      {/* Shareable Link */}
+      <div className="bg-[#111] border border-[#00a854]/20 rounded-2xl p-5 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white mb-1">Shareable Assessment Link</p>
+            <p className="text-xs text-neutral-500">Share this single link with all candidates. They enter their own details before starting.</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <input
+              type="text"
+              value={typeof window !== 'undefined' ? `${window.location.origin}/apply/${params.id}` : `/apply/${params.id}`}
+              readOnly
+              className="bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-[#00a854] text-xs font-mono w-64"
+            />
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/apply/${params.id}`);
+                setCopiedShareable(true);
+                setTimeout(() => setCopiedShareable(false), 2000);
+              }}
+              className="bg-[#00a854] hover:bg-[#00c96b] text-black px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap"
+            >
+              {copiedShareable ? 'Copied!' : 'Copy Link'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
