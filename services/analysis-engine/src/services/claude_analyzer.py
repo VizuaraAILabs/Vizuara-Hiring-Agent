@@ -244,51 +244,78 @@ or fabricate any actions or content."""
         challenge_description: str,
         session_metadata: dict,
         transcript: str,
-    ) -> dict:
+    ) -> tuple[dict, dict]:
         """Pass 1: Extract structured observations from the transcript."""
         message = self._build_pass1_message(
             challenge_description, session_metadata, transcript
         )
 
-        logger.info("Pass 1: Extracting observations from transcript")
+        last_error: Exception | None = None
+        pass1_usage: dict = {}
 
-        response = self.client.models.generate_content(
-            model=self.MODEL,
-            contents=message,
-            config=types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a precise transcript analyst. Your job is to extract "
-                    "factual observations from candidate session transcripts. "
-                    "You must NEVER fabricate, invent, or assume information. "
-                    "Only record what is explicitly present in the transcript."
-                ),
-                temperature=0.1,  # Very low for factual extraction
-                max_output_tokens=32000,
-                response_mime_type="application/json",
-                response_schema=_OBSERVATION_SCHEMA,
-            ),
-        )
-
-        # Capture token usage from Gemini response
-        pass1_usage = {}
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
-            um = response.usage_metadata
-            pass1_usage = {
-                "input_tokens": getattr(um, 'prompt_token_count', 0) or 0,
-                "output_tokens": getattr(um, 'candidates_token_count', 0) or 0,
-            }
+        for attempt in range(1, self.MAX_RETRIES + 2):
             logger.info(
-                "Pass 1 token usage: input=%d, output=%d",
-                pass1_usage["input_tokens"], pass1_usage["output_tokens"],
+                "Pass 1: Extracting observations (attempt %d/%d)",
+                attempt, self.MAX_RETRIES + 1,
             )
 
-        observations = json.loads(response.text)
-        logger.info(
-            "Pass 1 complete: %d candidate actions, %d AI interactions",
-            len(observations.get("candidate_actions", [])),
-            len(observations.get("ai_interactions", [])),
+            response = self.client.models.generate_content(
+                model=self.MODEL,
+                contents=message,
+                config=types.GenerateContentConfig(
+                    system_instruction=(
+                        "You are a precise transcript analyst. Your job is to extract "
+                        "factual observations from candidate session transcripts. "
+                        "You must NEVER fabricate, invent, or assume information. "
+                        "Only record what is explicitly present in the transcript."
+                    ),
+                    temperature=0.1,  # Very low for factual extraction
+                    max_output_tokens=32000,
+                    response_mime_type="application/json",
+                    response_schema=_OBSERVATION_SCHEMA,
+                ),
+            )
+
+            # Capture token usage from Gemini response
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                um = response.usage_metadata
+                pass1_usage = {
+                    "input_tokens": getattr(um, 'prompt_token_count', 0) or 0,
+                    "output_tokens": getattr(um, 'candidates_token_count', 0) or 0,
+                }
+                logger.info(
+                    "Pass 1 token usage: input=%d, output=%d",
+                    pass1_usage["input_tokens"], pass1_usage["output_tokens"],
+                )
+
+            try:
+                observations = json.loads(response.text)
+                logger.info(
+                    "Pass 1 complete: %d candidate actions, %d AI interactions",
+                    len(observations.get("candidate_actions", [])),
+                    len(observations.get("ai_interactions", [])),
+                )
+                return observations, pass1_usage
+
+            except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                last_error = exc
+                logger.warning(
+                    "Pass 1 attempt %d failed: %s", attempt, str(exc)
+                )
+                if attempt <= self.MAX_RETRIES:
+                    original_message = self._build_pass1_message(
+                        challenge_description, session_metadata, transcript
+                    )
+                    message = (
+                        f"{original_message}\n\n"
+                        f"NOTE: Your previous response was invalid JSON. "
+                        f"Error: {exc}\n\nPlease produce a complete, valid JSON response."
+                    )
+
+        raise ValueError(
+            f"Pass 1 failed after {self.MAX_RETRIES + 1} attempts. "
+            f"Last error: {last_error}"
         )
-        return observations, pass1_usage
 
     # ------------------------------------------------------------------
     # Pass 2: Score based on observations
