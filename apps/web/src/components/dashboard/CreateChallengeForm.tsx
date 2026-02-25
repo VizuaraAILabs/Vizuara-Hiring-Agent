@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function CreateChallengeForm() {
@@ -11,6 +11,21 @@ export default function CreateChallengeForm() {
   const [starterFilesDir, setStarterFilesDir] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const prefill = sessionStorage.getItem('prefill_challenge');
+    if (prefill) {
+      try {
+        const data = JSON.parse(prefill);
+        if (data.title) setTitle(data.title);
+        if (data.description) setDescription(data.description);
+        if (data.timeLimit) setTimeLimit(data.timeLimit);
+      } catch {
+        // ignore invalid JSON
+      }
+      sessionStorage.removeItem('prefill_challenge');
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

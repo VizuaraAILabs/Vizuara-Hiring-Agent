@@ -28,6 +28,7 @@ services:
       NEXT_PUBLIC_TERMINAL_WS_URL: wss://${DOMAIN}/terminal
       NEXT_PUBLIC_TERMINAL_HTTP_URL: https://${DOMAIN}/terminal
       ANALYSIS_ENGINE_URL: http://analysis:8000
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       NODE_ENV: production
 
   terminal:
