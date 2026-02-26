@@ -1,13 +1,14 @@
 'use client';
 
-import Link from 'next/link';
-import { motion } from 'framer-motion';
 import FPLLogo from '@/components/FPLLogo';
+import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { useState } from 'react';
 
 const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
 const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
 const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
+const PAYMENT_URL = process.env.NEXT_PUBLIC_PAYMENT_URL || 'https://vizuara.ai/courses/arceval';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -891,6 +892,14 @@ export default function LandingPage() {
                 >
                   {plan.cta}
                 </a>
+                {plan.price !== null && (
+                  <a
+                    href={PAYMENT_URL}
+                    className="block text-center font-semibold py-3.5 rounded-xl text-sm transition-all border border-white/10 hover:border-white/20 text-white hover:bg-white/5 mt-2"
+                  >
+                    Buy Now
+                  </a>
+                )}
               </motion.div>
             ))}
           </div>
