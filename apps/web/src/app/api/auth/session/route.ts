@@ -16,11 +16,21 @@ function getCookieDomain(): string | undefined {
   return process.env.COOKIE_DOMAIN || undefined;
 }
 
+function getExternalOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  return request.nextUrl.origin;
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
+  const origin = getExternalOrigin(request);
 
   if (!token) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
+    return NextResponse.redirect(new URL('/auth/login', origin));
   }
 
   try {
@@ -58,7 +68,7 @@ export async function GET(request: NextRequest) {
     const returnTo = request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
     const redirectPath = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
 
-    const response = NextResponse.redirect(new URL(redirectPath, request.url));
+    const response = NextResponse.redirect(new URL(redirectPath, origin));
 
     const cookieDomain = getCookieDomain();
     response.cookies.set(COOKIE_NAME, sessionCookie, {
