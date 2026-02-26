@@ -418,10 +418,12 @@ export default function LandingPage() {
               Start Free Trial
             </a>
             <a
-              href="#how-it-works"
+              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
+              target="_blank"
+              rel="noopener noreferrer"
               className="border border-white/10 hover:border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
-              See How It Works
+              Book a Demo
             </a>
           </motion.div>
         </motion.div>
@@ -880,7 +882,7 @@ export default function LandingPage() {
                 </ul>
 
                 <a
-                  href={plan.price !== null ? SIGNUP_URL : 'mailto:raj@firstprinciplelabs.ai'}
+                  href={plan.price !== null ? SIGNUP_URL : 'https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action'}
                   className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
                     plan.popular
                       ? 'bg-primary hover:bg-primary-light text-black btn-glow'
@@ -1026,10 +1028,12 @@ export default function LandingPage() {
               Start Free Trial
             </a>
             <a
-              href="mailto:raj@firstprinciplelabs.ai"
+              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block border border-white/10 hover:border-white/20 text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
-              Talk to Sales
+              Book a Demo
             </a>
           </div>
         </motion.div>
