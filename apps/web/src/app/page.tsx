@@ -374,6 +374,14 @@ export default function LandingPage() {
             >
               Sign in
             </Link>
+            <a
+              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
+            >
+              Book a Demo
+            </a>
             <Link
               href="/register"
               className="bg-[#00a854] hover:bg-[#00c96b] text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
@@ -445,10 +453,12 @@ export default function LandingPage() {
               Start Free Trial
             </Link>
             <a
-              href="#how-it-works"
+              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
+              target="_blank"
+              rel="noopener noreferrer"
               className="border border-white/10 hover:border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
-              See How It Works
+              Book a Demo
             </a>
           </motion.div>
         </motion.div>
@@ -907,7 +917,7 @@ export default function LandingPage() {
                 </ul>
 
                 <Link
-                  href={plan.price !== null ? '/register' : 'mailto:raj@firstprinciplelabs.ai'}
+                  href={plan.price !== null ? '/register' : 'https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action'}
                   className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
                     plan.popular
                       ? 'bg-[#00a854] hover:bg-[#00c96b] text-black btn-glow'
@@ -1053,10 +1063,12 @@ export default function LandingPage() {
               Start Free Trial
             </Link>
             <a
-              href="mailto:raj@firstprinciplelabs.ai"
+              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block border border-white/10 hover:border-white/20 text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
             >
-              Talk to Sales
+              Book a Demo
             </a>
           </div>
         </motion.div>
