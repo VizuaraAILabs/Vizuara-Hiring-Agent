@@ -3,11 +3,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import type { EnrollmentStatus, EnrollmentStatusResponse } from '@/types/subscription';
+import type { PlanStatus } from '@/types';
 
 interface SubscriptionContextValue {
   enrolled: boolean;
   loading: boolean;
   status: EnrollmentStatus | null;
+  planStatus: PlanStatus | null;
   refreshSubscription: () => Promise<void>;
 }
 
@@ -17,23 +19,35 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const [enrolled, setEnrolled] = useState(false);
   const [status, setStatus] = useState<EnrollmentStatus | null>(null);
+  const [planStatus, setPlanStatus] = useState<PlanStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshSubscription = useCallback(async () => {
     try {
-      const res = await fetch('/api/subscription/status');
-      if (!res.ok) {
+      const [subRes, planRes] = await Promise.all([
+        fetch('/api/subscription/status'),
+        fetch('/api/plan'),
+      ]);
+
+      if (subRes.ok) {
+        const data: EnrollmentStatusResponse = await subRes.json();
+        setEnrolled(data.enrolled);
+        setStatus(data.status);
+      } else {
         setEnrolled(false);
         setStatus(null);
-        setLoading(false);
-        return;
       }
-      const data: EnrollmentStatusResponse = await res.json();
-      setEnrolled(data.enrolled);
-      setStatus(data.status);
+
+      if (planRes.ok) {
+        const data: PlanStatus = await planRes.json();
+        setPlanStatus(data);
+      } else {
+        setPlanStatus(null);
+      }
     } catch {
       setEnrolled(false);
       setStatus(null);
+      setPlanStatus(null);
     } finally {
       setLoading(false);
     }
@@ -44,6 +58,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setEnrolled(false);
       setStatus(null);
+      setPlanStatus(null);
       setLoading(false);
       return;
     }
@@ -52,7 +67,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SubscriptionContext.Provider
-      value={{ enrolled, loading: authLoading || loading, status, refreshSubscription }}
+      value={{ enrolled, loading: authLoading || loading, status, planStatus, refreshSubscription }}
     >
       {children}
     </SubscriptionContext.Provider>
