@@ -50,8 +50,16 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
   const sessionsUsed = count;
   const trialEndsAt = company.trial_ends_at;
 
-  // 3. If on trial plan, check trial-specific logic
+  // 3. If on trial plan, check if they've upgraded via Firestore first
   if (company.plan === 'trial') {
+    // Always check Firestore for enrollment — catches mid-trial upgrades
+    if (company.firebase_uid) {
+      const updatedPlan = await syncEnrollmentFromFirestore(companyId, company.firebase_uid);
+      if (updatedPlan) {
+        return checkPaidPlan(companyId, updatedPlan, sessionsUsed, trialEndsAt);
+      }
+    }
+
     const trialExpired = trialEndsAt ? new Date(trialEndsAt) < new Date() : false;
 
     if (!trialExpired && sessionsUsed < PLAN_LIMITS.trial) {
@@ -75,15 +83,6 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
         trialEndsAt,
         paymentUrl,
       };
-    }
-
-    // Trial expired — check if they've enrolled (paid) via Firestore
-    if (company.firebase_uid) {
-      const updatedPlan = await syncEnrollmentFromFirestore(companyId, company.firebase_uid);
-      if (updatedPlan) {
-        // Re-check with updated plan
-        return checkPaidPlan(companyId, updatedPlan, sessionsUsed, trialEndsAt);
-      }
     }
 
     return {
