@@ -29,11 +29,12 @@ export async function GET(request: NextRequest) {
 
     const sessionCookie = await createSessionCookie(token);
 
-    // Upsert company record keyed by Firebase UID
+    // Vizuara sets decoded.name to the company name when redirecting to ArcEval
     const firebaseUid = decoded.uid;
-    const email = decoded.email || '';
     const name = decoded.name || decoded.email?.split('@')[0] || 'Unknown';
+    const email = decoded.email || '';
 
+    // Upsert company record keyed by Firebase UID
     const [existing] = await sql<{ id: string }[]>`
       SELECT id FROM companies WHERE firebase_uid = ${firebaseUid}
     `;
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         VALUES (${id}, ${name}, ${email}, '', ${firebaseUid})
       `;
     } else {
-      // Update email/name in case they changed on vizuara.ai
+      // Sync profile from Vizuara on every login
       await sql`
         UPDATE companies SET email = ${email}, name = ${name}
         WHERE firebase_uid = ${firebaseUid}

@@ -3,6 +3,7 @@ export interface Company {
   name: string;
   email: string;
   password_hash: string;
+  firebase_uid: string | null;
   created_at: string;
 }
 
