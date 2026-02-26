@@ -24,11 +24,17 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
-      JWT_SECRET: ${JWT_SECRET}
       NEXT_PUBLIC_TERMINAL_WS_URL: wss://${DOMAIN}/terminal
       NEXT_PUBLIC_TERMINAL_HTTP_URL: https://${DOMAIN}/terminal
       ANALYSIS_ENGINE_URL: http://analysis:8000
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      ARCEVAL_ENROLLMENT_ID: ${ARCEVAL_ENROLLMENT_ID}
+      NEXT_PUBLIC_VIZUARA_URL: ${NEXT_PUBLIC_VIZUARA_URL}
+      NEXT_PUBLIC_APP_CALLBACK_URL: ${NEXT_PUBLIC_APP_CALLBACK_URL}
       NODE_ENV: production
 
   terminal:
@@ -44,7 +50,6 @@ services:
       - /tmp/sessions:/tmp/sessions
     environment:
       DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
-      JWT_SECRET: ${JWT_SECRET}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SANDBOX_IMAGE: hiring-sandbox
       NODE_ENV: production

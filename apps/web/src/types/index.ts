@@ -103,14 +103,6 @@ export interface InteractionAnnotation {
   dimension: string | null;
 }
 
-export interface JWTPayload {
-  sub: string;
-  email: string;
-  name: string;
-  iat: number;
-  exp: number;
-}
-
 export interface SessionWithChallenge extends Session {
   challenge_title: string;
   challenge_description: string;

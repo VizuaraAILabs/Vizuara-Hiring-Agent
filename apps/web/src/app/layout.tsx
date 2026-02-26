@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Instrument_Serif, Geist_Mono } from "next/font/google";
+import { AuthProvider } from "@/context/AuthContext";
+import { SubscriptionProvider } from "@/context/SubscriptionContext";
+import Header from "@/components/Header";
 import "./globals.css";
 
 const inter = Inter({
@@ -37,7 +40,12 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
       >
-        {children}
+        <AuthProvider>
+          <SubscriptionProvider>
+            <Header />
+            {children}
+          </SubscriptionProvider>
+        </AuthProvider>
       </body>
     </html>
   );

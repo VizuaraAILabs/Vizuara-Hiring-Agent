@@ -23,7 +23,7 @@ source .env.production
 set +a
 
 # Verify required vars
-for var in DOMAIN POSTGRES_PASSWORD JWT_SECRET ANTHROPIC_API_KEY GEMINI_API_KEY; do
+for var in DOMAIN POSTGRES_PASSWORD ANTHROPIC_API_KEY GEMINI_API_KEY FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL FIREBASE_PRIVATE_KEY; do
   if [ -z "${!var}" ] || [[ "${!var}" == *"CHANGE_ME"* ]]; then
     echo "ERROR: $var is not set or still has placeholder value in .env.production"
     exit 1

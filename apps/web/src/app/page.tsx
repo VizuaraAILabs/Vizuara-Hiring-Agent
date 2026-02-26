@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import FPLLogo from '@/components/FPLLogo';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
+
+const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
+const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
+const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -351,51 +355,12 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <FPLLogo size={30} />
-            <span className="text-lg font-semibold text-white">
-              Arc<span className="text-[#00a854]">Eval</span>
-            </span>
-          </Link>
-          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
-            <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
-            <a href="#templates" className="hover:text-white transition-colors">Templates</a>
-            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
-            <Link href="/about" className="hover:text-white transition-colors">About Us</Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
-            >
-              Sign in
-            </Link>
-            <a
-              href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
-            >
-              Book a Demo
-            </a>
-            <Link
-              href="/register"
-              className="bg-[#00a854] hover:bg-[#00c96b] text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation is rendered by the global Header component in layout.tsx */}
 
       {/* Hero Section */}
       <section className="relative pt-36 pb-20 px-6">
         <div className="absolute inset-0 bg-grid opacity-50" />
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-[#00a854]/5 blur-[120px] pointer-events-none" />
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
         <motion.div
           className="max-w-4xl mx-auto text-center relative"
@@ -405,10 +370,10 @@ export default function LandingPage() {
         >
           <motion.div
             variants={fadeUp}
-            className="inline-flex items-center gap-2 border border-[#00a854]/20 bg-[#00a854]/5 rounded-full px-4 py-1.5 mb-8"
+            className="inline-flex items-center gap-2 border border-primary/20 bg-primary/5 rounded-full px-4 py-1.5 mb-8"
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-[#00a854] animate-pulse" />
-            <span className="text-[#00a854] text-sm font-medium">The AI Collaboration Assessment Platform</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-primary text-sm font-medium">The AI Collaboration Assessment Platform</span>
           </motion.div>
 
           <motion.h1
@@ -446,12 +411,12 @@ export default function LandingPage() {
             variants={fadeUp}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link
-              href="/register"
-              className="bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-8 py-4 rounded-xl text-lg transition-all btn-glow"
+            <a
+              href={SIGNUP_URL}
+              className="bg-primary hover:bg-primary-light text-black font-semibold px-8 py-4 rounded-xl text-lg transition-all btn-glow"
             >
               Start Free Trial
-            </Link>
+            </a>
             <a
               href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
               target="_blank"
@@ -537,24 +502,24 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-[#111] border border-[#00a854]/20 rounded-2xl p-8"
+              className="bg-[#111] border border-primary/20 rounded-2xl p-8"
             >
-              <div className="text-[#00a854] text-sm font-mono mb-4">ARCEVAL APPROACH</div>
+              <div className="text-primary text-sm font-mono mb-4">ARCEVAL APPROACH</div>
               <ul className="space-y-3 text-neutral-400 text-sm">
                 <li className="flex items-start gap-3">
-                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span className="text-primary mt-0.5">+</span>
                   <span>Real-world challenges that mirror actual engineering tasks</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span className="text-primary mt-0.5">+</span>
                   <span>AI assistant included — test the skill that actually matters</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span className="text-primary mt-0.5">+</span>
                   <span>8-dimension analysis of problem-solving and AI collaboration</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span className="text-primary mt-0.5">+</span>
                   <span>Every prompt, edit, and decision captured — impossible to fake</span>
                 </li>
               </ul>
@@ -590,11 +555,11 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}
                 transition={{ delay: i * 0.15, duration: 0.5 }}
-                className="group relative bg-[#111] border border-white/5 rounded-2xl p-8 hover:border-[#00a854]/20 transition-all duration-300"
+                className="group relative bg-[#111] border border-white/5 rounded-2xl p-8 hover:border-primary/20 transition-all duration-300"
               >
-                <div className="absolute inset-0 rounded-2xl bg-[#00a854]/0 group-hover:bg-[#00a854]/[0.02] transition-colors duration-300" />
+                <div className="absolute inset-0 rounded-2xl bg-primary/0 group-hover:bg-primary/2 transition-colors duration-300" />
                 <div className="relative">
-                  <div className="text-5xl font-serif italic text-[#00a854]/40 mb-4">{step.num}</div>
+                  <div className="text-5xl font-serif italic text-primary/40 mb-4">{step.num}</div>
                   <h3 className="text-xl font-semibold text-white mb-3">{step.title}</h3>
                   <p className="text-neutral-500 text-sm leading-relaxed">{step.desc}</p>
                 </div>
@@ -643,15 +608,15 @@ export default function LandingPage() {
               </div>
               <div className="p-6 font-mono text-sm leading-relaxed">
                 <div className="text-neutral-600">$ claude &quot;Help me implement a rate limiter using a sliding window algorithm&quot;</div>
-                <div className="mt-2 text-[#00a854]">
+                <div className="mt-2 text-primary">
                   I&apos;ll implement a sliding window rate limiter. Let me start by designing the
                 </div>
-                <div className="text-[#00a854]">
+                <div className="text-primary">
                   data structure and then build the middleware...
                 </div>
                 <div className="mt-3 text-neutral-600">$ npm test</div>
                 <div className="mt-1 text-neutral-400">Running 18 test cases...</div>
-                <div className="text-[#00a854]">All tests passed (18/18)</div>
+                <div className="text-primary">All tests passed (18/18)</div>
                 <div className="mt-3 text-neutral-700 animate-pulse">_</div>
               </div>
             </div>
@@ -697,11 +662,11 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.06, duration: 0.4 }}
-                className="group relative bg-[#111] border border-white/5 rounded-xl p-5 hover:border-[#00a854]/30 transition-all duration-300 cursor-default"
+                className="group relative bg-[#111] border border-white/5 rounded-xl p-5 hover:border-primary/30 transition-all duration-300 cursor-default"
               >
-                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-b from-[#00a854]/[0.03] to-transparent" />
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-b from-primary/3 to-transparent" />
                 <div className="relative">
-                  <div className="text-xs font-mono text-[#00a854]/50 mb-3">{dim.icon}</div>
+                  <div className="text-xs font-mono text-primary/50 mb-3">{dim.icon}</div>
                   <h3 className="text-sm font-semibold text-white mb-1">{dim.name}</h3>
                   <p className="text-xs text-neutral-500 leading-relaxed">{dim.desc}</p>
                 </div>
@@ -739,11 +704,11 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08, duration: 0.4 }}
-                className="bg-[#111] border border-white/5 rounded-xl p-6 text-center hover:border-[#00a854]/30 transition-all duration-300"
+                className="bg-[#111] border border-white/5 rounded-xl p-6 text-center hover:border-primary/30 transition-all duration-300"
               >
                 <h3 className="text-base font-semibold text-white mb-2">{role.name}</h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">{role.description}</p>
-                <div className="mt-3 text-[#00a854] text-sm font-medium">{role.challenges.length} templates</div>
+                <div className="mt-3 text-primary text-sm font-medium">{role.challenges.length} templates</div>
               </motion.div>
             ))}
           </div>
@@ -779,7 +744,7 @@ export default function LandingPage() {
                 onClick={() => setActiveRole(role.id)}
                 className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   activeRole === role.id
-                    ? 'bg-[#00a854] text-black'
+                    ? 'bg-primary text-black'
                     : 'bg-[#111] border border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
                 }`}
               >
@@ -798,7 +763,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.08, duration: 0.4 }}
-                  className="bg-[#111] border border-white/5 rounded-2xl p-6 hover:border-[#00a854]/20 transition-all duration-300 flex flex-col"
+                  className="bg-[#111] border border-white/5 rounded-2xl p-6 hover:border-primary/20 transition-all duration-300 flex flex-col"
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
@@ -838,12 +803,12 @@ export default function LandingPage() {
             <p className="text-neutral-600 text-sm mb-4">
               All templates are fully customizable. Create your own challenges or modify any template to match your tech stack.
             </p>
-            <Link
-              href="/register"
-              className="inline-block bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-8 py-3.5 rounded-xl text-sm transition-all btn-glow"
+            <a
+              href={SIGNUP_URL}
+              className="inline-block bg-primary hover:bg-primary-light text-black font-semibold px-8 py-3.5 rounded-xl text-sm transition-all btn-glow"
             >
               Try These Challenges Free
-            </Link>
+            </a>
           </motion.div>
         </div>
       </section>
@@ -878,13 +843,13 @@ export default function LandingPage() {
                 transition={{ delay: i * 0.12, duration: 0.5 }}
                 className={`relative bg-[#111] rounded-2xl p-8 flex flex-col ${
                   plan.popular
-                    ? 'border-2 border-[#00a854]/40 ring-1 ring-[#00a854]/20'
+                    ? 'border-2 border-primary/40 ring-1 ring-primary/20'
                     : 'border border-white/5'
                 }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="bg-[#00a854] text-black text-xs font-bold px-4 py-1.5 rounded-full">
+                    <span className="bg-primary text-black text-xs font-bold px-4 py-1.5 rounded-full">
                       MOST POPULAR
                     </span>
                   </div>
@@ -904,28 +869,28 @@ export default function LandingPage() {
                   ) : (
                     <div className="text-4xl font-serif italic text-white">Custom</div>
                   )}
-                  <div className="text-[#00a854] text-sm font-medium mt-2">{plan.assessments}</div>
+                  <div className="text-primary text-sm font-medium mt-2">{plan.assessments}</div>
                 </div>
 
                 <ul className="space-y-3 mb-8 flex-grow">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-3 text-sm">
-                      <span className="text-[#00a854] mt-0.5 flex-shrink-0">+</span>
+                      <span className="text-primary mt-0.5 flex-shrink-0">+</span>
                       <span className="text-neutral-400">{feature}</span>
                     </li>
                   ))}
                 </ul>
 
-                <Link
-                  href={plan.price !== null ? '/register' : 'https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action'}
+                <a
+                  href={plan.price !== null ? SIGNUP_URL : 'https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action'}
                   className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
                     plan.popular
-                      ? 'bg-[#00a854] hover:bg-[#00c96b] text-black btn-glow'
+                      ? 'bg-primary hover:bg-primary-light text-black btn-glow'
                       : 'border border-white/10 hover:border-white/20 text-white hover:bg-white/5'
                   }`}
                 >
                   {plan.cta}
-                </Link>
+                </a>
               </motion.div>
             ))}
           </div>
@@ -938,7 +903,7 @@ export default function LandingPage() {
             className="text-center text-neutral-600 text-sm mt-8"
           >
             All plans include a 14-day free trial. Billed annually for 20% savings.
-            Need a custom volume? <a href="mailto:raj@firstprinciplelabs.ai" className="text-[#00a854] hover:underline">Talk to us</a>.
+            Need a custom volume? <a href="mailto:raj@firstprinciplelabs.ai" className="text-primary hover:underline">Talk to us</a>.
           </motion.p>
         </div>
       </section>
@@ -1039,7 +1004,7 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="relative px-6 py-24">
         <div className="absolute inset-0 bg-grid opacity-30" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#00a854]/5 blur-[100px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1056,12 +1021,12 @@ export default function LandingPage() {
             Join engineering teams that evaluate what actually matters. Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/register"
-              className="inline-block bg-[#00a854] hover:bg-[#00c96b] text-black font-semibold px-10 py-4 rounded-xl text-lg transition-all btn-glow"
+            <a
+              href={SIGNUP_URL}
+              className="inline-block bg-primary hover:bg-primary-light text-black font-semibold px-10 py-4 rounded-xl text-lg transition-all btn-glow"
             >
               Start Free Trial
-            </Link>
+            </a>
             <a
               href="https://calendly.com/rajatdandekar-1/arceval-demo-see-ai-native-hiring-in-action"
               target="_blank"
