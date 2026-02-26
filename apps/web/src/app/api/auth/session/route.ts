@@ -34,9 +34,10 @@ export async function GET(request: NextRequest) {
     const name = decoded.name || decoded.email?.split('@')[0] || 'Unknown';
     const email = decoded.email || '';
 
-    // Upsert company record keyed by Firebase UID
+    // Upsert company record keyed by Firebase UID or email
     const [existing] = await sql<{ id: string }[]>`
-      SELECT id FROM companies WHERE firebase_uid = ${firebaseUid}
+      SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+      LIMIT 1
     `;
 
     if (!existing) {
@@ -47,10 +48,10 @@ export async function GET(request: NextRequest) {
         VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
       `;
     } else {
-      // Sync profile from Vizuara on every login
+      // Sync profile and firebase_uid from Vizuara on every login
       await sql`
-        UPDATE companies SET email = ${email}, name = ${name}
-        WHERE firebase_uid = ${firebaseUid}
+        UPDATE companies SET email = ${email}, name = ${name}, firebase_uid = ${firebaseUid}
+        WHERE id = ${existing.id}
       `;
     }
 
