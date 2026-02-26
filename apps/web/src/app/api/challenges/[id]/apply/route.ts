@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { checkEnrollmentStatus } from '@/lib/enrollment';
 import { generateToken } from '@/lib/utils';
-import { v4 as uuidv4 } from 'uuid';
 import type { Challenge } from '@/types';
+import { NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 
 // Public endpoint — no auth required. Candidates self-register for a challenge.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +31,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (existing && (existing.status === 'pending' || existing.status === 'active')) {
       // Return existing session token so they can resume
       return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
+    }
+
+    // Enforce plan quotas before creating a new session
+    const planStatus = await checkEnrollmentStatus(challenge.company_id);
+    if (!planStatus.canCreateSession) {
+      // Candidates see a generic message — never expose payment details
+      return NextResponse.json(
+        { error: 'This assessment is temporarily unavailable. Please contact the company.' },
+        { status: 403 }
+      );
     }
 
     const sessionId = uuidv4();

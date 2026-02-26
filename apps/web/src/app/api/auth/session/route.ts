@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth } from '@/lib/firebase-admin';
 import { createSessionCookie } from '@/lib/auth';
 import sql from '@/lib/db';
+import { getAdminAuth } from '@/lib/firebase-admin';
+import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -41,9 +41,10 @@ export async function GET(request: NextRequest) {
 
     if (!existing) {
       const id = uuidv4();
+      const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       await sql`
-        INSERT INTO companies (id, name, email, password_hash, firebase_uid)
-        VALUES (${id}, ${name}, ${email}, '', ${firebaseUid})
+        INSERT INTO companies (id, name, email, password_hash, firebase_uid, plan, trial_ends_at)
+        VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
       `;
     } else {
       // Sync profile from Vizuara on every login

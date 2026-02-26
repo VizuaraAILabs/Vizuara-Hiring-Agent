@@ -1,9 +1,13 @@
+export type PlanTier = 'trial' | 'starter' | 'growth' | 'enterprise';
+
 export interface Company {
   id: string;
   name: string;
   email: string;
   password_hash: string;
   firebase_uid: string | null;
+  plan: PlanTier;
+  trial_ends_at: string | null;
   created_at: string;
 }
 
@@ -164,4 +168,18 @@ export interface SessionCostSummary {
   docker_cost: number;
   total_cost: number;
   created_at: string;
+}
+
+// Plan & enrollment types
+
+export type EnrollmentCheckReason = 'ok' | 'trial_active' | 'trial_expired' | 'quota_exceeded' | 'not_enrolled';
+
+export interface PlanStatus {
+  canCreateSession: boolean;
+  reason: EnrollmentCheckReason;
+  sessionsUsed: number;
+  sessionsLimit: number;
+  plan: PlanTier;
+  trialEndsAt: string | null;
+  paymentUrl?: string;
 }
