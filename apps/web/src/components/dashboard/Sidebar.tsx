@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import FPLLogo from '@/components/FPLLogo';
+import { useAuth } from '@/context/AuthContext';
 
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
@@ -12,12 +13,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleLogout() {
-    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    router.push('/login');
-  }
+  const { logout } = useAuth();
 
   return (
     <aside className="w-64 bg-[#111] border-r border-white/5 flex flex-col h-screen sticky top-0">
@@ -25,7 +21,7 @@ export default function Sidebar() {
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <FPLLogo size={26} />
           <span className="text-lg font-semibold text-white">
-            Arc<span className="text-[#00a854]">Eval</span>
+            Arc<span className="text-primary">Eval</span>
           </span>
         </Link>
         <p className="text-xs text-neutral-600 mt-1">By First Principle Labs</p>
@@ -40,7 +36,7 @@ export default function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-[#00a854]/10 text-[#00a854]'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-neutral-500 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -53,7 +49,7 @@ export default function Sidebar() {
 
       <div className="p-4 border-t border-white/5">
         <button
-          onClick={handleLogout}
+          onClick={logout}
           className="w-full text-left px-4 py-3 rounded-xl text-sm text-neutral-500 hover:text-white hover:bg-white/5 transition-all"
         >
           Sign out

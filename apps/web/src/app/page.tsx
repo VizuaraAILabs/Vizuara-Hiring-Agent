@@ -3,7 +3,11 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import FPLLogo from '@/components/FPLLogo';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
+
+const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
+const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
+const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,
@@ -351,38 +355,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <FPLLogo size={30} />
-            <span className="text-lg font-semibold text-white">
-              Arc<span className="text-primary">Eval</span>
-            </span>
-          </Link>
-          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
-            <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
-            <a href="#templates" className="hover:text-white transition-colors">Templates</a>
-            <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
-            <Link href="/about" className="hover:text-white transition-colors">About Us</Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/register"
-              className="bg-primary hover:bg-primary-light text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation is rendered by the global Header component in layout.tsx */}
 
       {/* Hero Section */}
       <section className="relative pt-36 pb-20 px-6">
@@ -438,12 +411,12 @@ export default function LandingPage() {
             variants={fadeUp}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Link
-              href="/register"
+            <a
+              href={SIGNUP_URL}
               className="bg-primary hover:bg-primary-light text-black font-semibold px-8 py-4 rounded-xl text-lg transition-all btn-glow"
             >
               Start Free Trial
-            </Link>
+            </a>
             <a
               href="#how-it-works"
               className="border border-white/10 hover:border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg transition-all hover:bg-white/5"
@@ -828,12 +801,12 @@ export default function LandingPage() {
             <p className="text-neutral-600 text-sm mb-4">
               All templates are fully customizable. Create your own challenges or modify any template to match your tech stack.
             </p>
-            <Link
-              href="/register"
+            <a
+              href={SIGNUP_URL}
               className="inline-block bg-primary hover:bg-primary-light text-black font-semibold px-8 py-3.5 rounded-xl text-sm transition-all btn-glow"
             >
               Try These Challenges Free
-            </Link>
+            </a>
           </motion.div>
         </div>
       </section>
@@ -906,8 +879,8 @@ export default function LandingPage() {
                   ))}
                 </ul>
 
-                <Link
-                  href={plan.price !== null ? '/register' : 'mailto:raj@firstprinciplelabs.ai'}
+                <a
+                  href={plan.price !== null ? SIGNUP_URL : 'mailto:raj@firstprinciplelabs.ai'}
                   className={`block text-center font-semibold py-3.5 rounded-xl text-sm transition-all ${
                     plan.popular
                       ? 'bg-primary hover:bg-primary-light text-black btn-glow'
@@ -915,7 +888,7 @@ export default function LandingPage() {
                   }`}
                 >
                   {plan.cta}
-                </Link>
+                </a>
               </motion.div>
             ))}
           </div>
@@ -1046,12 +1019,12 @@ export default function LandingPage() {
             Join engineering teams that evaluate what actually matters. Start your free trial today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/register"
+            <a
+              href={SIGNUP_URL}
               className="inline-block bg-primary hover:bg-primary-light text-black font-semibold px-10 py-4 rounded-xl text-lg transition-all btn-glow"
             >
               Start Free Trial
-            </Link>
+            </a>
             <a
               href="mailto:raj@firstprinciplelabs.ai"
               className="inline-block border border-white/10 hover:border-white/20 text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:bg-white/5"

@@ -10,7 +10,6 @@
   "dependencies": {
     "postgres": "^3.4.4",
     "dotenv": "^16.4.0",
-    "jose": "^5.2.0",
     "dockerode": "^4.0.0",
     "uuid": "^9.0.0",
     "ws": "^8.16.0"
