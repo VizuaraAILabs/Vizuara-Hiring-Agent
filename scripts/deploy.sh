@@ -47,8 +47,27 @@ docker compose exec -T postgres psql -U hiring -d hiring_agent < database/migrat
 
 echo ""
 echo "5. Running seed script..."
-docker compose cp scripts/seed-prod.js web:/tmp/seed-prod.js
-docker compose exec web node /tmp/seed-prod.js
+docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent <<'SQL'
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM companies WHERE email = 'demo@acme.com') THEN
+    INSERT INTO companies (id, name, email, password_hash)
+    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com',
+            '$2a$10$xJ8Kq5K5K5K5K5K5K5K5KuYgYgYgYgYgYgYgYgYgYgYgYgYgYgYgY');
+    RAISE NOTICE 'Demo company seeded (email: demo@acme.com)';
+  ELSE
+    RAISE NOTICE 'Demo company already exists, skipping.';
+  END IF;
+
+  INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir)
+  SELECT 'c0000001-0001-4000-a000-000000000006', id,
+         'Design a Retrieval Strategy for RAG',
+         'Build the retrieval component for a RAG system. See BRIEF.md for full instructions.',
+         60, 'challenges/rag-retrieval'
+  FROM companies WHERE email = 'demo@acme.com'
+  ON CONFLICT (id) DO NOTHING;
+END $$;
+SQL
 
 echo ""
 echo "=== Deployment complete! ==="
