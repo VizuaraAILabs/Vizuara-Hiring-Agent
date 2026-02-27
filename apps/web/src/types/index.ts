@@ -19,6 +19,7 @@ export interface Challenge {
   time_limit_min: number;
   is_active: number;
   starter_files_dir: string | null;
+  starter_files: { path: string; content: string }[] | null;
   created_at: string;
 }
 

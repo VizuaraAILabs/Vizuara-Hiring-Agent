@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import postgres from 'postgres';
 import path from 'path';
 import dotenv from 'dotenv';
-import { DockerManager } from './docker-manager';
+import { DockerManager, StarterFile } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import { buildFileTree, readFileContent } from './file-service';
@@ -139,17 +139,20 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   console.log(`[Terminal] Session connected: ${sessionId}`);
 
-  // Look up starter files directory for this challenge
+  // Look up starter files for this challenge
   let starterFilesDir: string | undefined;
+  let starterFiles: StarterFile[] | undefined;
   try {
-    const [challenge] = await sql<{ starter_files_dir: string | null }[]>`
-      SELECT starter_files_dir FROM challenges WHERE id = ${challengeId}
+    const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: StarterFile[] | null }[]>`
+      SELECT starter_files_dir, starter_files FROM challenges WHERE id = ${challengeId}
     `;
-    if (challenge?.starter_files_dir) {
+    if (challenge?.starter_files && Array.isArray(challenge.starter_files) && challenge.starter_files.length > 0) {
+      starterFiles = challenge.starter_files;
+    } else if (challenge?.starter_files_dir) {
       starterFilesDir = challenge.starter_files_dir;
     }
   } catch (err) {
-    console.warn(`[Terminal] Failed to query starter_files_dir for challenge ${challengeId}:`, err);
+    console.warn(`[Terminal] Failed to query starter files for challenge ${challengeId}:`, err);
   }
 
   // Spawn Docker container (may queue if at capacity)
@@ -163,7 +166,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
         message: 'Server is at capacity. You are in the queue...',
       }));
     }
-    dockerSession = await dockerManager.spawn(sessionId, starterFilesDir);
+    dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
   } catch (err: any) {
     const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
     console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);

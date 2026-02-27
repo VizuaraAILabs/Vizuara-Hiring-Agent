@@ -22,6 +22,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
+  const [creatingPhase, setCreatingPhase] = useState<'creating' | 'generating'>('creating');
   const [error, setError] = useState('');
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
@@ -29,6 +30,8 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     setError('');
 
     try {
+      setCreatingPhase('creating');
+
       const res = await fetch('/api/challenges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,6 +49,18 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       }
 
       const created = await res.json();
+
+      // Generate starter files for the challenge
+      setCreatingPhase('generating');
+      try {
+        await fetch(`/api/challenges/${created.id}/generate-files`, {
+          method: 'POST',
+        });
+      } catch {
+        // Non-fatal — challenge was created, starter files just failed
+        console.warn('Failed to generate starter files, continuing without them');
+      }
+
       router.push(`/dashboard/challenges/${created.id}`);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -162,7 +177,11 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
                   disabled={creatingIndex !== null}
                   className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black font-semibold px-5 py-2.5 rounded-lg text-sm transition-all"
                 >
-                  {creatingIndex === i ? 'Creating...' : 'Use This Challenge'}
+                  {creatingIndex === i
+                    ? creatingPhase === 'generating'
+                      ? 'Generating starter files...'
+                      : 'Creating...'
+                    : 'Use This Challenge'}
                 </button>
                 <button
                   onClick={() => handleCustomize(challenge)}
