@@ -9,7 +9,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
 // Resource management constants
-const MAX_CONCURRENT_SANDBOXES = parseInt(process.env.SANDBOX_MAX_CONCURRENT || '3');
+const MAX_CONCURRENT_SANDBOXES = parseInt(process.env.SANDBOX_MAX_CONCURRENT || '5');
 const SANDBOX_IDLE_TTL_MS = parseInt(process.env.SANDBOX_IDLE_TTL_MS || String(15 * 60 * 1000)); // 15 min
 const QUEUE_TIMEOUT_MS = parseInt(process.env.SANDBOX_QUEUE_TIMEOUT_MS || '60000'); // 60s
 
@@ -53,6 +53,11 @@ export class DockerManager {
   /** Number of active sandbox containers */
   get activeCount(): number {
     return this.sessions.size;
+  }
+
+  /** Maximum concurrent sandboxes allowed */
+  get maxConcurrent(): number {
+    return MAX_CONCURRENT_SANDBOXES;
   }
 
   async spawn(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
@@ -116,7 +121,7 @@ export class DockerManager {
       ],
       HostConfig: {
         Binds: [`${hostWorkDir}:/workspace`],
-        Memory: 2 * 1024 * 1024 * 1024, // 2GB
+        Memory: 1 * 1024 * 1024 * 1024, // 1GB
         NanoCpus: 1 * 1e9, // 1 CPU (leave headroom for 3 concurrent on 2-4 core host)
         NetworkMode: 'bridge',
         AutoRemove: false,
