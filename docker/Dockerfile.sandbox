@@ -23,7 +23,7 @@ RUN npm install -g @anthropic-ai/claude-code && \
     npm cache clean --force && \
     CLAUDE_BIN=$(which claude) && \
     mv "$CLAUDE_BIN" "${CLAUDE_BIN}-real" && \
-    printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
+    printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions --model "${CLAUDE_MODEL:-claude-haiku-4-5-20251001}" "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
     chmod +x "$CLAUDE_BIN"
 
 # Remove build-essential now that npm global install is done (saves ~200MB)
