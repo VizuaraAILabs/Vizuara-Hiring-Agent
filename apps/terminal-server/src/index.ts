@@ -156,7 +156,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   let dockerSession;
   try {
     // Notify client if they'll be queued
-    if (dockerManager.activeCount >= 3) {
+    if (dockerManager.activeCount >= dockerManager.maxConcurrent) {
       ws.send(JSON.stringify({
         type: 'queued',
         position: dockerManager.queueLength + 1,
