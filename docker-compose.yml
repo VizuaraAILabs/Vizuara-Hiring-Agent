@@ -53,7 +53,15 @@ services:
       DATABASE_URL: postgresql://hiring:${POSTGRES_PASSWORD}@postgres:5432/hiring_agent
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SANDBOX_IMAGE: hiring-sandbox
+      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-3}
+      SANDBOX_IDLE_TTL_MS: ${SANDBOX_IDLE_TTL_MS:-900000}
+      SANDBOX_QUEUE_TIMEOUT_MS: ${SANDBOX_QUEUE_TIMEOUT_MS:-60000}
       NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
 
   analysis:
     build:

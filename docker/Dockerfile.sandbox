@@ -3,7 +3,8 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies (no nodejs here — we install it separately)
-RUN apt-get update && apt-get install -y \
+# Use --no-install-recommends to reduce image size
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     curl git wget sudo \
     build-essential ca-certificates gnupg \
@@ -13,16 +14,22 @@ RUN apt-get update && apt-get install -y \
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update && apt-get install -y nodejs \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code globally, then create a wrapper that auto-skips
 # all interactive prompts (safe because sandbox is fully isolated in Docker)
 RUN npm install -g @anthropic-ai/claude-code && \
+    npm cache clean --force && \
     CLAUDE_BIN=$(which claude) && \
     mv "$CLAUDE_BIN" "${CLAUDE_BIN}-real" && \
     printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
     chmod +x "$CLAUDE_BIN"
+
+# Remove build-essential now that npm global install is done (saves ~200MB)
+RUN apt-get update && apt-get purge -y build-essential && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root candidate user (--dangerously-skip-permissions requires non-root)
 RUN useradd -m -s /bin/bash candidate && \

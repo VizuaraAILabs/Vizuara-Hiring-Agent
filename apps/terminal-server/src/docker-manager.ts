@@ -8,6 +8,11 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 // Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
 const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
+// Resource management constants
+const MAX_CONCURRENT_SANDBOXES = parseInt(process.env.SANDBOX_MAX_CONCURRENT || '3');
+const SANDBOX_IDLE_TTL_MS = parseInt(process.env.SANDBOX_IDLE_TTL_MS || String(15 * 60 * 1000)); // 15 min
+const QUEUE_TIMEOUT_MS = parseInt(process.env.SANDBOX_QUEUE_TIMEOUT_MS || '60000'); // 60s
+
 export interface DockerSession {
   containerId: string;
   sessionId: string;
@@ -18,15 +23,57 @@ export interface DockerSession {
   onExit: ((code: number) => void) | null;
 }
 
+interface QueueEntry {
+  sessionId: string;
+  starterFilesDir?: string;
+  resolve: (session: DockerSession) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 export class DockerManager {
   private docker: Docker;
   private sessions: Map<string, DockerSession> = new Map();
+  private lastActivity: Map<string, number> = new Map();
+  private queue: QueueEntry[] = [];
+  private idleCleanupInterval: ReturnType<typeof setInterval>;
 
   constructor() {
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+
+    // Periodically check for idle sandboxes
+    this.idleCleanupInterval = setInterval(() => this.cleanupIdleSessions(), 60_000);
+  }
+
+  /** Number of items waiting in the spawn queue */
+  get queueLength(): number {
+    return this.queue.length;
+  }
+
+  /** Number of active sandbox containers */
+  get activeCount(): number {
+    return this.sessions.size;
   }
 
   async spawn(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
+    // If at capacity, queue the request and wait
+    if (this.sessions.size >= MAX_CONCURRENT_SANDBOXES) {
+      console.log(`[Docker] At capacity (${this.sessions.size}/${MAX_CONCURRENT_SANDBOXES}), queuing session ${sessionId}`);
+      return new Promise<DockerSession>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const idx = this.queue.findIndex(e => e.sessionId === sessionId);
+          if (idx !== -1) this.queue.splice(idx, 1);
+          reject(new Error('QUEUE_TIMEOUT'));
+        }, QUEUE_TIMEOUT_MS);
+
+        this.queue.push({ sessionId, starterFilesDir, resolve, reject, timer });
+      });
+    }
+
+    return this.spawnContainer(sessionId, starterFilesDir);
+  }
+
+  private async spawnContainer(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
     // Create a temporary host directory with starter files
     const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
@@ -70,7 +117,7 @@ export class DockerManager {
       HostConfig: {
         Binds: [`${hostWorkDir}:/workspace`],
         Memory: 2 * 1024 * 1024 * 1024, // 2GB
-        NanoCpus: 2 * 1e9, // 2 CPUs
+        NanoCpus: 1 * 1e9, // 1 CPU (leave headroom for 3 concurrent on 2-4 core host)
         NetworkMode: 'bridge',
         AutoRemove: false,
       },
@@ -134,6 +181,7 @@ export class DockerManager {
     });
 
     this.sessions.set(sessionId, session);
+    this.lastActivity.set(sessionId, Date.now());
     return session;
   }
 
@@ -145,6 +193,7 @@ export class DockerManager {
     const session = this.sessions.get(sessionId);
     if (session && session.stream.writable) {
       session.stream.write(data);
+      this.lastActivity.set(sessionId, Date.now());
     }
   }
 
@@ -170,15 +219,50 @@ export class DockerManager {
         console.warn(`[Docker] Failed to cleanup container for ${sessionId}:`, err.message);
       }
       this.sessions.delete(sessionId);
+      this.lastActivity.delete(sessionId);
+
+      // Drain the next queued request now that a slot is free
+      this.drainQueue();
     }
   }
 
   async killAll() {
+    clearInterval(this.idleCleanupInterval);
+
+    // Reject all queued requests
+    for (const entry of this.queue) {
+      clearTimeout(entry.timer);
+      entry.reject(new Error('Server shutting down'));
+    }
+    this.queue = [];
+
     const promises = [];
     for (const [id] of this.sessions) {
       promises.push(this.kill(id));
     }
     await Promise.all(promises);
+  }
+
+  private drainQueue() {
+    if (this.queue.length === 0 || this.sessions.size >= MAX_CONCURRENT_SANDBOXES) return;
+
+    const next = this.queue.shift()!;
+    clearTimeout(next.timer);
+
+    console.log(`[Docker] Draining queue: spawning session ${next.sessionId} (${this.queue.length} still queued)`);
+    this.spawnContainer(next.sessionId, next.starterFilesDir)
+      .then(next.resolve)
+      .catch(next.reject);
+  }
+
+  private async cleanupIdleSessions() {
+    const now = Date.now();
+    for (const [sessionId, lastTime] of this.lastActivity) {
+      if (now - lastTime > SANDBOX_IDLE_TTL_MS) {
+        console.log(`[Docker] Killing idle session ${sessionId} (idle ${Math.round((now - lastTime) / 60_000)}min)`);
+        await this.kill(sessionId);
+      }
+    }
   }
 
   private copyDirRecursive(src: string, dest: string) {

@@ -152,13 +152,27 @@ wss.on('connection', async (ws: WebSocket, req) => {
     console.warn(`[Terminal] Failed to query starter_files_dir for challenge ${challengeId}:`, err);
   }
 
-  // Spawn Docker container
+  // Spawn Docker container (may queue if at capacity)
   let dockerSession;
   try {
+    // Notify client if they'll be queued
+    if (dockerManager.activeCount >= 3) {
+      ws.send(JSON.stringify({
+        type: 'queued',
+        position: dockerManager.queueLength + 1,
+        message: 'Server is at capacity. You are in the queue...',
+      }));
+    }
     dockerSession = await dockerManager.spawn(sessionId, starterFilesDir);
-  } catch (err) {
+  } catch (err: any) {
+    const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
     console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
-    ws.send(JSON.stringify({ type: 'error', message: 'Failed to start terminal' }));
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: isQueueTimeout
+        ? 'Server is busy, please try again in a few minutes'
+        : 'Failed to start terminal',
+    }));
     ws.close();
     return;
   }
