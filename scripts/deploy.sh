@@ -17,6 +17,9 @@ if [ ! -f .env.production ]; then
   exit 1
 fi
 
+# Strip Windows line endings if present
+sed -i 's/\r$//' .env.production
+
 # Source the env file
 set -a
 source .env.production
@@ -42,44 +45,35 @@ echo "3. Waiting for PostgreSQL to be ready..."
 sleep 5
 
 echo ""
-echo "4. Running schema migration..."
-docker compose exec -T postgres psql -U hiring -d hiring_agent < database/migrations/001_pg_schema.sql
+echo "4. Running all database migrations..."
+for migration in database/migrations/*.sql; do
+  echo "  Running $migration..."
+  docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent < "$migration"
+done
 
 echo ""
 echo "5. Running seed script..."
-docker compose exec web node -e "
-const postgres = require('postgres');
-const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
+docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent <<'SQL'
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM companies WHERE email = 'demo@acme.com') THEN
+    INSERT INTO companies (id, name, email, password_hash)
+    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com',
+            '$2a$10$xJ8Kq5K5K5K5K5K5K5K5KuYgYgYgYgYgYgYgYgYgYgYgYgYgYgYgY');
+    RAISE NOTICE 'Demo company seeded (email: demo@acme.com)';
+  ELSE
+    RAISE NOTICE 'Demo company already exists, skipping.';
+  END IF;
 
-const sql = postgres(process.env.DATABASE_URL, { max: 1 });
-
-async function seed() {
-  const [existing] = await sql\\\`SELECT id FROM companies WHERE email = 'demo@acme.com'\\\`;
-  if (existing) {
-    console.log('Demo company already exists, skipping seed.');
-    await sql.end();
-    return;
-  }
-
-  const companyId = uuidv4();
-  const passwordHash = bcrypt.hashSync('password123', 10);
-  await sql\\\`INSERT INTO companies (id, name, email, password_hash) VALUES (\${companyId}, 'Acme Engineering', 'demo@acme.com', \${passwordHash})\\\`;
-
-  await sql\\\`INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir)
-    VALUES ('c0000001-0001-4000-a000-000000000006', \${companyId}, 'Design a Retrieval Strategy for RAG',
-    'Build the retrieval component for a RAG system. See BRIEF.md for full instructions.',
-    60, 'challenges/rag-retrieval')
-    ON CONFLICT (id) DO NOTHING\\\`;
-
-  console.log('Demo data seeded!');
-  console.log('  Email: demo@acme.com');
-  console.log('  Password: password123');
-  await sql.end();
-}
-
-seed().catch(err => { console.error(err); process.exit(1); });
-"
+  INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir)
+  SELECT 'c0000001-0001-4000-a000-000000000006', id,
+         'Design a Retrieval Strategy for RAG',
+         'Build the retrieval component for a RAG system. See BRIEF.md for full instructions.',
+         60, 'challenges/rag-retrieval'
+  FROM companies WHERE email = 'demo@acme.com'
+  ON CONFLICT (id) DO NOTHING;
+END $$;
+SQL
 
 echo ""
 echo "=== Deployment complete! ==="
