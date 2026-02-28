@@ -17,6 +17,9 @@ if [ ! -f .env.production ]; then
   exit 1
 fi
 
+# Strip Windows line endings if present
+sed -i 's/\r$//' .env.production
+
 # Source the env file
 set -a
 source .env.production
@@ -42,8 +45,11 @@ echo "3. Waiting for PostgreSQL to be ready..."
 sleep 5
 
 echo ""
-echo "4. Running schema migration..."
-docker compose exec -T postgres psql -U hiring -d hiring_agent < database/migrations/001_pg_schema.sql
+echo "4. Running all database migrations..."
+for migration in database/migrations/*.sql; do
+  echo "  Running $migration..."
+  docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent < "$migration"
+done
 
 echo ""
 echo "5. Running seed script..."
