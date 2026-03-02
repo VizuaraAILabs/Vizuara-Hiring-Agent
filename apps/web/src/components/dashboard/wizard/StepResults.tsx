@@ -23,16 +23,19 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [fileWarning, setFileWarning] = useState('');
+  const [progressMessage, setProgressMessage] = useState('');
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
     setCreatingIndex(index);
     setError('');
+    setFileWarning('');
 
     try {
       // Auto-generate starter files (non-fatal if it fails)
       let starterFiles;
       try {
-        setError('Generating starter files...');
+        setProgressMessage('Generating starter files...');
         const genRes = await fetch('/api/challenges/generate-files', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -42,11 +45,14 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           const genData = await genRes.json();
           if (genData.files?.length > 0) starterFiles = genData.files;
         }
+        if (!starterFiles) {
+          setFileWarning('Starter files could not be generated — you can add them manually in the editor.');
+        }
       } catch {
-        // Non-fatal: continue without starter files
+        setFileWarning('Starter files could not be generated — you can add them manually in the editor.');
       }
-      setError('');
 
+      setProgressMessage('Creating challenge...');
       const res = await fetch('/api/challenges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,13 +76,16 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       setError('Something went wrong. Please try again.');
     } finally {
       setCreatingIndex(null);
+      setProgressMessage('');
     }
   }
 
   async function handleCustomize(challenge: GeneratedChallenge) {
+    setFileWarning('');
     // Try to pre-generate starter files for the customize form
     let starterFiles;
     try {
+      setProgressMessage('Generating starter files...');
       const genRes = await fetch('/api/challenges/generate-files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,6 +98,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     } catch {
       // Non-fatal
     }
+    setProgressMessage('');
 
     sessionStorage.setItem(
       'prefill_challenge',
@@ -119,6 +129,12 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm mb-6">
           {error}
+        </div>
+      )}
+
+      {fileWarning && !error && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-yellow-400 text-sm mb-6">
+          {fileWarning}
         </div>
       )}
 
@@ -228,6 +244,16 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           Back to Settings
         </button>
       </div>
+
+      {/* Progress modal */}
+      {progressMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-[#111] border border-white/10 rounded-2xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl">
+            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+            <p className="text-sm text-neutral-300">{progressMessage}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
