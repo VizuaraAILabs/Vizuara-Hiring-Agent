@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
-import { buildFileTree, readFileContent } from './file-service';
+import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile } from './file-service';
 import { CostTracker } from './cost-tracker';
 
 // Load env from root — __dirname is apps/terminal-server/src, root is ../../..
@@ -34,7 +34,7 @@ const server = http.createServer(async (req, res) => {
 
   // CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -50,7 +50,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   // File API endpoints
-  if (pathname === '/api/files/tree' || pathname === '/api/files/read') {
+  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read', '/api/files/create', '/api/files/mkdir', '/api/files/rename', '/api/files/delete', '/api/files/move'];
+  if (FILE_API_ROUTES.includes(pathname)) {
     const token = url.searchParams.get('token');
     if (!token) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -105,6 +106,94 @@ const server = http.createServer(async (req, res) => {
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    // --- Mutation endpoints (POST/DELETE) ---
+
+    // Helper to read JSON body
+    const readBody = (): Promise<Record<string, string>> =>
+      new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', (chunk: Buffer) => { data += chunk; });
+        req.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); }
+        });
+        req.on('error', reject);
+      });
+
+    if (pathname === '/api/files/create' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
+        createFile(workDir, body.path, body.content || '');
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/mkdir' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
+        createDirectory(workDir, body.path);
+        res.writeHead(201, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/rename' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.oldPath || !body.newPath) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing oldPath or newPath' })); return; }
+        renameFile(workDir, body.oldPath, body.newPath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/delete' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
+        deleteFile(workDir, body.path);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'File not found' ? 404 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/move' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.srcPath || !body.destPath) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing srcPath or destPath' })); return; }
+        moveFile(workDir, body.srcPath, body.destPath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'Source not found' ? 404 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
       }
       return;
     }

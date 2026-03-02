@@ -185,3 +185,76 @@ export function readFileContent(workDir: string, filePath: string): {
     size: stat.size,
   };
 }
+
+// --- File mutation operations ---
+
+function safePath(workDir: string, filePath: string): string {
+  if (!filePath || filePath.includes('..') || path.isAbsolute(filePath)) {
+    throw new Error('Invalid path');
+  }
+  const resolved = path.resolve(workDir, filePath);
+  if (!resolved.startsWith(path.resolve(workDir))) {
+    throw new Error('Path traversal detected');
+  }
+  return resolved;
+}
+
+export function createFile(workDir: string, filePath: string, content = ''): void {
+  const resolved = safePath(workDir, filePath);
+  if (fs.existsSync(resolved)) {
+    throw new Error('File already exists');
+  }
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, content, 'utf-8');
+}
+
+export function createDirectory(workDir: string, dirPath: string): void {
+  const resolved = safePath(workDir, dirPath);
+  if (fs.existsSync(resolved)) {
+    throw new Error('Directory already exists');
+  }
+  fs.mkdirSync(resolved, { recursive: true });
+}
+
+export function renameFile(workDir: string, oldPath: string, newPath: string): void {
+  const resolvedOld = safePath(workDir, oldPath);
+  const resolvedNew = safePath(workDir, newPath);
+  if (!fs.existsSync(resolvedOld)) {
+    throw new Error('Source not found');
+  }
+  if (fs.existsSync(resolvedNew)) {
+    throw new Error('Destination already exists');
+  }
+  fs.mkdirSync(path.dirname(resolvedNew), { recursive: true });
+  fs.renameSync(resolvedOld, resolvedNew);
+}
+
+export function deleteFile(workDir: string, filePath: string): void {
+  const resolved = safePath(workDir, filePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found');
+  }
+  const stat = fs.statSync(resolved);
+  if (stat.isDirectory()) {
+    fs.rmSync(resolved, { recursive: true });
+  } else {
+    fs.unlinkSync(resolved);
+  }
+}
+
+export function moveFile(workDir: string, srcPath: string, destPath: string): void {
+  const resolvedSrc = safePath(workDir, srcPath);
+  const resolvedDest = safePath(workDir, destPath);
+  if (!fs.existsSync(resolvedSrc)) {
+    throw new Error('Source not found');
+  }
+  // Prevent moving directory into itself
+  if (resolvedDest.startsWith(resolvedSrc + path.sep)) {
+    throw new Error('Cannot move directory into itself');
+  }
+  if (fs.existsSync(resolvedDest)) {
+    throw new Error('Destination already exists');
+  }
+  fs.mkdirSync(path.dirname(resolvedDest), { recursive: true });
+  fs.renameSync(resolvedSrc, resolvedDest);
+}
