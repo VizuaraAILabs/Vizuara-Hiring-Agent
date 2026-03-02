@@ -27,7 +27,7 @@ export default function StarterFilesPage() {
         const res = await fetch(`/api/challenges/${id}`);
         if (!res.ok) throw new Error('Failed to load challenge');
         const data = await res.json();
-        const starterFiles = data.starter_files || [];
+        const starterFiles = (data.starter_files || []).filter((f: { path?: string }) => f.path);
         setFiles(starterFiles);
         setSavedFiles(starterFiles);
         setChallengeTitle(data.title || '');

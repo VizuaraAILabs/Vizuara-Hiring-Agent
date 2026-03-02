@@ -26,6 +26,7 @@ function buildTree(files: StarterFile[]): TreeNode[] {
   const root: TreeNode[] = [];
 
   for (const file of files) {
+    if (!file.path) continue;
     const parts = file.path.split('/');
     let current = root;
 
@@ -662,7 +663,7 @@ export default function StarterFilesEditor({
           Starter Files
           {files.length > 0 && (
             <span className="text-neutral-600 ml-2">
-              ({files.filter(f => f.path.split('/').pop() !== GITKEEP).length} file{files.filter(f => f.path.split('/').pop() !== GITKEEP).length !== 1 ? 's' : ''})
+              ({files.filter(f => f.path && f.path.split('/').pop() !== GITKEEP).length} file{files.filter(f => f.path && f.path.split('/').pop() !== GITKEEP).length !== 1 ? 's' : ''})
             </span>
           )}
         </span>
