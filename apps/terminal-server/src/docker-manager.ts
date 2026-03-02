@@ -150,6 +150,18 @@ export class DockerManager {
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
     console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
 
+    // Fix ownership: starter files were written by root on the host,
+    // but the candidate user needs write access inside the container
+    try {
+      const chownExec = await container.exec({
+        Cmd: ['chown', '-R', 'candidate:candidate', '/workspace'],
+        User: 'root',
+      });
+      await chownExec.start({ Detach: true });
+    } catch (err: any) {
+      console.warn(`[Docker] Failed to chown /workspace for ${sessionId}:`, err.message);
+    }
+
     // Wait for entrypoint to write the API key file before attaching exec
     await new Promise(resolve => setTimeout(resolve, 1500));
 
