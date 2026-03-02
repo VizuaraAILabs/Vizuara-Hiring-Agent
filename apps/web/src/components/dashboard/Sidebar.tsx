@@ -131,7 +131,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-white/5">
         <button
           onClick={logout}
-          className="w-full text-left px-4 py-3 rounded-xl text-sm text-neutral-500 hover:text-white hover:bg-white/5 transition-all"
+          className="w-full text-left px-4 py-3 rounded-xl text-sm text-white bg-red-600 hover:bg-red-500 transition-all"
         >
           Sign out
         </button>
