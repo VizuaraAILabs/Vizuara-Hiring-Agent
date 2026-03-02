@@ -54,7 +54,7 @@ export default function CreateChallengeForm() {
       }
 
       const challenge = await res.json();
-      router.push(`/dashboard/challenges/${challenge.id}`);
+      router.push(`/dashboard/challenges/${challenge.id}/starter-files`);
     } catch {
       setError('Something went wrong');
     } finally {

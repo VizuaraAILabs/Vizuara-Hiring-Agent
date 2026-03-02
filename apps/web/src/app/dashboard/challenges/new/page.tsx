@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import CreateChallengeForm from '@/components/dashboard/CreateChallengeForm';
 import WizardContainer from '@/components/dashboard/wizard/WizardContainer';
+import TemplateGallery from '@/components/dashboard/TemplateGallery';
 
-type Tab = 'ai' | 'manual';
+type Tab = 'ai' | 'manual' | 'template';
 
 export default function NewChallengePage() {
   const searchParams = useSearchParams();
@@ -37,6 +38,16 @@ export default function NewChallengePage() {
           AI-Assisted
         </button>
         <button
+          onClick={() => setActiveTab('template')}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+            activeTab === 'template'
+              ? 'bg-[#00a854] text-black'
+              : 'text-neutral-400 hover:text-white'
+          }`}
+        >
+          From Template
+        </button>
+        <button
           onClick={() => setActiveTab('manual')}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'manual'
@@ -48,7 +59,9 @@ export default function NewChallengePage() {
         </button>
       </div>
 
-      {activeTab === 'ai' ? <WizardContainer /> : <CreateChallengeForm />}
+      {activeTab === 'ai' && <WizardContainer />}
+      {activeTab === 'template' && <TemplateGallery />}
+      {activeTab === 'manual' && <CreateChallengeForm />}
     </div>
   );
 }
