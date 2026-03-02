@@ -1,5 +1,5 @@
 import type { Sql } from 'postgres';
-import { extractTokenReadings } from './token-parser';
+import { extractTokenReadings, stripAnsi } from './token-parser';
 
 interface SessionTracking {
   sessionId: string;
@@ -9,6 +9,7 @@ interface SessionTracking {
   outputTokens: number;
   inputChars: number;
   outputChars: number;
+  claudeActive: boolean;
 }
 
 /**
@@ -27,6 +28,10 @@ export class CostTracker {
   private static INPUT_RATE = 1.0;
   private static OUTPUT_RATE = 5.0;
   private static CHARS_PER_TOKEN = 4;
+  // Discount factor for fallback estimation: PTY output during Claude Code
+  // still includes UI chrome (spinners, markdown rendering, status bars)
+  // that inflates char counts beyond actual API payload.
+  private static FALLBACK_DISCOUNT = 0.4;
 
   constructor(sql: Sql) {
     this.sql = sql;
@@ -41,6 +46,7 @@ export class CostTracker {
       outputTokens: 0,
       inputChars: 0,
       outputChars: 0,
+      claudeActive: false,
     });
   }
 
@@ -48,8 +54,20 @@ export class CostTracker {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    // Track raw character count for fallback estimation
-    session.outputChars += data.length;
+    // Detect Claude Code start/exit from PTY output
+    const clean = stripAnsi(data);
+    if (/claude|╭─|> /.test(clean) && !session.claudeActive) {
+      session.claudeActive = true;
+    }
+    // Claude Code exits back to shell prompt
+    if (session.claudeActive && /\$\s*$/.test(clean) && !/claude/.test(clean)) {
+      session.claudeActive = false;
+    }
+
+    // Only count chars while Claude Code is active (strip ANSI first)
+    if (session.claudeActive) {
+      session.outputChars += clean.length;
+    }
 
     // Try to parse token indicators from PTY output
     const reading = extractTokenReadings(data);
@@ -63,7 +81,10 @@ export class CostTracker {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    session.inputChars += data.length;
+    // Only count input chars while Claude Code is active (strip ANSI first)
+    if (session.claudeActive) {
+      session.inputChars += stripAnsi(data).length;
+    }
   }
 
   async endSession(sessionId: string): Promise<void> {
@@ -80,26 +101,17 @@ export class CostTracker {
     let estimated = false;
 
     if (inputTokens === 0 && outputTokens === 0 && (session.inputChars > 0 || session.outputChars > 0)) {
-      // Fallback: estimate from interactions stored in DB
-      try {
-        const [row] = await this.sql`
-          SELECT
-            COALESCE(SUM(CASE WHEN direction = 'input' THEN length(content) ELSE 0 END), 0) as input_chars,
-            COALESCE(SUM(CASE WHEN direction = 'output' THEN length(content) ELSE 0 END), 0) as output_chars
-          FROM interactions
-          WHERE session_id = ${session.sessionId}
-        `;
-        if (row) {
-          inputTokens = Math.round(Number(row.input_chars) / CostTracker.CHARS_PER_TOKEN);
-          outputTokens = Math.round(Number(row.output_chars) / CostTracker.CHARS_PER_TOKEN);
-          estimated = true;
-        }
-      } catch (err) {
-        // If DB query fails, use the raw char counts we accumulated
-        inputTokens = Math.round(session.inputChars / CostTracker.CHARS_PER_TOKEN);
-        outputTokens = Math.round(session.outputChars / CostTracker.CHARS_PER_TOKEN);
-        estimated = true;
-      }
+      // Fallback: estimate from in-memory char counts (already ANSI-stripped
+      // and scoped to Claude Code activity). Apply discount factor to account
+      // for UI chrome (spinners, status bars, markdown rendering) that inflates
+      // char counts beyond actual API payload.
+      inputTokens = Math.round(
+        (session.inputChars * CostTracker.FALLBACK_DISCOUNT) / CostTracker.CHARS_PER_TOKEN
+      );
+      outputTokens = Math.round(
+        (session.outputChars * CostTracker.FALLBACK_DISCOUNT) / CostTracker.CHARS_PER_TOKEN
+      );
+      estimated = true;
     }
 
     const anthropicCost =

@@ -58,6 +58,7 @@ export async function GET(request: Request) {
         COALESCE(SUM(CASE WHEN ue.provider = 'gemini' THEN ue.cost_usd ELSE 0 END), 0) as gemini_cost,
         COALESCE(SUM(CASE WHEN ue.provider = 'docker' THEN ue.cost_usd ELSE 0 END), 0) as docker_cost,
         COALESCE(SUM(ue.cost_usd), 0) as total_cost,
+        BOOL_OR(COALESCE((ue.metadata->>'estimated')::boolean, false)) as estimated,
         MIN(ue.created_at) as created_at
       FROM usage_events ue
       JOIN sessions s ON s.id = ue.session_id

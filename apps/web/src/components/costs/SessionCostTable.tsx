@@ -47,7 +47,10 @@ export default function SessionCostTable({ data }: SessionCostTableProps) {
                   <div className="text-neutral-600 text-xs">{row.candidate_email}</div>
                 </td>
                 <td className="text-neutral-400 py-3 pr-4">{row.challenge_title}</td>
-                <td className="text-right text-orange-400 py-3 pr-4">{formatCost(row.anthropic_cost)}</td>
+                <td className="text-right text-orange-400 py-3 pr-4">
+                  {formatCost(row.anthropic_cost)}
+                  {row.estimated && <span className="text-yellow-500 text-[10px] ml-1" title="Token count was estimated, not parsed from Claude Code output">~</span>}
+                </td>
                 <td className="text-right text-blue-400 py-3 pr-4">{formatCost(row.gemini_cost)}</td>
                 <td className="text-right text-purple-400 py-3 pr-4">{formatCost(row.docker_cost)}</td>
                 <td className="text-right text-white font-medium py-3">{formatCost(row.total_cost)}</td>

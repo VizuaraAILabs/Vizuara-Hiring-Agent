@@ -18,7 +18,7 @@ const ANSI_RE = /\x1B(?:\[[0-9;]*[a-zA-Z]|\][^\x07]*\x07|\[[0-9;]*m)/g;
 // Also strip common control chars that appear in PTY output
 const CTRL_RE = /[\x00-\x08\x0E-\x1F]/g;
 
-function stripAnsi(text: string): string {
+export function stripAnsi(text: string): string {
   return text.replace(ANSI_RE, ' ').replace(CTRL_RE, '');
 }
 
