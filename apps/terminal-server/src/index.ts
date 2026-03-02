@@ -146,8 +146,11 @@ wss.on('connection', async (ws: WebSocket, req) => {
     const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: { path: string; content: string }[] | null }[]>`
       SELECT starter_files_dir, starter_files FROM challenges WHERE id = ${challengeId}
     `;
-    if (challenge?.starter_files && Array.isArray(challenge.starter_files) && challenge.starter_files.length > 0) {
-      starterFiles = challenge.starter_files;
+    // Parse JSONB — postgres may return it as a string
+    const rawFiles = challenge?.starter_files;
+    const parsedFiles = typeof rawFiles === 'string' ? JSON.parse(rawFiles) : rawFiles;
+    if (parsedFiles && Array.isArray(parsedFiles) && parsedFiles.length > 0) {
+      starterFiles = parsedFiles;
     } else if (challenge?.starter_files_dir) {
       starterFilesDir = challenge.starter_files_dir;
     }
