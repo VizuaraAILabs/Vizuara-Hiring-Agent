@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import StarterFilesEditor from './StarterFilesEditor';
+import type { StarterFile } from '@/types';
 
 export default function CreateChallengeForm() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState(60);
-  const [starterFilesDir, setStarterFilesDir] = useState('');
+  const [starterFiles, setStarterFiles] = useState<StarterFile[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -20,6 +22,7 @@ export default function CreateChallengeForm() {
         if (data.title) setTitle(data.title);
         if (data.description) setDescription(data.description);
         if (data.timeLimit) setTimeLimit(data.timeLimit);
+        if (data.starterFiles) setStarterFiles(data.starterFiles);
       } catch {
         // ignore invalid JSON
       }
@@ -40,7 +43,7 @@ export default function CreateChallengeForm() {
           title,
           description,
           time_limit_min: timeLimit,
-          starter_files_dir: starterFilesDir || undefined,
+          starter_files: starterFiles.length > 0 ? starterFiles : undefined,
         }),
       });
 
@@ -107,16 +110,17 @@ export default function CreateChallengeForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-400 mb-2">Starter Files Directory <span className="text-neutral-600">(optional)</span></label>
+        <label className="block text-sm font-medium text-neutral-400 mb-2">
+          Starter Files <span className="text-neutral-600">(optional)</span>
+        </label>
         <p className="text-xs text-neutral-600 mb-2">
-          Path to a directory (relative to project root) containing files to pre-populate the candidate&apos;s workspace.
+          Files to pre-populate the candidate&apos;s workspace. Generate them with AI or add manually.
         </p>
-        <input
-          type="text"
-          value={starterFilesDir}
-          onChange={(e) => setStarterFilesDir(e.target.value)}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 font-mono text-sm transition-all"
-          placeholder="e.g., challenges/fix-the-pipeline"
+        <StarterFilesEditor
+          files={starterFiles}
+          onChange={setStarterFiles}
+          challengeTitle={title}
+          challengeDescription={description}
         />
       </div>
 

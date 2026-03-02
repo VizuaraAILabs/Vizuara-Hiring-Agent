@@ -23,9 +23,15 @@ export interface DockerSession {
   onExit: ((code: number) => void) | null;
 }
 
+interface StarterFile {
+  path: string;
+  content: string;
+}
+
 interface QueueEntry {
   sessionId: string;
   starterFilesDir?: string;
+  starterFiles?: StarterFile[];
   resolve: (session: DockerSession) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -60,7 +66,7 @@ export class DockerManager {
     return MAX_CONCURRENT_SANDBOXES;
   }
 
-  async spawn(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
+  async spawn(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
     // If at capacity, queue the request and wait
     if (this.sessions.size >= MAX_CONCURRENT_SANDBOXES) {
       console.log(`[Docker] At capacity (${this.sessions.size}/${MAX_CONCURRENT_SANDBOXES}), queuing session ${sessionId}`);
@@ -71,20 +77,29 @@ export class DockerManager {
           reject(new Error('QUEUE_TIMEOUT'));
         }, QUEUE_TIMEOUT_MS);
 
-        this.queue.push({ sessionId, starterFilesDir, resolve, reject, timer });
+        this.queue.push({ sessionId, starterFilesDir, starterFiles, resolve, reject, timer });
       });
     }
 
-    return this.spawnContainer(sessionId, starterFilesDir);
+    return this.spawnContainer(sessionId, starterFilesDir, starterFiles);
   }
 
-  private async spawnContainer(sessionId: string, starterFilesDir?: string): Promise<DockerSession> {
+  private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
     // Create a temporary host directory with starter files
     const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
 
-    // Seed workspace with starter files if provided
-    if (starterFilesDir) {
+    // Seed workspace from JSONB starter files (takes priority over dir)
+    if (starterFiles && starterFiles.length > 0) {
+      for (const file of starterFiles) {
+        // Safety: skip path traversal attempts
+        if (file.path.includes('..') || path.isAbsolute(file.path)) continue;
+        const destPath = path.join(hostWorkDir, file.path);
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.writeFileSync(destPath, file.content, 'utf-8');
+      }
+      console.log(`[Docker] Seeded workspace for ${sessionId} from JSONB starter_files (${starterFiles.length} files)`);
+    } else if (starterFilesDir) {
       const workDirContents = fs.readdirSync(hostWorkDir);
       if (workDirContents.length === 0) {
         const resolvedSrc = path.isAbsolute(starterFilesDir)
@@ -255,7 +270,7 @@ export class DockerManager {
     clearTimeout(next.timer);
 
     console.log(`[Docker] Draining queue: spawning session ${next.sessionId} (${this.queue.length} still queued)`);
-    this.spawnContainer(next.sessionId, next.starterFilesDir)
+    this.spawnContainer(next.sessionId, next.starterFilesDir, next.starterFiles)
       .then(next.resolve)
       .catch(next.reject);
   }

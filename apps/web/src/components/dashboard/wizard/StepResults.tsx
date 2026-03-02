@@ -29,6 +29,24 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     setError('');
 
     try {
+      // Auto-generate starter files (non-fatal if it fails)
+      let starterFiles;
+      try {
+        setError('Generating starter files...');
+        const genRes = await fetch('/api/challenges/generate-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: challenge.title, description: challenge.description }),
+        });
+        if (genRes.ok) {
+          const genData = await genRes.json();
+          if (genData.files?.length > 0) starterFiles = genData.files;
+        }
+      } catch {
+        // Non-fatal: continue without starter files
+      }
+      setError('');
+
       const res = await fetch('/api/challenges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,6 +54,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           title: challenge.title,
           description: challenge.description,
           time_limit_min: challenge.duration_minutes,
+          starter_files: starterFiles,
         }),
       });
 
@@ -54,13 +73,30 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     }
   }
 
-  function handleCustomize(challenge: GeneratedChallenge) {
+  async function handleCustomize(challenge: GeneratedChallenge) {
+    // Try to pre-generate starter files for the customize form
+    let starterFiles;
+    try {
+      const genRes = await fetch('/api/challenges/generate-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: challenge.title, description: challenge.description }),
+      });
+      if (genRes.ok) {
+        const genData = await genRes.json();
+        if (genData.files?.length > 0) starterFiles = genData.files;
+      }
+    } catch {
+      // Non-fatal
+    }
+
     sessionStorage.setItem(
       'prefill_challenge',
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
         timeLimit: challenge.duration_minutes,
+        starterFiles,
       })
     );
     router.push('/dashboard/challenges/new?tab=manual&prefill=true');
