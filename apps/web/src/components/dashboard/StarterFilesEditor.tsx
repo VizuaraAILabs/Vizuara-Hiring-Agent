@@ -167,7 +167,7 @@ function ContextMenu({
 function EditorTreeNode({
   node,
   depth,
-  selectedFile,
+  selectedPath,
   onSelect,
   expandedDirs,
   toggleDir,
@@ -185,7 +185,7 @@ function EditorTreeNode({
 }: {
   node: TreeNode;
   depth: number;
-  selectedFile: string | null;
+  selectedPath: string | null;
   onSelect: (path: string) => void;
   expandedDirs: Set<string>;
   toggleDir: (path: string) => void;
@@ -202,7 +202,7 @@ function EditorTreeNode({
   dragOverPath: string | null;
 }) {
   const isDir = node.type === 'directory';
-  const isSelected = !isDir && node.path === selectedFile;
+  const isSelected = node.path === selectedPath;
   const isExpanded = expandedDirs.has(node.path);
   const paddingLeft = depth * 16 + 8;
   const isRenaming = renamingPath === node.path;
@@ -214,11 +214,13 @@ function EditorTreeNode({
     return (
       <div>
         <div
+          draggable
+          onDragStart={(e) => onDragStart(e, node.path)}
           className={`w-full text-left flex items-center gap-1 py-1 hover:bg-white/5 text-neutral-300 text-xs group cursor-pointer ${
-            isDragOver ? 'bg-primary/10 border-l-2 border-primary' : ''
+            isDragOver ? 'bg-primary/10 border-l-2 border-primary' : isSelected ? 'bg-primary/10 text-primary' : ''
           }`}
           style={{ paddingLeft }}
-          onClick={() => toggleDir(node.path)}
+          onClick={() => { onSelect(node.path); toggleDir(node.path); }}
           onContextMenu={(e) => onContextMenu(e, node.path, 'directory')}
           onDragOver={(e) => onDragOver(e, node.path)}
           onDrop={(e) => onDrop(e, node.path)}
@@ -246,7 +248,7 @@ function EditorTreeNode({
             key={child.path}
             node={child}
             depth={depth + 1}
-            selectedFile={selectedFile}
+            selectedPath={selectedPath}
             onSelect={onSelect}
             expandedDirs={expandedDirs}
             toggleDir={toggleDir}
@@ -331,7 +333,7 @@ export default function StarterFilesEditor({
   challengeDescription,
   mode = 'inline',
 }: StarterFilesEditorProps) {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState('');
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
@@ -344,6 +346,7 @@ export default function StarterFilesEditor({
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -362,8 +365,31 @@ export default function StarterFilesEditor({
     setExpandedDirs(dirs);
   }, [tree]);
 
-  const selectedFileData = files.find((f) => f.path === selectedFile);
+  // Click outside tree panel to deselect
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (treeRef.current && !treeRef.current.contains(e.target as Node)) {
+        setSelectedPath(null);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
+  // Derive the file being edited (only files, not directories)
+  const selectedFileData = files.find((f) => f.path === selectedPath);
   const isFull = mode === 'full';
+
+  // Get target directory for new file/folder based on selection
+  function getCreationTarget(): string {
+    if (!selectedPath) return '';
+    // Check if selectedPath is a directory
+    const isDir = files.some((f) => f.path?.startsWith(selectedPath + '/'));
+    if (isDir) return selectedPath;
+    // It's a file — return its parent directory
+    const lastSlash = selectedPath.lastIndexOf('/');
+    return lastSlash === -1 ? '' : selectedPath.substring(0, lastSlash);
+  }
 
   function toggleDir(path: string) {
     setExpandedDirs((prev) => {
@@ -375,8 +401,8 @@ export default function StarterFilesEditor({
   }
 
   function handleContentChange(content: string) {
-    if (!selectedFile) return;
-    onChange(files.map((f) => (f.path === selectedFile ? { ...f, content } : f)));
+    if (!selectedPath) return;
+    onChange(files.map((f) => (f.path === selectedPath ? { ...f, content } : f)));
   }
 
   // --- Context menu actions ---
@@ -423,7 +449,7 @@ export default function StarterFilesEditor({
     } else {
       if (!files.some((f) => f.path === fullPath)) {
         onChange([...files, { path: fullPath, content: '' }]);
-        setSelectedFile(fullPath);
+        setSelectedPath(fullPath);
       }
     }
     setInlineInput(null);
@@ -463,7 +489,7 @@ export default function StarterFilesEditor({
       const newPath = (parentPath ? parentPath + '/' : '') + newName;
       if (files.some((f) => f.path === newPath)) { setRenamingPath(null); return; }
       onChange(files.map((f) => (f.path === renamingPath ? { ...f, path: newPath } : f)));
-      if (selectedFile === renamingPath) setSelectedFile(newPath);
+      if (selectedPath === renamingPath) setSelectedPath(newPath);
     }
     setRenamingPath(null);
   }
@@ -473,12 +499,12 @@ export default function StarterFilesEditor({
     const isFile = files.some((f) => f.path === path);
     if (isFile) {
       onChange(files.filter((f) => f.path !== path));
-      if (selectedFile === path) setSelectedFile(null);
+      if (selectedPath === path) setSelectedPath(null);
     } else {
       // Delete all files under this directory
       const prefix = path + '/';
       onChange(files.filter((f) => !f.path.startsWith(prefix)));
-      if (selectedFile?.startsWith(prefix)) setSelectedFile(null);
+      if (selectedPath?.startsWith(prefix) || selectedPath === path) setSelectedPath(null);
     }
   }
 
@@ -507,14 +533,43 @@ export default function StarterFilesEditor({
 
     if (!draggedPath) return;
 
-    const fileName = draggedPath.split('/').pop()!;
-    const newPath = targetDir ? `${targetDir}/${fileName}` : fileName;
+    // Check if dragging a directory
+    const isDraggingDir = files.some((f) => f.path?.startsWith(draggedPath + '/'));
 
-    if (newPath === draggedPath) return;
-    if (files.some((f) => f.path === newPath)) return;
+    if (isDraggingDir) {
+      // Prevent dropping into itself or a descendant
+      if (targetDir === draggedPath || targetDir.startsWith(draggedPath + '/')) {
+        setDraggedPath(null);
+        return;
+      }
+      const dirName = draggedPath.split('/').pop()!;
+      const newDirPath = targetDir ? `${targetDir}/${dirName}` : dirName;
+      if (newDirPath === draggedPath) { setDraggedPath(null); return; }
 
-    onChange(files.map((f) => (f.path === draggedPath ? { ...f, path: newPath } : f)));
-    if (selectedFile === draggedPath) setSelectedFile(newPath);
+      const oldPrefix = draggedPath + '/';
+      const newPrefix = newDirPath + '/';
+      onChange(files.map((f) => {
+        if (f.path.startsWith(oldPrefix)) {
+          return { ...f, path: newPrefix + f.path.slice(oldPrefix.length) };
+        }
+        return f;
+      }));
+      if (selectedPath?.startsWith(oldPrefix)) {
+        setSelectedPath(newPrefix + selectedPath.slice(oldPrefix.length));
+      } else if (selectedPath === draggedPath) {
+        setSelectedPath(newDirPath);
+      }
+    } else {
+      // Dragging a single file
+      const fileName = draggedPath.split('/').pop()!;
+      const newPath = targetDir ? `${targetDir}/${fileName}` : fileName;
+
+      if (newPath === draggedPath) { setDraggedPath(null); return; }
+      if (files.some((f) => f.path === newPath)) { setDraggedPath(null); return; }
+
+      onChange(files.map((f) => (f.path === draggedPath ? { ...f, path: newPath } : f)));
+      if (selectedPath === draggedPath) setSelectedPath(newPath);
+    }
     setDraggedPath(null);
   }
 
@@ -531,7 +586,7 @@ export default function StarterFilesEditor({
         if (!newFiles.some((f) => f.path === filePath)) {
           newFiles.push({ path: filePath, content });
           onChange([...newFiles]);
-          setSelectedFile(filePath);
+          setSelectedPath(filePath);
         }
       };
       reader.readAsText(file);
@@ -595,7 +650,7 @@ export default function StarterFilesEditor({
       const data = await res.json();
       if (data.files && Array.isArray(data.files)) {
         onChange(data.files);
-        if (data.files.length > 0) setSelectedFile(data.files[0].path);
+        if (data.files.length > 0) setSelectedPath(data.files[0].path);
       }
     } catch (err: unknown) {
       setGenError(err instanceof Error ? err.message : 'Generation failed');
@@ -669,14 +724,14 @@ export default function StarterFilesEditor({
         </span>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => startNewFile('')}
+            onClick={() => startNewFile(getCreationTarget())}
             className="text-xs text-neutral-400 hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors"
             title="New File"
           >
             + File
           </button>
           <button
-            onClick={() => startNewFolder('')}
+            onClick={() => startNewFolder(getCreationTarget())}
             className="text-xs text-neutral-400 hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors"
             title="New Folder"
           >
@@ -716,6 +771,7 @@ export default function StarterFilesEditor({
       <div className={`flex flex-1 min-h-0 ${!isFull ? editorHeight : ''}`}>
         {/* Left panel: file tree */}
         <div
+          ref={treeRef}
           className={`${treeWidth} shrink-0 flex flex-col border-r border-white/10 bg-[#0a0a0a]`}
           onContextMenu={handleRootContextMenu}
         >
@@ -739,8 +795,8 @@ export default function StarterFilesEditor({
                     key={node.path}
                     node={node}
                     depth={0}
-                    selectedFile={selectedFile}
-                    onSelect={setSelectedFile}
+                    selectedPath={selectedPath}
+                    onSelect={setSelectedPath}
                     expandedDirs={expandedDirs}
                     toggleDir={toggleDir}
                     onContextMenu={handleContextMenu}
