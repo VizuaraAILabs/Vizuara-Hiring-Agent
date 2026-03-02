@@ -40,9 +40,25 @@ export function useFileExplorer(token: string) {
   const [fileError, setFileError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const apiUrl = (endpoint: string) =>
+    `${TERMINAL_HTTP_URL}/api/files/${endpoint}?token=${encodeURIComponent(token)}`;
+
+  const postApi = useCallback(async (endpoint: string, body: Record<string, string>) => {
+    const res = await fetch(apiUrl(endpoint), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(data.error);
+    }
+    return res.json();
+  }, [token]);
+
   const fetchTree = useCallback(async () => {
     try {
-      const res = await fetch(`${TERMINAL_HTTP_URL}/api/files/tree?token=${encodeURIComponent(token)}`);
+      const res = await fetch(apiUrl('tree'));
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Failed to fetch file tree' }));
         throw new Error(data.error);
@@ -94,6 +110,42 @@ export function useFileExplorer(token: string) {
     }
   }, [fetchTree, selectedFile, selectFile]);
 
+  // --- File mutation operations ---
+
+  const createNewFile = useCallback(async (filePath: string) => {
+    await postApi('create', { path: filePath });
+    await fetchTree();
+  }, [postApi, fetchTree]);
+
+  const createNewDirectory = useCallback(async (dirPath: string) => {
+    await postApi('mkdir', { path: dirPath });
+    await fetchTree();
+  }, [postApi, fetchTree]);
+
+  const renameItem = useCallback(async (oldPath: string, newPath: string) => {
+    await postApi('rename', { oldPath, newPath });
+    if (selectedFile === oldPath) {
+      setSelectedFile(newPath);
+    }
+    await fetchTree();
+  }, [postApi, fetchTree, selectedFile]);
+
+  const deleteItem = useCallback(async (filePath: string) => {
+    await postApi('delete', { path: filePath });
+    if (selectedFile === filePath) {
+      closeFile();
+    }
+    await fetchTree();
+  }, [postApi, fetchTree, selectedFile, closeFile]);
+
+  const moveItem = useCallback(async (srcPath: string, destPath: string) => {
+    await postApi('move', { srcPath, destPath });
+    if (selectedFile === srcPath) {
+      setSelectedFile(destPath);
+    }
+    await fetchTree();
+  }, [postApi, fetchTree, selectedFile]);
+
   // Initial fetch + polling
   useEffect(() => {
     fetchTree();
@@ -115,5 +167,10 @@ export function useFileExplorer(token: string) {
     selectFile,
     closeFile,
     refresh,
+    createNewFile,
+    createNewDirectory,
+    renameItem,
+    deleteItem,
+    moveItem,
   };
 }
