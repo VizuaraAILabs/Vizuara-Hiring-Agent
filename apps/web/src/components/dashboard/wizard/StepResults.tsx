@@ -80,33 +80,13 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     }
   }
 
-  async function handleCustomize(challenge: GeneratedChallenge) {
-    setFileWarning('');
-    // Try to pre-generate starter files for the customize form
-    let starterFiles;
-    try {
-      setProgressMessage('Generating starter files...');
-      const genRes = await fetch('/api/challenges/generate-files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: challenge.title, description: challenge.description }),
-      });
-      if (genRes.ok) {
-        const genData = await genRes.json();
-        if (genData.files?.length > 0) starterFiles = genData.files;
-      }
-    } catch {
-      // Non-fatal
-    }
-    setProgressMessage('');
-
+  function handleCustomize(challenge: GeneratedChallenge) {
     sessionStorage.setItem(
       'prefill_challenge',
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
         timeLimit: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
-        starterFiles,
       })
     );
     router.push('/dashboard/challenges/new?tab=manual&prefill=true');
