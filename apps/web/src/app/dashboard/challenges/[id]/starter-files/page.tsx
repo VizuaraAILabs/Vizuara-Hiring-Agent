@@ -30,7 +30,9 @@ export default function StarterFilesPage() {
           throw new Error(data.error || `Failed to load challenge (${res.status})`);
         }
         const data = await res.json();
-        const starterFiles = (data.starter_files || []).filter((f: { path?: string }) => f.path);
+        const raw = data.starter_files;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        const starterFiles = (parsed || []).filter((f: { path?: string }) => f.path);
         setFiles(starterFiles);
         setSavedFiles(starterFiles);
         setChallengeTitle(data.title || '');

@@ -54,7 +54,12 @@ export async function POST(request: Request) {
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
 
-    return NextResponse.json(challenge, { status: 201 });
+    // Ensure starter_files is a parsed array
+    const parsedFiles = typeof challenge.starter_files === 'string'
+      ? JSON.parse(challenge.starter_files)
+      : challenge.starter_files;
+
+    return NextResponse.json({ ...challenge, starter_files: parsedFiles }, { status: 201 });
   } catch (error) {
     console.error('Error creating challenge:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
