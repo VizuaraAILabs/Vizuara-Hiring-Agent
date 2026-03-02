@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
+import MarkdownViewer from '@/components/MarkdownViewer';
 import type { Challenge, Session } from '@/types';
 
 interface ChallengeDetail extends Challenge {
@@ -19,6 +20,7 @@ export default function ChallengeDetailPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [copiedShareable, setCopiedShareable] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/challenges/${params.id}`)
@@ -80,6 +82,34 @@ export default function ChallengeDetailPage() {
         <h1 className="text-2xl font-serif italic text-white">{challenge.title}</h1>
         <p className="text-neutral-500 mt-1">{challenge.time_limit_min} minute time limit</p>
       </div>
+
+      {/* Description Accordion */}
+      {challenge.description && (
+        <div className="bg-[#111] border border-white/5 rounded-2xl mb-8 overflow-hidden">
+          <button
+            onClick={() => setDescriptionOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/2 transition-colors"
+          >
+            <span className="text-sm font-medium text-white">Description</span>
+            <svg
+              className={`w-4 h-4 text-neutral-500 transition-transform duration-200 ${descriptionOpen ? 'rotate-180' : ''}`}
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6,8 10,12 14,8" />
+            </svg>
+          </button>
+          {descriptionOpen && (
+            <div className="px-5 pb-5 border-t border-white/5 pt-4">
+              <MarkdownViewer content={challenge.description} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Shareable Link */}
       <div className="bg-[#111] border border-[#00a854]/20 rounded-2xl p-5 mb-8">
