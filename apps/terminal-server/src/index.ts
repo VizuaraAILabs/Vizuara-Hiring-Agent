@@ -27,6 +27,10 @@ const dockerManager = new DockerManager();
 const logger = new InteractionLogger(sql);
 const costTracker = new CostTracker(sql);
 
+// Grace period before killing containers on WebSocket disconnect (allows page refresh)
+const DISCONNECT_GRACE_MS = 15_000;
+const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+
 // HTTP server for health checks and file API
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '', `http://localhost:${PORT}`);
@@ -228,67 +232,86 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   console.log(`[Terminal] Session connected: ${sessionId}`);
 
-  // Look up starter files for this challenge (JSONB column + legacy dir)
-  let starterFilesDir: string | undefined;
-  let starterFiles: { path: string; content: string }[] | undefined;
-  try {
-    const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: { path: string; content: string }[] | null }[]>`
-      SELECT starter_files_dir, starter_files FROM challenges WHERE id = ${challengeId}
-    `;
-    // Parse JSONB — postgres may return it as a string
-    const rawFiles = challenge?.starter_files;
-    const parsedFiles = typeof rawFiles === 'string' ? JSON.parse(rawFiles) : rawFiles;
-    if (parsedFiles && Array.isArray(parsedFiles) && parsedFiles.length > 0) {
-      starterFiles = parsedFiles;
-    } else if (challenge?.starter_files_dir) {
-      starterFilesDir = challenge.starter_files_dir;
-    }
-  } catch (err) {
-    console.warn(`[Terminal] Failed to query starter files for challenge ${challengeId}:`, err);
-  }
+  // Check if this session has an existing container (reconnection after refresh/disconnect)
+  const existingSession = dockerManager.getSession(sessionId);
+  let dockerSession: typeof existingSession;
 
-  // Spawn Docker container (may queue if at capacity)
-  let dockerSession;
-  try {
-    // Notify client if they'll be queued
-    if (dockerManager.activeCount >= dockerManager.maxConcurrent) {
+  if (existingSession) {
+    // Cancel the pending disconnect timer — candidate is reconnecting
+    const pendingTimer = disconnectTimers.get(sessionId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      disconnectTimers.delete(sessionId);
+      console.log(`[Terminal] Reconnection: cancelled disconnect timer for ${sessionId}`);
+    }
+
+    dockerSession = existingSession;
+    ws.send(JSON.stringify({ type: 'connected', sessionId, reconnected: true }));
+    console.log(`[Terminal] Reattached to existing container for session ${sessionId}`);
+  } else {
+    // Fresh connection — spawn a new container
+
+    // Look up starter files for this challenge (JSONB column + legacy dir)
+    let starterFilesDir: string | undefined;
+    let starterFiles: { path: string; content: string }[] | undefined;
+    try {
+      const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: { path: string; content: string }[] | null }[]>`
+        SELECT starter_files_dir, starter_files FROM challenges WHERE id = ${challengeId}
+      `;
+      // Parse JSONB — postgres may return it as a string
+      const rawFiles = challenge?.starter_files;
+      const parsedFiles = typeof rawFiles === 'string' ? JSON.parse(rawFiles) : rawFiles;
+      if (parsedFiles && Array.isArray(parsedFiles) && parsedFiles.length > 0) {
+        starterFiles = parsedFiles;
+      } else if (challenge?.starter_files_dir) {
+        starterFilesDir = challenge.starter_files_dir;
+      }
+    } catch (err) {
+      console.warn(`[Terminal] Failed to query starter files for challenge ${challengeId}:`, err);
+    }
+
+    // Spawn Docker container (may queue if at capacity)
+    try {
+      // Notify client if they'll be queued
+      if (dockerManager.activeCount >= dockerManager.maxConcurrent) {
+        ws.send(JSON.stringify({
+          type: 'queued',
+          position: dockerManager.queueLength + 1,
+          message: 'Server is at capacity. You are in the queue...',
+        }));
+      }
+      dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
+    } catch (err: any) {
+      const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
+      console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
       ws.send(JSON.stringify({
-        type: 'queued',
-        position: dockerManager.queueLength + 1,
-        message: 'Server is at capacity. You are in the queue...',
+        type: 'error',
+        message: isQueueTimeout
+          ? 'Server is busy, please try again in a few minutes'
+          : 'Failed to start terminal',
       }));
+      ws.close();
+      return;
     }
-    dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
-  } catch (err: any) {
-    const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
-    console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
-    ws.send(JSON.stringify({
-      type: 'error',
-      message: isQueueTimeout
-        ? 'Server is busy, please try again in a few minutes'
-        : 'Failed to start terminal',
-    }));
-    ws.close();
-    return;
+
+    // Start cost tracking for this session
+    try {
+      const [challengeRow] = await sql<{ company_id: string }[]>`
+        SELECT company_id FROM challenges WHERE id = ${challengeId}
+      `;
+      if (challengeRow) {
+        costTracker.startSession(sessionId, challengeRow.company_id);
+      }
+    } catch (err) {
+      console.warn(`[Terminal] Failed to start cost tracking for session ${sessionId}:`, err);
+    }
+
+    // Send initial message
+    ws.send(JSON.stringify({ type: 'connected', sessionId }));
   }
 
-  // Start cost tracking for this session
-  try {
-    const [challengeRow] = await sql<{ company_id: string }[]>`
-      SELECT company_id FROM challenges WHERE id = ${challengeId}
-    `;
-    if (challengeRow) {
-      costTracker.startSession(sessionId, challengeRow.company_id);
-    }
-  } catch (err) {
-    console.warn(`[Terminal] Failed to start cost tracking for session ${sessionId}:`, err);
-  }
-
-  // Send initial message
-  ws.send(JSON.stringify({ type: 'connected', sessionId }));
-
-  // Container output → WebSocket + Logger + CostTracker
-  dockerSession.onData = (data: string) => {
+  // Reattach container output → this WebSocket + Logger + CostTracker
+  dockerSession!.onData = (data: string) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'output', data }));
     }
@@ -296,7 +319,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     costTracker.processOutput(sessionId, data);
   };
 
-  dockerSession.onExit = (exitCode: number) => {
+  dockerSession!.onExit = (exitCode: number) => {
     console.log(`[Terminal] Container exited for session ${sessionId} with code ${exitCode}`);
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'exit', exitCode }));
@@ -334,18 +357,28 @@ wss.on('connection', async (ws: WebSocket, req) => {
   });
 
   ws.on('close', async () => {
-    console.log(`[Terminal] Session disconnected: ${sessionId}`);
-    await costTracker.endSession(sessionId);
-    await logger.flush();
-    await dockerManager.kill(sessionId);
+    console.log(`[Terminal] Session disconnected: ${sessionId}, starting ${DISCONNECT_GRACE_MS / 1000}s grace period`);
 
-    // Mark session as completed when candidate disconnects (e.g. closes tab)
-    try {
-      await sql`UPDATE sessions SET status = 'completed', ended_at = NOW() WHERE id = ${sessionId} AND status = 'active'`;
-      console.log(`[Terminal] Session marked as completed: ${sessionId}`);
-    } catch (err) {
-      console.error(`[Terminal] Failed to update session status for ${sessionId}:`, err);
-    }
+    // Start a grace period instead of immediately killing the container.
+    // If the candidate reconnects (e.g. page refresh), the timer is cancelled above.
+    const timer = setTimeout(async () => {
+      disconnectTimers.delete(sessionId);
+      console.log(`[Terminal] Grace period expired for ${sessionId}, terminating`);
+
+      await costTracker.endSession(sessionId);
+      await logger.flush();
+      await dockerManager.kill(sessionId);
+
+      // Mark session as completed
+      try {
+        await sql`UPDATE sessions SET status = 'completed', ended_at = NOW() WHERE id = ${sessionId} AND status = 'active'`;
+        console.log(`[Terminal] Session marked as completed: ${sessionId}`);
+      } catch (err) {
+        console.error(`[Terminal] Failed to update session status for ${sessionId}:`, err);
+      }
+    }, DISCONNECT_GRACE_MS);
+
+    disconnectTimers.set(sessionId, timer);
   });
 
   ws.on('error', (err) => {
@@ -359,6 +392,11 @@ process.on('SIGINT', () => shutdown());
 
 async function shutdown() {
   console.log('[Terminal] Shutting down...');
+  // Clear all pending disconnect timers
+  for (const [, timer] of disconnectTimers) {
+    clearTimeout(timer);
+  }
+  disconnectTimers.clear();
   await costTracker.destroy();
   await logger.destroy();
   await dockerManager.killAll();

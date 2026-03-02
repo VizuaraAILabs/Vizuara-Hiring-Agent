@@ -36,6 +36,9 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
         switch (msg.type) {
           case 'connected':
             setConnected(true);
+            if (msg.reconnected) {
+              console.log('[Terminal] Reconnected to existing session');
+            }
             break;
           case 'output':
             terminalRef.current?.write(msg.data);
