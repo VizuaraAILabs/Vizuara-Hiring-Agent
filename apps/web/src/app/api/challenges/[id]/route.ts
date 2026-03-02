@@ -26,7 +26,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       SELECT * FROM sessions WHERE challenge_id = ${id} ORDER BY created_at DESC
     `;
 
-    return NextResponse.json({ ...challenge, sessions });
+    // Ensure starter_files is always a parsed array (postgres may return it as a string)
+    const starterFiles = typeof challenge.starter_files === 'string'
+      ? JSON.parse(challenge.starter_files)
+      : challenge.starter_files;
+
+    return NextResponse.json({ ...challenge, starter_files: starterFiles, sessions });
   } catch (error) {
     console.error('Error fetching challenge:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -80,7 +85,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       RETURNING *
     `;
 
-    return NextResponse.json(updated);
+    // Ensure starter_files is a parsed array
+    const parsedFiles = typeof updated.starter_files === 'string'
+      ? JSON.parse(updated.starter_files)
+      : updated.starter_files;
+
+    return NextResponse.json({ ...updated, starter_files: parsedFiles });
   } catch (error) {
     console.error('Error updating challenge:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
