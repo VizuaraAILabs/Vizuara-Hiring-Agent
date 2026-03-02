@@ -74,6 +74,15 @@ export async function getAuthUser(): Promise<{ sub: string; email: string; name:
   }
 }
 
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+export function isAdmin(email: string): boolean {
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 const ENROLLMENT_ID = process.env.ARCEVAL_ENROLLMENT_ID || '';
 
 export async function checkEnrollment(uid: string): Promise<boolean> {

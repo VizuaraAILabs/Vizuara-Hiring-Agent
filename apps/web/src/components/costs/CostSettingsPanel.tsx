@@ -55,7 +55,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
               step="0.01"
               value={vpsCost}
               onChange={(e) => setVpsCost(parseFloat(e.target.value) || 0)}
-              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-[#00a854]/50 focus:outline-none"
+              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
             />
           </div>
 
@@ -67,7 +67,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
                 step="0.01"
                 value={anthropicIn}
                 onChange={(e) => setAnthropicIn(parseFloat(e.target.value) || 0)}
-                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-[#00a854]/50 focus:outline-none"
+                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
               />
             </div>
             <div>
@@ -77,7 +77,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
                 step="0.01"
                 value={anthropicOut}
                 onChange={(e) => setAnthropicOut(parseFloat(e.target.value) || 0)}
-                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-[#00a854]/50 focus:outline-none"
+                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
               />
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
                 step="0.01"
                 value={geminiIn}
                 onChange={(e) => setGeminiIn(parseFloat(e.target.value) || 0)}
-                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-[#00a854]/50 focus:outline-none"
+                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
               />
             </div>
             <div>
@@ -100,7 +100,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
                 step="0.01"
                 value={geminiOut}
                 onChange={(e) => setGeminiOut(parseFloat(e.target.value) || 0)}
-                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-[#00a854]/50 focus:outline-none"
+                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
               />
             </div>
           </div>
@@ -108,7 +108,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-[#00a854] hover:bg-[#00c96b] text-black px-5 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+            className="bg-primary hover:bg-primary-light text-black px-5 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Settings'}
           </button>

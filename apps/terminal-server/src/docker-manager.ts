@@ -23,7 +23,7 @@ export interface DockerSession {
   onExit: ((code: number) => void) | null;
 }
 
-export interface StarterFile {
+interface StarterFile {
   path: string;
   content: string;
 }
@@ -89,20 +89,17 @@ export class DockerManager {
     const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
 
-    // Seed workspace with starter files from JSONB (AI-generated)
+    // Seed workspace from JSONB starter files (takes priority over dir)
     if (starterFiles && starterFiles.length > 0) {
-      const workDirContents = fs.readdirSync(hostWorkDir);
-      if (workDirContents.length === 0) {
-        for (const file of starterFiles) {
-          const filePath = path.join(hostWorkDir, file.path);
-          fs.mkdirSync(path.dirname(filePath), { recursive: true });
-          fs.writeFileSync(filePath, file.content, 'utf-8');
-        }
-        console.log(`[Docker] Seeded workspace for ${sessionId} with ${starterFiles.length} generated files`);
+      for (const file of starterFiles) {
+        // Safety: skip path traversal attempts
+        if (file.path.includes('..') || path.isAbsolute(file.path)) continue;
+        const destPath = path.join(hostWorkDir, file.path);
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.writeFileSync(destPath, file.content, 'utf-8');
       }
-    }
-    // Fall back to directory-based starter files
-    else if (starterFilesDir) {
+      console.log(`[Docker] Seeded workspace for ${sessionId} from JSONB starter_files (${starterFiles.length} files)`);
+    } else if (starterFilesDir) {
       const workDirContents = fs.readdirSync(hostWorkDir);
       if (workDirContents.length === 0) {
         const resolvedSrc = path.isAbsolute(starterFilesDir)

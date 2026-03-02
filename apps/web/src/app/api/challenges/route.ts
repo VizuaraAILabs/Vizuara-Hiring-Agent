@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { title, description, time_limit_min, starter_files_dir } = await request.json();
+    const { title, description, time_limit_min, starter_files_dir, starter_files } = await request.json();
 
     if (!title || !description) {
       return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
@@ -43,10 +43,13 @@ export async function POST(request: Request) {
     const id = uuidv4();
     const timeLimit = time_limit_min || 60;
     const starterDir = starter_files_dir || null;
+    const starterFiles = Array.isArray(starter_files) && starter_files.length > 0
+      ? JSON.stringify(starter_files)
+      : null;
 
     await sql`
-      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir)
-      VALUES (${id}, ${user.sub}, ${title}, ${description}, ${timeLimit}, ${starterDir})
+      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files)
+      VALUES (${id}, ${user.sub}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles})
     `;
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;

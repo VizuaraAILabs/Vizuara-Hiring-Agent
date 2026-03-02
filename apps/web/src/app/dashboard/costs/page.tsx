@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import CostSummaryCards from '@/components/costs/CostSummaryCards';
 import DailyCostChart from '@/components/costs/DailyCostChart';
 import ProviderBreakdownChart from '@/components/costs/ProviderBreakdownChart';
@@ -29,14 +31,26 @@ const timeRanges = [
 ];
 
 export default function CostsPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<CostData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+
+  useEffect(() => {
+    if (!authLoading && (!user || !user.isAdmin)) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   async function fetchData(d: number) {
     setLoading(true);
     try {
       const res = await fetch(`/api/costs?days=${d}`);
+      if (res.status === 403) {
+        router.replace('/dashboard');
+        return;
+      }
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -47,8 +61,10 @@ export default function CostsPage() {
   }
 
   useEffect(() => {
-    fetchData(days);
-  }, [days]);
+    if (user?.isAdmin) {
+      fetchData(days);
+    }
+  }, [days, user]);
 
   async function handleSaveSettings(settings: Partial<CostSettings>) {
     const res = await fetch('/api/costs/settings', {
@@ -59,6 +75,10 @@ export default function CostsPage() {
     if (res.ok) {
       fetchData(days);
     }
+  }
+
+  if (authLoading || !user?.isAdmin) {
+    return null;
   }
 
   const totalSpend = Number(data?.totals?.total_spend ?? 0);
@@ -80,7 +100,7 @@ export default function CostsPage() {
               onClick={() => setDays(range.days)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 days === range.days
-                  ? 'bg-[#00a854]/10 text-[#00a854]'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-neutral-500 hover:text-white'
               }`}
             >

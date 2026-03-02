@@ -11,6 +11,11 @@ export interface Company {
   created_at: string;
 }
 
+export interface StarterFile {
+  path: string;
+  content: string;
+}
+
 export interface Challenge {
   id: string;
   company_id: string;
@@ -19,7 +24,7 @@ export interface Challenge {
   time_limit_min: number;
   is_active: number;
   starter_files_dir: string | null;
-  starter_files: { path: string; content: string }[] | null;
+  starter_files: StarterFile[] | null;
   created_at: string;
 }
 

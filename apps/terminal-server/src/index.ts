@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import postgres from 'postgres';
 import path from 'path';
 import dotenv from 'dotenv';
-import { DockerManager, StarterFile } from './docker-manager';
+import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import { buildFileTree, readFileContent } from './file-service';
@@ -139,11 +139,11 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   console.log(`[Terminal] Session connected: ${sessionId}`);
 
-  // Look up starter files for this challenge
+  // Look up starter files for this challenge (JSONB column + legacy dir)
   let starterFilesDir: string | undefined;
-  let starterFiles: StarterFile[] | undefined;
+  let starterFiles: { path: string; content: string }[] | undefined;
   try {
-    const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: StarterFile[] | null }[]>`
+    const [challenge] = await sql<{ starter_files_dir: string | null; starter_files: { path: string; content: string }[] | null }[]>`
       SELECT starter_files_dir, starter_files FROM challenges WHERE id = ${challengeId}
     `;
     if (challenge?.starter_files && Array.isArray(challenge.starter_files) && challenge.starter_files.length > 0) {

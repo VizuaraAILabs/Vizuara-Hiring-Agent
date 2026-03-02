@@ -22,7 +22,6 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
-  const [creatingPhase, setCreatingPhase] = useState<'creating' | 'generating'>('creating');
   const [error, setError] = useState('');
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
@@ -30,7 +29,23 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     setError('');
 
     try {
-      setCreatingPhase('creating');
+      // Auto-generate starter files (non-fatal if it fails)
+      let starterFiles;
+      try {
+        setError('Generating starter files...');
+        const genRes = await fetch('/api/challenges/generate-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: challenge.title, description: challenge.description }),
+        });
+        if (genRes.ok) {
+          const genData = await genRes.json();
+          if (genData.files?.length > 0) starterFiles = genData.files;
+        }
+      } catch {
+        // Non-fatal: continue without starter files
+      }
+      setError('');
 
       const res = await fetch('/api/challenges', {
         method: 'POST',
@@ -39,6 +54,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           title: challenge.title,
           description: challenge.description,
           time_limit_min: challenge.duration_minutes,
+          starter_files: starterFiles,
         }),
       });
 
@@ -49,18 +65,6 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       }
 
       const created = await res.json();
-
-      // Generate starter files for the challenge
-      setCreatingPhase('generating');
-      try {
-        await fetch(`/api/challenges/${created.id}/generate-files`, {
-          method: 'POST',
-        });
-      } catch {
-        // Non-fatal — challenge was created, starter files just failed
-        console.warn('Failed to generate starter files, continuing without them');
-      }
-
       router.push(`/dashboard/challenges/${created.id}`);
     } catch {
       setError('Something went wrong. Please try again.');
@@ -69,13 +73,30 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     }
   }
 
-  function handleCustomize(challenge: GeneratedChallenge) {
+  async function handleCustomize(challenge: GeneratedChallenge) {
+    // Try to pre-generate starter files for the customize form
+    let starterFiles;
+    try {
+      const genRes = await fetch('/api/challenges/generate-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: challenge.title, description: challenge.description }),
+      });
+      if (genRes.ok) {
+        const genData = await genRes.json();
+        if (genData.files?.length > 0) starterFiles = genData.files;
+      }
+    } catch {
+      // Non-fatal
+    }
+
     sessionStorage.setItem(
       'prefill_challenge',
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
         timeLimit: challenge.duration_minutes,
+        starterFiles,
       })
     );
     router.push('/dashboard/challenges/new?tab=manual&prefill=true');
@@ -177,11 +198,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
                   disabled={creatingIndex !== null}
                   className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black font-semibold px-5 py-2.5 rounded-lg text-sm transition-all"
                 >
-                  {creatingIndex === i
-                    ? creatingPhase === 'generating'
-                      ? 'Generating starter files...'
-                      : 'Creating...'
-                    : 'Use This Challenge'}
+                  {creatingIndex === i ? 'Creating...' : 'Use This Challenge'}
                 </button>
                 <button
                   onClick={() => handleCustomize(challenge)}
