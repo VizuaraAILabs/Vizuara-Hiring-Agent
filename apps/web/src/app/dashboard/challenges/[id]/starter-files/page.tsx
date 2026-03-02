@@ -25,15 +25,18 @@ export default function StarterFilesPage() {
     async function fetchChallenge() {
       try {
         const res = await fetch(`/api/challenges/${id}`);
-        if (!res.ok) throw new Error('Failed to load challenge');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to load challenge (${res.status})`);
+        }
         const data = await res.json();
         const starterFiles = (data.starter_files || []).filter((f: { path?: string }) => f.path);
         setFiles(starterFiles);
         setSavedFiles(starterFiles);
         setChallengeTitle(data.title || '');
         setChallengeDescription(data.description || '');
-      } catch {
-        setError('Failed to load challenge');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load challenge');
       } finally {
         setLoading(false);
       }
