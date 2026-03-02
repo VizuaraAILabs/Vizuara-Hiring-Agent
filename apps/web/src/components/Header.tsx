@@ -15,8 +15,9 @@ export default function Header() {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
 
-  // Don't render Header on dashboard pages — the Sidebar handles navigation there
-  if (pathname.startsWith('/dashboard')) return null;
+  // Don't render Header on dashboard pages (Sidebar handles navigation)
+  // or session terminal pages (TerminalToolbar handles navigation)
+  if (pathname.startsWith('/dashboard') || pathname.includes('/terminal')) return null;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
