@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, isAdmin } from '@/lib/auth';
 
 export async function PUT(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!isAdmin(user.email)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const companyId = user.sub;

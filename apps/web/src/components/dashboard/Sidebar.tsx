@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
-  { label: 'Costs', href: '/dashboard/costs', icon: '$' },
+  { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true },
 ];
 
 const PLAN_LABELS: Record<string, string> = {
@@ -21,7 +21,7 @@ const PLAN_LABELS: Record<string, string> = {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { planStatus } = useSubscription();
 
   const planLabel = planStatus ? (PLAN_LABELS[planStatus.plan] || planStatus.plan) : null;
@@ -48,7 +48,9 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
+        {navItems
+          .filter((item) => !item.adminOnly || user?.isAdmin)
+          .map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
