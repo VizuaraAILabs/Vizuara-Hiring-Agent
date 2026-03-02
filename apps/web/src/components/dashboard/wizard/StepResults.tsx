@@ -65,7 +65,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       }
 
       const created = await res.json();
-      router.push(`/dashboard/challenges/${created.id}`);
+      router.push(`/dashboard/challenges/${created.id}/starter-files`);
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
