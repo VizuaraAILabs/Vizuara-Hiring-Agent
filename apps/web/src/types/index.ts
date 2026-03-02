@@ -173,6 +173,7 @@ export interface SessionCostSummary {
   gemini_cost: number;
   docker_cost: number;
   total_cost: number;
+  estimated: boolean;
   created_at: string;
 }
 
