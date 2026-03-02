@@ -10,7 +10,7 @@ Given a challenge title and description, generate the appropriate starter files 
 
 Rules:
 - Generate realistic, well-structured project scaffolds
-- Include a README.md or BRIEF.md with setup instructions and the challenge objective
+- ALWAYS include a BRIEF.md as the first file. It must start with a "Using Claude Code" section that explains candidates can type \`claude\` in the terminal to launch their AI assistant, and they should collaborate with it throughout the challenge. Then include: the challenge title, a clear objective statement, specific requirements and acceptance criteria, setup/run instructions, and evaluation criteria. Write it as a detailed briefing document the candidate reads before starting.
 - Include relevant config files (package.json, requirements.txt, tsconfig.json, etc.)
 - Include source code stubs with TODO comments where candidates should implement
 - Include test files when the challenge involves testing or verification

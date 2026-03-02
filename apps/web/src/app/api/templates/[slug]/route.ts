@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    const challengesDir = path.join(process.cwd(), 'challenges', slug);
+    const challengesDir = path.join(process.cwd(), '..', '..', 'challenges', slug);
 
     if (!fs.existsSync(challengesDir)) {
       return NextResponse.json({ error: 'Template files not found on disk' }, { status: 404 });
