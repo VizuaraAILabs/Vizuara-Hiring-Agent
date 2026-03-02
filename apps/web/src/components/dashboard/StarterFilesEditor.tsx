@@ -214,7 +214,10 @@ function EditorTreeNode({
 
   if (isDir) {
     return (
-      <div>
+      <div
+        onDragOver={(e) => onDragOver(e, node.path)}
+        onDrop={(e) => onDrop(e, node.path)}
+      >
         <div
           draggable
           onDragStart={(e) => onDragStart(e, node.path)}
@@ -225,12 +228,13 @@ function EditorTreeNode({
           style={{ paddingLeft }}
           onClick={() => { onSelect(node.path); toggleDir(node.path); }}
           onContextMenu={(e) => onContextMenu(e, node.path, 'directory')}
-          onDragOver={(e) => onDragOver(e, node.path)}
-          onDrop={(e) => onDrop(e, node.path)}
         >
-          <span className="text-neutral-600 w-3 text-center shrink-0">
-            {isExpanded ? '▼' : '▶'}
-          </span>
+          <svg className="w-3 h-3 text-neutral-600 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isExpanded
+              ? <polyline points="6,8 10,12 14,8" />
+              : <polyline points="8,6 12,10 8,14" />
+            }
+          </svg>
           {isRenaming ? (
             <input
               type="text"
@@ -503,7 +507,18 @@ export default function StarterFilesEditor({
     // Check if it's a directory (no direct file match)
     const isFile = files.some((f) => f.path === path);
     if (isFile) {
-      onChange(files.filter((f) => f.path !== path));
+      const remaining = files.filter((f) => f.path !== path);
+      // If deleting a file from a directory, check if directory becomes empty
+      const parentDir = path.substring(0, path.lastIndexOf('/'));
+      if (parentDir) {
+        const siblingPrefix = parentDir + '/';
+        const hasOtherFiles = remaining.some((f) => f.path.startsWith(siblingPrefix));
+        if (!hasOtherFiles) {
+          // Add .gitkeep to preserve the empty directory
+          remaining.push({ path: `${parentDir}/${GITKEEP}`, content: '' });
+        }
+      }
+      onChange(remaining);
       if (selectedPath === path) setSelectedPath(null);
     } else {
       // Delete all files under this directory

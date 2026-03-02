@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
 import type { StarterFile } from '@/types';
 
 export default function StarterFilesPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
 
   const [files, setFiles] = useState<StarterFile[]>([]);
@@ -18,6 +18,7 @@ export default function StarterFilesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   const hasUnsavedChanges = JSON.stringify(files) !== JSON.stringify(savedFiles);
 
@@ -104,17 +105,36 @@ export default function StarterFilesPage() {
     );
   }
 
+  function handleBack() {
+    if (hasUnsavedChanges) {
+      setShowLeaveModal(true);
+    } else {
+      router.push(`/dashboard/challenges/${id}`);
+    }
+  }
+
+  function handleLeaveWithoutSaving() {
+    setShowLeaveModal(false);
+    router.push(`/dashboard/challenges/${id}`);
+  }
+
+  async function handleSaveAndLeave() {
+    setShowLeaveModal(false);
+    await handleSave();
+    router.push(`/dashboard/challenges/${id}`);
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-white/5 shrink-0">
         <div className="flex items-center gap-4">
-          <Link
-            href={`/dashboard/challenges/${id}`}
+          <button
+            onClick={handleBack}
             className="text-neutral-500 hover:text-white text-sm transition-colors"
           >
             &larr; Back to challenge
-          </Link>
+          </button>
           <span className="text-white font-medium text-sm truncate max-w-md">
             {challengeTitle}
           </span>
@@ -149,6 +169,38 @@ export default function StarterFilesPage() {
           mode="full"
         />
       </div>
+
+      {/* Unsaved changes modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#111] border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-white font-semibold text-lg mb-2">Unsaved Changes</h3>
+            <p className="text-neutral-400 text-sm mb-6">
+              You have unsaved changes. Would you like to save before leaving?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleLeaveWithoutSaving}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-neutral-400 border border-white/10 hover:bg-white/5 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white border border-white/10 hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAndLeave}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold text-black bg-primary hover:bg-primary-light transition-colors"
+              >
+                Save & Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
