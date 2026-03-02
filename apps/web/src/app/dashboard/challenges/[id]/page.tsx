@@ -109,6 +109,24 @@ export default function ChallengeDetailPage() {
         </div>
       </div>
 
+      {/* Starter Files */}
+      <div className="bg-[#111] border border-white/5 rounded-2xl p-5 mb-8 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-white">Starter Files</p>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {challenge.starter_files && challenge.starter_files.length > 0
+              ? `${challenge.starter_files.length} file${challenge.starter_files.length !== 1 ? 's' : ''} configured`
+              : 'No starter files configured'}
+          </p>
+        </div>
+        <Link
+          href={`/dashboard/challenges/${challenge.id}/starter-files`}
+          className="text-primary hover:text-primary-light text-sm font-medium transition-colors"
+        >
+          {challenge.starter_files && challenge.starter_files.length > 0 ? 'Edit Starter Files' : 'Add Starter Files'}
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Candidates List */}
         <div className="lg:col-span-2">

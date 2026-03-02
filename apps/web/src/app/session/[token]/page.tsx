@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
 import FPLLogo from '@/components/FPLLogo';
+import MarkdownViewer from '@/components/MarkdownViewer';
 
 export default function SessionPage() {
   const params = useParams();
@@ -80,11 +81,7 @@ export default function SessionPage() {
 
         <div className="bg-[#111] border border-white/5 rounded-2xl p-8 mb-6">
           <h2 className="text-lg font-semibold text-white mb-4">Challenge Description</h2>
-          <div className="prose prose-invert prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap text-neutral-400 text-sm leading-relaxed font-sans">
-              {session.challenge_description}
-            </pre>
-          </div>
+          <MarkdownViewer content={session.challenge_description} />
         </div>
 
         <div className="bg-[#111] border border-white/5 rounded-2xl p-8 mb-8">
