@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, Instrument_Serif, Geist_Mono } from "next/font/google";
+import { Figtree, Instrument_Serif, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { SubscriptionProvider } from "@/context/SubscriptionContext";
 import Header from "@/components/Header";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
 });
 
@@ -38,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${inter.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
+        className={`${figtree.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
       >
         <AuthProvider>
           <SubscriptionProvider>

@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 .venv/
 dist/
+.claude/
+.vscode/
+docs/
