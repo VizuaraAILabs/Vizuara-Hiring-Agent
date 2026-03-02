@@ -9,7 +9,7 @@ export default function CreateChallengeForm() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [timeLimit, setTimeLimit] = useState(60);
+  const [timeLimit, setTimeLimit] = useState(30);
   const [starterFiles, setStarterFiles] = useState<StarterFile[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +21,7 @@ export default function CreateChallengeForm() {
         const data = JSON.parse(prefill);
         if (data.title) setTitle(data.title);
         if (data.description) setDescription(data.description);
-        if (data.timeLimit) setTimeLimit(data.timeLimit);
+        if (data.timeLimit) setTimeLimit(Math.max(10, Math.min(45, data.timeLimit)));
         if (data.starterFiles) setStarterFiles(data.starterFiles);
       } catch {
         // ignore invalid JSON
@@ -102,9 +102,9 @@ export default function CreateChallengeForm() {
         <input
           type="number"
           value={timeLimit}
-          onChange={(e) => setTimeLimit(parseInt(e.target.value) || 60)}
-          min={15}
-          max={180}
+          onChange={(e) => setTimeLimit(Math.max(10, Math.min(45, parseInt(e.target.value) || 30)))}
+          min={10}
+          max={45}
           className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
         />
       </div>

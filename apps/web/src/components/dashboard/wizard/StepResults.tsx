@@ -53,7 +53,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
         body: JSON.stringify({
           title: challenge.title,
           description: challenge.description,
-          time_limit_min: challenge.duration_minutes,
+          time_limit_min: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
           starter_files: starterFiles,
         }),
       });
@@ -95,7 +95,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
-        timeLimit: challenge.duration_minutes,
+        timeLimit: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
         starterFiles,
       })
     );
