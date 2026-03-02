@@ -179,6 +179,7 @@ function EditorTreeNode({
   onRenameCancel,
   inlineInput,
   onDragStart,
+  onDragEnd,
   onDragOver,
   onDrop,
   dragOverPath,
@@ -197,6 +198,7 @@ function EditorTreeNode({
   onRenameCancel: () => void;
   inlineInput: { dirPath: string; type: 'file' | 'folder' } | null;
   onDragStart: (e: React.DragEvent, path: string) => void;
+  onDragEnd: () => void;
   onDragOver: (e: React.DragEvent, path: string) => void;
   onDrop: (e: React.DragEvent, targetDir: string) => void;
   dragOverPath: string | null;
@@ -216,6 +218,7 @@ function EditorTreeNode({
         <div
           draggable
           onDragStart={(e) => onDragStart(e, node.path)}
+          onDragEnd={onDragEnd}
           className={`w-full text-left flex items-center gap-1 py-1 hover:bg-white/5 text-neutral-300 text-xs group cursor-pointer ${
             isDragOver ? 'bg-primary/10 border-l-2 border-primary' : isSelected ? 'bg-primary/10 text-primary' : ''
           }`}
@@ -260,6 +263,7 @@ function EditorTreeNode({
             onRenameCancel={onRenameCancel}
             inlineInput={inlineInput}
             onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
             onDragOver={onDragOver}
             onDrop={onDrop}
             dragOverPath={dragOverPath}
@@ -279,6 +283,7 @@ function EditorTreeNode({
     <div
       draggable
       onDragStart={(e) => onDragStart(e, node.path)}
+      onDragEnd={onDragEnd}
       className={`w-full flex items-center gap-1 py-1 text-xs group cursor-pointer ${
         isSelected
           ? 'bg-primary/10 text-primary'
@@ -513,16 +518,25 @@ export default function StarterFilesEditor({
   function handleDragStart(e: React.DragEvent, path: string) {
     setDraggedPath(path);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', path);
+    e.stopPropagation();
+  }
+
+  function handleDragEnd() {
+    setDraggedPath(null);
+    setDragOverPath(null);
   }
 
   function handleDragOver(e: React.DragEvent, dirPath: string) {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverPath(dirPath);
   }
 
   function handleDrop(e: React.DragEvent, targetDir: string) {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverPath(null);
 
     // Handle external file drops
@@ -595,7 +609,12 @@ export default function StarterFilesEditor({
 
   function handleEditorDragOver(e: React.DragEvent) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    // Use 'move' for internal drags, 'copy' for external file drops
+    if (draggedPath) {
+      e.dataTransfer.dropEffect = 'move';
+    } else {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   }
 
   function handleEditorDrop(e: React.DragEvent) {
@@ -603,6 +622,11 @@ export default function StarterFilesEditor({
     setDragOverPath(null);
     if (e.dataTransfer.files.length > 0) {
       handleExternalFileDrop(e.dataTransfer.files, '');
+      return;
+    }
+    // Internal drag to root (outside any directory)
+    if (draggedPath) {
+      handleDrop(e, '');
     }
   }
 
@@ -807,6 +831,7 @@ export default function StarterFilesEditor({
                     onRenameCancel={() => setRenamingPath(null)}
                     inlineInput={inlineInput}
                     onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
                     dragOverPath={dragOverPath}
