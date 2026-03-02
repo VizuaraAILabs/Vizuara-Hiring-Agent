@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const id = uuidv4();
-    const timeLimit = time_limit_min || 60;
+    const timeLimit = Math.max(10, Math.min(45, time_limit_min || 30));
     const starterDir = starter_files_dir || null;
     const starterFiles = Array.isArray(starter_files) && starter_files.length > 0
       ? JSON.stringify(starter_files)

@@ -42,7 +42,7 @@ Each challenge object must have:
 - title (string): A concise, descriptive title
 - description (string): The full challenge description in markdown with the sections above
 - difficulty (string): One of "beginner", "intermediate", "advanced", "expert"
-- duration_minutes (number): Estimated time to complete
+- duration_minutes (number): Always set to 30. Do NOT vary this value — assessment duration is configured separately by the hiring team.
 - tags (string[]): 3-6 relevant technology/skill tags
 - why_iterative (string): 2-3 sentences explaining why this challenge specifically tests multi-step AI collaboration skills`;
 
@@ -53,11 +53,11 @@ function buildUserPrompt(body: {
   focus_areas: string[];
   context?: string;
 }): string {
-  const seniorityMap: Record<string, { label: string; difficulty: string; duration: string }> = {
-    junior: { label: 'Junior (0-2 years)', difficulty: 'beginner to intermediate', duration: '30-60 minutes' },
-    mid: { label: 'Mid-Level (2-5 years)', difficulty: 'intermediate', duration: '45-75 minutes' },
-    senior: { label: 'Senior (5-8 years)', difficulty: 'advanced', duration: '60-90 minutes' },
-    staff: { label: 'Staff/Principal (8+ years)', difficulty: 'expert', duration: '75-120 minutes' },
+  const seniorityMap: Record<string, { label: string; difficulty: string }> = {
+    junior: { label: 'Junior (0-2 years)', difficulty: 'beginner to intermediate' },
+    mid: { label: 'Mid-Level (2-5 years)', difficulty: 'intermediate' },
+    senior: { label: 'Senior (5-8 years)', difficulty: 'advanced' },
+    staff: { label: 'Staff/Principal (8+ years)', difficulty: 'expert' },
   };
 
   const info = seniorityMap[body.seniority] || seniorityMap.mid;
@@ -67,9 +67,9 @@ function buildUserPrompt(body: {
 Tech stack: ${body.tech_stack.join(', ')}
 Focus areas: ${body.focus_areas.join(', ')}
 Target difficulty: ${info.difficulty}
-Target duration: ${info.duration} per challenge
 
-Each challenge must be completable within the duration range and appropriate for the seniority level. Include a "why_iterative" field explaining why multi-step AI collaboration is needed for each challenge.`;
+Set duration_minutes to 30 for every challenge. The hiring team configures the actual time limit separately.
+Each challenge must be appropriate for the seniority level. Include a "why_iterative" field explaining why multi-step AI collaboration is needed for each challenge.`;
 
   if (body.context) {
     prompt += `\n\nAdditional context from the hiring company:\n${body.context}`;
