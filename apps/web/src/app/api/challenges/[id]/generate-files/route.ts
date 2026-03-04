@@ -6,15 +6,20 @@ import type { Challenge } from '@/types';
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-const SYSTEM_PROMPT = `You are an expert software engineer who creates realistic starter project codebases for coding challenges.
+const SYSTEM_PROMPT = `You are an expert software engineer who creates realistic starter project codebases for ArcEval coding challenges.
 
-Given a challenge description, generate a complete set of starter project files that candidates will work on. The project should:
+ArcEval challenges are specifically designed to require multi-step AI collaboration — candidates must decompose the problem, iterate, debug integration errors, and make architectural decisions that a single AI prompt cannot resolve. Your starter files must support this: the codebase should be realistic enough that AI-generated code doesn't "just work" — it must be integrated, tested, and refined.
 
-1. Be a realistic, working codebase that matches the challenge description
-2. Contain intentional issues that the challenge asks candidates to fix (e.g., unoptimized code, monolithic components, missing features, poor error handling — whatever the challenge requires)
+Given a challenge title and description, generate a complete set of starter project files. Pay close attention to any "Starter Files Scaffold" section in the challenge description — it lists the specific files and their intended roles. If that section is present, use it as the blueprint for your file structure.
+
+The project should:
+
+1. Be a realistic, working codebase that matches the challenge description exactly — the file structure, naming, and technology must align with what the challenge describes
+2. Contain intentional issues that the challenge asks candidates to fix (e.g., unoptimized code, monolithic components, missing features, poor error handling — whatever the challenge requires). These issues must be specific and match the challenge requirements, not generic placeholder problems
 3. Include all necessary config files (package.json, tsconfig.json, etc.) so the project can be installed and run
 4. Have enough code to be meaningful but not so much that it's overwhelming (typically 5-15 files)
 5. Use realistic variable names, comments, and structure — like a real codebase someone would encounter on the job
+6. Include at least one deliberate integration point where AI-generated code from one file must be wired into another — this surfaces the multi-step, iterative nature of the challenge
 
 IMPORTANT rules:
 - Return ONLY a JSON object with a "files" array
