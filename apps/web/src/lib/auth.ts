@@ -74,10 +74,10 @@ export async function getAuthUser(): Promise<{ sub: string; email: string; name:
   }
 }
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
+const ADMIN_EMAILS = [
+  'rajatdandekar@vizuara.com',
+  'crimsonsyrus000@gmail.com',
+];
 
 export function isAdmin(email: string): boolean {
   return ADMIN_EMAILS.includes(email.toLowerCase());
