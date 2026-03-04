@@ -1,5 +1,9 @@
 # Design a Retrieval Strategy for RAG
 
+## Using Claude Code
+
+Open your terminal and type `claude` to launch your AI assistant. Use it to design your retrieval strategy, write and debug code, understand tradeoffs between approaches, interpret your evaluation metrics, and draft your DESIGN.md. This challenge rewards thoughtful AI collaboration — use it to think through design decisions, not just to generate boilerplate.
+
 ## Scenario
 
 You're building the retrieval component for a Retrieval-Augmented Generation (RAG) system that helps developers navigate the documentation for **NexusDB** — a fictional distributed database platform.
@@ -42,6 +46,13 @@ Query types: `keyword`, `natural_language`, `conceptual`
 
 Relevance levels: `high` (directly answers), `medium` (partially relevant), `low` (tangentially related)
 
+## Getting Started
+
+```bash
+pip install -r requirements.txt
+python retriever.py "how do I authenticate API requests?"
+```
+
 ## Deliverables
 
 ### 1. `retriever.py`
@@ -71,7 +82,6 @@ A short document (1-2 pages) explaining:
 - **No model downloads** — no HuggingFace transformers, sentence-transformers, etc.
 - **Allowed packages**: `numpy`, `pandas`, `scikit-learn`, `nltk`, `rank_bm25` (see `requirements.txt`)
 - **Performance**: Retrieval should complete in under 3 seconds per query
-- **Time limit**: 60 minutes
 
 ## Important
 

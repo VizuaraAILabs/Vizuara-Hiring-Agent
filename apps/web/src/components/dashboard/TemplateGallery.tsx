@@ -44,7 +44,7 @@ export default function TemplateGallery() {
         JSON.stringify({
           title: data.title,
           description: data.full_description || data.description,
-          timeLimit: data.duration_minutes,
+          timeLimit: data.time_limit_min,
           starterFiles: data.files,
         })
       );
@@ -113,7 +113,7 @@ export default function TemplateGallery() {
                   </span>
                 ))}
                 <span className="px-2 py-0.5 bg-white/5 text-neutral-600 rounded text-xs">
-                  {template.duration_minutes} min
+                  {template.time_limit_min} min
                 </span>
               </div>
 

@@ -37,10 +37,9 @@ async function runPipeline(dataIds) {
 
   for (let i = 0; i < chunks.length; i++) {
     const processed = await processBatch(i, chunks[i].length);
-    results.push(processed);   // BUG 4: should be results.push(...processed) to flatten
+    results.push(processed);
   }
 
-  // BUG 5: Filters r !== null, but r is an array (because of BUG 4), so this is ineffective
   return results.filter((r) => r !== null);
 }
 

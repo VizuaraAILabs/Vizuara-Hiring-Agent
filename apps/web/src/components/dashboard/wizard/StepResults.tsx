@@ -22,6 +22,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
+  const [customizingIndex, setCustomizingIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [fileWarning, setFileWarning] = useState('');
   const [progressMessage, setProgressMessage] = useState('');
@@ -80,15 +81,38 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
     }
   }
 
-  function handleCustomize(challenge: GeneratedChallenge) {
+  async function handleCustomize(challenge: GeneratedChallenge, index: number) {
+    setCustomizingIndex(index);
+    setError('');
+
+    let starterFiles;
+    try {
+      setProgressMessage('Generating starter files...');
+      const genRes = await fetch('/api/challenges/generate-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: challenge.title, description: challenge.description }),
+      });
+      if (genRes.ok) {
+        const genData = await genRes.json();
+        if (genData.files?.length > 0) starterFiles = genData.files;
+      }
+    } catch {
+      // Non-fatal — editor will start empty
+    } finally {
+      setProgressMessage('');
+    }
+
     sessionStorage.setItem(
       'prefill_challenge',
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
         timeLimit: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
+        starterFiles,
       })
     );
+    setCustomizingIndex(null);
     router.push('/dashboard/challenges/new?tab=manual&prefill=true');
   }
 
@@ -191,17 +215,17 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
               <div className="flex gap-3 pt-2 border-t border-white/5">
                 <button
                   onClick={() => handleUseChallenge(challenge, i)}
-                  disabled={creatingIndex !== null}
+                  disabled={creatingIndex !== null || customizingIndex !== null}
                   className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black font-semibold px-5 py-2.5 rounded-lg text-sm transition-all"
                 >
                   {creatingIndex === i ? 'Creating...' : 'Use This Challenge'}
                 </button>
                 <button
-                  onClick={() => handleCustomize(challenge)}
-                  disabled={creatingIndex !== null}
-                  className="px-5 py-2.5 border border-white/10 text-neutral-400 rounded-lg text-sm hover:text-white hover:border-white/20 transition-all"
+                  onClick={() => handleCustomize(challenge, i)}
+                  disabled={creatingIndex !== null || customizingIndex !== null}
+                  className="px-5 py-2.5 border border-white/10 text-neutral-400 rounded-lg text-sm hover:text-white hover:border-white/20 transition-all disabled:opacity-50"
                 >
-                  Customize First
+                  {customizingIndex === i ? 'Preparing...' : 'Customize First'}
                 </button>
               </div>
             </div>
