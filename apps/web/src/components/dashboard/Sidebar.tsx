@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true },
+  { label: 'Admin', href: '/dashboard/admin', icon: '⚙', adminOnly: true },
 ];
 
 const PLAN_LABELS: Record<string, string> = {
@@ -51,7 +52,9 @@ export default function Sidebar() {
         {navItems
           .filter((item) => !item.adminOnly || user?.isAdmin)
           .map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item.href === '/dashboard'
+            ? pathname === '/dashboard'
+            : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
