@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, isAdmin } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import type { Challenge } from '@/types';
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { title, description, time_limit_min, starter_files_dir, starter_files } = await request.json();
+    const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit } = await request.json();
 
     if (!title || !description) {
       return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
@@ -46,10 +46,14 @@ export async function POST(request: Request) {
     const starterFiles = Array.isArray(starter_files) && starter_files.length > 0
       ? JSON.stringify(starter_files)
       : null;
+    // Only admins can set a per-challenge session limit
+    const sessionsLimit = isAdmin(user.email) && sessions_limit != null
+      ? Math.max(1, parseInt(sessions_limit) || 1)
+      : null;
 
     await sql`
-      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files)
-      VALUES (${id}, ${user.sub}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles})
+      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit)
+      VALUES (${id}, ${user.sub}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit})
     `;
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;

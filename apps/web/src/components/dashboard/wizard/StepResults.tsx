@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import type { GeneratedChallenge } from './types';
 
 const difficultyColors: Record<string, string> = {
@@ -19,10 +20,12 @@ interface StepResultsProps {
 
 export default function StepResults({ challenges, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
   const [customizingIndex, setCustomizingIndex] = useState<number | null>(null);
+  const [sessionsLimits, setSessionsLimits] = useState<Record<number, string>>({});
   const [error, setError] = useState('');
   const [fileWarning, setFileWarning] = useState('');
   const [progressMessage, setProgressMessage] = useState('');
@@ -62,6 +65,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           description: challenge.description,
           time_limit_min: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
           starter_files: starterFiles,
+          sessions_limit: user?.isAdmin && sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
         }),
       });
 
@@ -208,6 +212,23 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
                       {challenge.why_iterative}
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Admin session limit */}
+              {user?.isAdmin && (
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-neutral-500 mb-1">
+                    Session limit <span className="text-neutral-600">(leave blank for unlimited)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Unlimited"
+                    value={sessionsLimits[i] ?? ''}
+                    onChange={(e) => setSessionsLimits((prev) => ({ ...prev, [i]: e.target.value }))}
+                    className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                  />
                 </div>
               )}
 

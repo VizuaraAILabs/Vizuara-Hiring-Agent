@@ -72,8 +72,8 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Plan status section */}
-      {planStatus && (
+      {/* Plan status section — hidden for admins */}
+      {planStatus && !user?.isAdmin && (
         <div className="px-4 pb-2">
           <div className="bg-white/3 border border-white/5 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
