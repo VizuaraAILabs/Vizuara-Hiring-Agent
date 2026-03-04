@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StarterFilesEditor from './StarterFilesEditor';
+import { useAuth } from '@/context/AuthContext';
 import type { StarterFile } from '@/types';
 
 export default function CreateChallengeForm() {
   const router = useRouter();
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState(30);
+  const [sessionsLimit, setSessionsLimit] = useState<string>('');
   const [starterFiles, setStarterFiles] = useState<StarterFile[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,6 +47,7 @@ export default function CreateChallengeForm() {
           description,
           time_limit_min: timeLimit,
           starter_files: starterFiles.length > 0 ? starterFiles : undefined,
+          sessions_limit: user?.isAdmin && sessionsLimit !== '' ? parseInt(sessionsLimit) : undefined,
         }),
       });
 
@@ -108,6 +112,25 @@ export default function CreateChallengeForm() {
           className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
         />
       </div>
+
+      {user?.isAdmin && (
+        <div>
+          <label className="block text-sm font-medium text-neutral-400 mb-2">
+            Session Limit <span className="text-neutral-600">(optional — leave blank for unlimited)</span>
+          </label>
+          <p className="text-xs text-neutral-600 mb-2">
+            Maximum number of candidates who can take this challenge.
+          </p>
+          <input
+            type="number"
+            value={sessionsLimit}
+            onChange={(e) => setSessionsLimit(e.target.value)}
+            min={1}
+            placeholder="Unlimited"
+            className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
+          />
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-neutral-400 mb-2">

@@ -1,5 +1,6 @@
 import sql from '@/lib/db';
 import { checkEnrollmentStatus } from '@/lib/enrollment';
+import { isAdmin } from '@/lib/auth';
 import { generateToken } from '@/lib/utils';
 import type { Challenge } from '@/types';
 import { NextResponse } from 'next/server';
@@ -33,14 +34,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
     }
 
-    // Enforce plan quotas before creating a new session
-    const planStatus = await checkEnrollmentStatus(challenge.company_id);
-    if (!planStatus.canCreateSession) {
-      // Candidates see a generic message — never expose payment details
-      return NextResponse.json(
-        { error: 'This assessment is temporarily unavailable. Please contact the company.' },
-        { status: 403 }
-      );
+    // Look up the company email to determine if this is an admin-created challenge
+    const [company] = await sql<{ email: string }[]>`SELECT email FROM companies WHERE id = ${challenge.company_id}`;
+    const isAdminChallenge = company ? isAdmin(company.email) : false;
+
+    if (isAdminChallenge) {
+      // For admin challenges: enforce per-challenge sessions_limit if set, otherwise unlimited
+      if (challenge.sessions_limit != null) {
+        const [{ count }] = await sql<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count FROM sessions WHERE challenge_id = ${id}
+        `;
+        if (count >= challenge.sessions_limit) {
+          return NextResponse.json(
+            { error: 'This assessment has reached its maximum number of participants.' },
+            { status: 403 }
+          );
+        }
+      }
+    } else {
+      // For regular companies: enforce plan quotas
+      const planStatus = await checkEnrollmentStatus(challenge.company_id);
+      if (!planStatus.canCreateSession) {
+        // Candidates see a generic message — never expose payment details
+        return NextResponse.json(
+          { error: 'This assessment is temporarily unavailable. Please contact the company.' },
+          { status: 403 }
+        );
+      }
     }
 
     const sessionId = uuidv4();
