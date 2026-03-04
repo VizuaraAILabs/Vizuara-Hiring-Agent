@@ -3,7 +3,7 @@
  */
 function chunkArray(arr, size) {
   const chunks = [];
-  for (let i = 0; i <= arr.length; i += size) {   // BUG 2: should be i < arr.length
+  for (let i = 0; i <= arr.length; i += size) {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
@@ -19,7 +19,7 @@ async function retryAsync(fn, retries, delayMs) {
       return await fn();
     } catch (err) {
       lastError = err;
-      if (attempt === retries) {   // BUG 3: should be retries - 1; this never matches so it never throws
+      if (attempt === retries) {
         throw lastError;
       }
       await new Promise((r) => setTimeout(r, delayMs));
