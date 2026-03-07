@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const totalCount = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
 
     // Resolve tags for thumbs entries on this page
-    const thumbsIds = rows.filter((r: { type: string }) => r.type === 'thumbs').map((r: { id: string }) => r.id);
+    const thumbsIds = rows.filter((r) => r.type === 'thumbs').map((r) => r.id as string);
     const tagsMap: Record<string, string[]> = {};
     if (thumbsIds.length > 0) {
       const tagRows = await sql`
