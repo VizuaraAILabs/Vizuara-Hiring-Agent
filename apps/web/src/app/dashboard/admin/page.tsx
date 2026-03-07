@@ -14,6 +14,8 @@ interface AdminCompany {
   plan: string;
   trial_ends_at: string | null;
   created_at: string;
+  contact_name: string | null;
+  contact_title: string | null;
   challenge_count: number;
   total_sessions: number;
   pending_sessions: number;
@@ -142,6 +144,7 @@ function CompaniesTab({
           <thead>
             <tr className="border-b border-white/5 text-left">
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Contact</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Plan</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Challenges</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Total sessions</th>
@@ -156,6 +159,18 @@ function CompaniesTab({
                 <td className="px-5 py-3.5">
                   <p className="font-medium text-white">{company.name}</p>
                   <p className="text-xs text-neutral-500">{company.email}</p>
+                </td>
+                <td className="px-5 py-3.5">
+                  {company.contact_name ? (
+                    <>
+                      <p className="text-neutral-200 text-sm">{company.contact_name}</p>
+                      {company.contact_title && (
+                        <p className="text-xs text-neutral-500">{company.contact_title}</p>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-neutral-600">—</span>
+                  )}
                 </td>
                 <td className="px-5 py-3.5">
                   <PlanBadge plan={company.plan} />
@@ -505,6 +520,12 @@ export default function AdminPage() {
             {tab.label}
           </button>
         ))}
+        <Link
+          href="/dashboard/admin/feedback"
+          className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer text-neutral-500 hover:text-white"
+        >
+          Feedback
+        </Link>
       </div>
 
       {activeTab === 'companies' && (

@@ -17,13 +17,15 @@ export async function GET() {
         c.plan,
         c.trial_ends_at,
         c.created_at,
+        c.contact_name,
+        c.contact_title,
         COUNT(DISTINCT ch.id)::int AS challenge_count,
         COUNT(DISTINCT s.id)::int AS total_sessions,
         COUNT(DISTINCT CASE WHEN s.status IN ('pending', 'active') THEN s.id END)::int AS pending_sessions
       FROM companies c
       LEFT JOIN challenges ch ON ch.company_id = c.id
       LEFT JOIN sessions s ON s.challenge_id = ch.id
-      GROUP BY c.id, c.name, c.email, c.plan, c.trial_ends_at, c.created_at
+      GROUP BY c.id, c.name, c.email, c.plan, c.trial_ends_at, c.created_at, c.contact_name, c.contact_title
       ORDER BY c.created_at DESC
     `;
 

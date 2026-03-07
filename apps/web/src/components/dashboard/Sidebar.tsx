@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
+  { label: 'Profile', href: '/dashboard/profile', icon: '○' },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true },
   { label: 'Admin', href: '/dashboard/admin', icon: '⚙', adminOnly: true },
 ];
