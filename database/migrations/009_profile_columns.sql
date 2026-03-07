@@ -1,0 +1,2 @@
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_name TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_title TEXT;
