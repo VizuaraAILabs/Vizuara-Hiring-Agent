@@ -3,6 +3,7 @@ import { Figtree, Instrument_Serif, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/context/AuthContext";
 import { SubscriptionProvider } from "@/context/SubscriptionContext";
 import Header from "@/components/Header";
+import FeedbackTab from "@/components/feedback/FeedbackTab";
 import "./globals.css";
 
 const figtree = Figtree({
@@ -43,6 +44,7 @@ export default function RootLayout({
         <AuthProvider>
           <SubscriptionProvider>
             <Header />
+            <FeedbackTab />
             {children}
           </SubscriptionProvider>
         </AuthProvider>

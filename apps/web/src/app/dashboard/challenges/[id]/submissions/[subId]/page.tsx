@@ -9,6 +9,9 @@ import ReportHeader from '@/components/report/ReportHeader';
 import ScoreSummary from '@/components/report/ScoreSummary';
 import KeyMoments from '@/components/report/KeyMoments';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
+import InlineFeedback from '@/components/feedback/InlineFeedback';
+import NpsPrompt from '@/components/feedback/NpsPrompt';
+import CompletionSurvey from '@/components/feedback/CompletionSurvey';
 
 // Dynamic imports for chart components (they use window)
 const RadarChart = dynamic(() => import('@/components/report/RadarChart'), { ssr: false });
@@ -88,7 +91,7 @@ export default function ReportPage() {
         </p>
         <Link
           href={`/dashboard/challenges/${challengeId}`}
-          className="text-[#00a854] hover:text-[#00c96b] text-sm"
+          className="text-primary hover:text-primary-light text-sm"
         >
           Back to challenge
         </Link>
@@ -183,6 +186,25 @@ export default function ReportPage() {
           highlightIndex={highlightIndex}
         />
       )}
+
+      {/* Feedback — shown below all tabs */}
+      <div className="mt-10 space-y-4">
+        <InlineFeedback
+          courseSlug={challengeId}
+          podSlug={sessionId}
+          contentType="article"
+        />
+        <NpsPrompt
+          courseSlug={challengeId}
+          podSlug={sessionId}
+          contentType="course"
+        />
+        <CompletionSurvey
+          courseSlug={challengeId}
+          podSlug={sessionId}
+          contentType="course"
+        />
+      </div>
     </div>
   );
 }
