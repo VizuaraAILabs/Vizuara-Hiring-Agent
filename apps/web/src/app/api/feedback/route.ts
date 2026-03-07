@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   let tags: string[] = [];
   if (row.type === 'thumbs') {
     const tagRows = await sql`SELECT tag FROM feedback_tags WHERE feedback_id = ${row.id}`;
-    tags = tagRows.map((r: { tag: string }) => r.tag);
+    tags = tagRows.map((r) => r.tag as string);
   }
 
   return NextResponse.json({
