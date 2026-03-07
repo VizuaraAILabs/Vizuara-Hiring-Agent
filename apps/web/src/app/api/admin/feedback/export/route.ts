@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     `;
 
     // Fetch all tags in batches of 100
-    const allIds = rows.map((r: { id: string }) => r.id);
+    const allIds = rows.map((r) => r.id as string);
     const tagsMap: Record<string, string[]> = {};
     for (let i = 0; i < allIds.length; i += 100) {
       const batch = allIds.slice(i, i + 100);
