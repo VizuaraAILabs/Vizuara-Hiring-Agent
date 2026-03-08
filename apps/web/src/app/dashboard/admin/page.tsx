@@ -320,7 +320,7 @@ function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
                   <td className="px-5 py-3.5 text-neutral-500">{fmtDate(ch.created_at)}</td>
                   <td className="px-5 py-3.5">
                     <Link
-                      href={`/dashboard/challenges/${ch.id}`}
+                      href={`/dashboard/admin/challenges/${ch.id}`}
                       className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
                     >
                       Open

@@ -231,8 +231,8 @@ export default function AdminFeedbackDashboard() {
                     <td className="px-4 py-3 text-neutral-200">
                       {row.rating !== null ? row.rating : '—'}
                     </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      {row.comment && <p className="text-neutral-300 text-xs mb-1 line-clamp-2">{row.comment}</p>}
+                    <td className="px-4 py-3 max-w-sm">
+                      {row.comment && <p className="text-neutral-300 text-xs mb-1">{row.comment}</p>}
                       {row.tags && row.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {row.tags.map((tag) => (
