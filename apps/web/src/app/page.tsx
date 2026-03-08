@@ -430,7 +430,7 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      {/* Video Placeholder */}
+      {/* Demo Video */}
       <section className="px-6 pb-16">
         <motion.div
           className="max-w-4xl mx-auto"
@@ -439,32 +439,14 @@ export default function LandingPage() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6 }}
         >
-          <div className="relative aspect-video bg-[#0e0e0e] border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center group cursor-pointer shadow-[0_0_80px_rgba(0,168,84,0.06)]">
-            {/* Subtle gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
-
-            {/* Play button */}
-            <div className="relative flex flex-col items-center gap-4 select-none">
-              <div className="w-20 h-20 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:bg-primary/20 group-hover:border-primary/60 transition-all duration-300">
-                <svg
-                  className="w-8 h-8 text-primary translate-x-0.5"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-              <div className="text-center">
-                <p className="text-white font-medium text-sm">See ArcEval in action</p>
-                <p className="text-neutral-500 text-xs mt-1">2-minute product walkthrough</p>
-              </div>
-            </div>
-
-            {/* Corner label */}
-            <div className="absolute top-4 left-4 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-neutral-500 font-medium tracking-wide uppercase">Product Demo</span>
-            </div>
+          <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,168,84,0.06)]">
+            <iframe
+              src="https://www.youtube.com/embed/keuQqCLKOuU?rel=0&modestbranding=1&controls=1"
+              title="ArcEval product demo"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="absolute inset-0 w-full h-full"
+            />
           </div>
         </motion.div>
       </section>
