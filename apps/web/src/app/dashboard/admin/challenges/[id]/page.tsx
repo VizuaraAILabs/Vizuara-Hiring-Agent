@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/context/AuthContext';
 import type { Challenge, Session } from '@/types';
 
 interface ChallengeDetail extends Challenge {
