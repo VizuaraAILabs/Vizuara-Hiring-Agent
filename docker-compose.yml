@@ -36,6 +36,7 @@ services:
       NEXT_PUBLIC_VIZUARA_URL: ${NEXT_PUBLIC_VIZUARA_URL}
       NEXT_PUBLIC_APP_CALLBACK_URL: ${NEXT_PUBLIC_APP_CALLBACK_URL}
       NEXT_PUBLIC_PAYMENT_URL: ${NEXT_PUBLIC_PAYMENT_URL:-https://vizuara.ai/courses/arceval}
+      BREVO_API_KEY: ${BREVO_API_KEY}
       NODE_ENV: production
 
   terminal:
