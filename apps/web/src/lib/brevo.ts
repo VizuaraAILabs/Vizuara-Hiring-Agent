@@ -2,7 +2,7 @@ const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 const SENDER = {
   name: 'ArcEval',
-  email: 'noreply@vizuara.com',
+  email: 'hello@vizuara.com',
 };
 
 function buildEmailHtml(name: string, dayNumber: number): string {
