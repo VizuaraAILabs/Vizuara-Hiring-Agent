@@ -49,7 +49,7 @@ export default function TemplateGallery() {
         })
       );
 
-      router.push('/dashboard/challenges/new?tab=manual&prefill=true');
+      router.push(`/dashboard/challenges/new?tab=manual&prefill=true&t=${Date.now()}`);
     } catch {
       setError('Failed to load template files. Please try again.');
     } finally {
