@@ -132,7 +132,7 @@ async function callGemini(userPrompt: string, retry = false): Promise<{ challeng
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
 
   try {
     const finalUserPrompt = retry
