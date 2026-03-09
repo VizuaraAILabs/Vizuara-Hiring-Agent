@@ -124,27 +124,24 @@ export async function sendReplyEmail({
 </html>
   `.trim();
 
-  try {
-    const res = await fetch(BREVO_API_URL, {
-      method: 'POST',
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sender: SENDER,
-        to: [{ email: to, name: toName }],
-        subject: 'Re: Your feedback on ArcEval',
-        htmlContent: html,
-      }),
-    });
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: SENDER,
+      to: [{ email: to, name: toName }],
+      subject: 'Re: Your feedback on ArcEval',
+      htmlContent: html,
+    }),
+  });
 
-    if (!res.ok) {
-      const body = await res.text();
-      console.error(`Brevo: failed to send reply to ${to} — ${res.status} ${body}`);
-    }
-  } catch (err) {
-    console.error(`Brevo: error sending reply to ${to}`, err);
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`Brevo: failed to send reply to ${to} — ${res.status} ${body}`);
+    throw new Error(`Brevo API error ${res.status}: ${body}`);
   }
 }
 
