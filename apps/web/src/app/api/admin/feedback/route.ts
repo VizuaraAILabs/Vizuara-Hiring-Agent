@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser, isAdmin } from '@/lib/auth';
+import type { FeedbackReply } from '@/types/feedback';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
@@ -51,6 +52,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Fetch replies for all feedback IDs on this page
+    const feedbackIds = rows.map((r) => r.id as string);
+    const repliesMap: Record<string, FeedbackReply[]> = {};
+    if (feedbackIds.length > 0) {
+      const replyRows = await sql`
+        SELECT * FROM feedback_replies
+        WHERE feedback_id = ANY(${feedbackIds})
+        ORDER BY created_at ASC
+      `;
+      for (const row of replyRows) {
+        if (!repliesMap[row.feedback_id]) repliesMap[row.feedback_id] = [];
+        repliesMap[row.feedback_id].push({
+          id: row.id,
+          feedbackId: row.feedback_id,
+          replyText: row.reply_text,
+          repliedBy: row.replied_by,
+          status: row.status,
+          sentAt: row.sent_at,
+          createdAt: row.created_at,
+        });
+      }
+    }
+
     const feedback = rows.map((r: Record<string, unknown>) => ({
       id: r.id,
       userId: r.company_id,
@@ -68,6 +92,7 @@ export async function GET(req: NextRequest) {
       tags: tagsMap[r.id as string] || [],
       userName: r.company_name,
       userEmail: r.company_email,
+      replies: repliesMap[r.id as string] || [],
     }));
 
     // Global stats (always over ALL rows, unfiltered)

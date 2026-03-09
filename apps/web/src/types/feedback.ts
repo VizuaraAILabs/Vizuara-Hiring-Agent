@@ -21,6 +21,16 @@ export interface FeedbackSubmission {
   pageUrl?: string;
 }
 
+export interface FeedbackReply {
+  id: string;
+  feedbackId: string;
+  replyText: string;
+  repliedBy: string;
+  status: 'draft' | 'sent';
+  sentAt: string | null;
+  createdAt: string;
+}
+
 // Shape returned from GET /api/feedback and admin routes
 export interface FeedbackRecord {
   id: string;
@@ -39,6 +49,7 @@ export interface FeedbackRecord {
   tags?: FeedbackTag[];
   userName?: string;   // only in admin responses
   userEmail?: string;  // only in admin responses
+  replies?: FeedbackReply[];  // only in admin responses
 }
 
 // Shape returned in the stats block from GET /api/admin/feedback
