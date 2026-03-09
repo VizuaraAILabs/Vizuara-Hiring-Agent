@@ -117,7 +117,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       })
     );
     setCustomizingIndex(null);
-    router.push('/dashboard/challenges/new?tab=manual&prefill=true');
+    router.push(`/dashboard/challenges/new?tab=manual&prefill=true&t=${Date.now()}`);
   }
 
   function getDescriptionPreview(description: string) {
