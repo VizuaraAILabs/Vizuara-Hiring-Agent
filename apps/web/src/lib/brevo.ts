@@ -203,7 +203,8 @@ export async function sendBulkEmail({
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sender: SENDER,
-        to: chunk,
+        to: [SENDER],
+        bcc: chunk,
         subject,
         htmlContent: html,
       }),
