@@ -100,6 +100,104 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
   );
 }
 
+// ─── Bulk Email Modal ──────────────────────────────────────────────────────────
+
+const MAX_BULK_RECIPIENTS = 100;
+
+function BulkEmailModal({
+  recipients,
+  onClose,
+}: {
+  recipients: { email: string; name: string }[];
+  onClose: () => void;
+}) {
+  const [subject, setSubject] = useState('');
+  const [bodyText, setBodyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ sent: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSend() {
+    if (!subject.trim() || !bodyText.trim()) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/companies/bulk-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients, subject, bodyText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to send');
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Send email</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''}</p>
+          </div>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors cursor-pointer text-lg leading-none">✕</button>
+        </div>
+
+        {result ? (
+          <div className="px-6 py-8 text-center space-y-3">
+            <p className="text-2xl">✓</p>
+            <p className="text-white font-medium">Sent to {result.sent} recipient{result.sent !== 1 ? 's' : ''}</p>
+            <button onClick={onClose} className="mt-4 px-4 py-2 rounded-xl bg-primary hover:bg-primary-light text-black text-sm font-semibold transition-all btn-glow cursor-pointer">
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs text-neutral-400 mb-1.5">Subject</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Email subject…"
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-[10px] px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-400 mb-1.5">Body</label>
+              <textarea
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                placeholder="Write your message…"
+                rows={7}
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-[10px] px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors resize-none"
+              />
+            </div>
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-neutral-400 hover:text-white transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !subject.trim() || !bodyText.trim()}
+                className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-light text-black text-sm font-semibold transition-all btn-glow cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab: Companies ───────────────────────────────────────────────────────────
 
 function CompaniesTab({
@@ -109,6 +207,8 @@ function CompaniesTab({
 }) {
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showEmailModal, setShowEmailModal] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/companies')
@@ -129,6 +229,34 @@ function CompaniesTab({
   }
 
   const totalPending = companies.reduce((a, c) => a + c.pending_sessions, 0);
+  const allIds = companies.map((c) => c.id);
+  const selectableCount = Math.min(companies.length, MAX_BULK_RECIPIENTS);
+  const allSelected = selected.size === selectableCount && selectableCount > 0;
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(allIds.slice(0, MAX_BULK_RECIPIENTS)));
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        if (next.size >= MAX_BULK_RECIPIENTS) return prev;
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  const selectedRecipients = companies
+    .filter((c) => selected.has(c.id))
+    .map((c) => ({ email: c.email, name: c.name }));
 
   return (
     <div className="space-y-5">
@@ -140,9 +268,40 @@ function CompaniesTab({
       </div>
 
       <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+        {/* Selection action bar */}
+        {selected.size > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 bg-primary/5 border-b border-primary/10">
+            <p className="text-xs text-primary font-medium">
+              {selected.size} selected{selected.size === MAX_BULK_RECIPIENTS ? ` (max)` : ''}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-light text-black text-xs font-semibold transition-all btn-glow cursor-pointer"
+              >
+                Send email
+              </button>
+            </div>
+          </div>
+        )}
+
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/5 text-left">
+              <th className="px-5 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="accent-primary cursor-pointer w-3.5 h-3.5"
+                />
+              </th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Contact</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Plan</th>
@@ -154,53 +313,76 @@ function CompaniesTab({
             </tr>
           </thead>
           <tbody>
-            {companies.map((company) => (
-              <tr key={company.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
-                <td className="px-5 py-3.5">
-                  <p className="font-medium text-white">{company.name}</p>
-                  <p className="text-xs text-neutral-500">{company.email}</p>
-                </td>
-                <td className="px-5 py-3.5">
-                  {company.contact_name ? (
-                    <>
-                      <p className="text-neutral-200 text-sm">{company.contact_name}</p>
-                      {company.contact_title && (
-                        <p className="text-xs text-neutral-500">{company.contact_title}</p>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-neutral-600">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-3.5">
-                  <PlanBadge plan={company.plan} />
-                </td>
-                <td className="px-5 py-3.5 text-right text-neutral-300">{company.challenge_count}</td>
-                <td className="px-5 py-3.5 text-right text-neutral-300">{company.total_sessions}</td>
-                <td className="px-5 py-3.5 text-right">
-                  {company.pending_sessions > 0 ? (
-                    <span className="text-amber-400 font-medium">{company.pending_sessions}</span>
-                  ) : (
-                    <span className="text-neutral-600">—</span>
-                  )}
-                </td>
-                <td className="px-5 py-3.5 text-neutral-500">{fmtDate(company.created_at)}</td>
-                <td className="px-5 py-3.5">
-                  <button
-                    onClick={() => onSelectCompany(company.id)}
-                    className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
-                  >
-                    View challenges
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {companies.map((company) => {
+              const isSelected = selected.has(company.id);
+              const atLimit = selected.size >= MAX_BULK_RECIPIENTS && !isSelected;
+              return (
+                <tr
+                  key={company.id}
+                  className={`border-b border-white/5 last:border-0 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-white/2'}`}
+                >
+                  <td className="px-5 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={atLimit}
+                      onChange={() => toggleOne(company.id)}
+                      className="accent-primary cursor-pointer w-3.5 h-3.5 disabled:cursor-not-allowed disabled:opacity-30"
+                    />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <p className="font-medium text-white">{company.name}</p>
+                    <p className="text-xs text-neutral-500">{company.email}</p>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {company.contact_name ? (
+                      <>
+                        <p className="text-neutral-200 text-sm">{company.contact_name}</p>
+                        {company.contact_title && (
+                          <p className="text-xs text-neutral-500">{company.contact_title}</p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-neutral-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <PlanBadge plan={company.plan} />
+                  </td>
+                  <td className="px-5 py-3.5 text-right text-neutral-300">{company.challenge_count}</td>
+                  <td className="px-5 py-3.5 text-right text-neutral-300">{company.total_sessions}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    {company.pending_sessions > 0 ? (
+                      <span className="text-amber-400 font-medium">{company.pending_sessions}</span>
+                    ) : (
+                      <span className="text-neutral-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-neutral-500">{fmtDate(company.created_at)}</td>
+                  <td className="px-5 py-3.5">
+                    <button
+                      onClick={() => onSelectCompany(company.id)}
+                      className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
+                    >
+                      View challenges
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {companies.length === 0 && (
           <p className="text-center text-neutral-600 py-12">No companies found</p>
         )}
       </div>
+
+      {showEmailModal && (
+        <BulkEmailModal
+          recipients={selectedRecipients}
+          onClose={() => setShowEmailModal(false)}
+        />
+      )}
     </div>
   );
 }
