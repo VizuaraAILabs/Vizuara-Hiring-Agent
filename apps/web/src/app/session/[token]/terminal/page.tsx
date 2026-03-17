@@ -16,10 +16,12 @@ export default function TerminalPage() {
   const token = params.token as string;
   const { session, loading, error, endSession } = useSession(token);
   const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
 
   const handleEnd = useCallback(async () => {
     if (ending) return;
     setEnding(true);
+    setEndError(null);
 
     const confirmed = window.confirm(
       'Are you sure you want to end the session? This cannot be undone.'
@@ -34,6 +36,7 @@ export default function TerminalPage() {
     if (success) {
       router.push(`/session/${token}`);
     } else {
+      setEndError('Failed to end session. Please try again.');
       setEnding(false);
     }
   }, [ending, endSession, router, token]);
@@ -41,14 +44,19 @@ export default function TerminalPage() {
   const handleExpired = useCallback(async () => {
     if (ending) return;
     setEnding(true);
-    await endSession();
-    router.push(`/session/${token}`);
+    const success = await endSession();
+    if (success) {
+      router.push(`/session/${token}`);
+    } else {
+      setEndError('Failed to mark session as ended. Please refresh the page.');
+      setEnding(false);
+    }
   }, [ending, endSession, router, token]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-[#00a854] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -66,6 +74,11 @@ export default function TerminalPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0a0a0a]">
+      {endError && (
+        <div className="bg-red-900/60 text-red-300 text-sm text-center px-4 py-2">
+          {endError}
+        </div>
+      )}
       <TerminalToolbar
         challengeTitle={session.challenge_title}
         durationMinutes={session.time_limit_min}

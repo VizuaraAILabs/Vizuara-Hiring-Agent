@@ -1,6 +1,7 @@
 'use client';
 
 import ChallengeCard from '@/components/dashboard/ChallengeCard';
+import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -17,8 +18,9 @@ interface ChallengeWithCount {
 
 function TrialBanner() {
   const { planStatus } = useSubscription();
+  const { user } = useAuth();
 
-  if (!planStatus) return null;
+  if (!planStatus || user?.isAdmin) return null;
 
   // Active trial banner
   if (planStatus.plan === 'trial' && planStatus.canCreateSession && planStatus.trialEndsAt) {

@@ -125,7 +125,7 @@ Each challenge must be appropriate for the seniority level. Include a "why_itera
   return prompt;
 }
 
-async function callGemini(userPrompt: string, retry = false): Promise<{ challenges: unknown[] }> {
+async function callGemini(userPrompt: string, attempt = 1): Promise<{ challenges: unknown[] }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
@@ -135,9 +135,10 @@ async function callGemini(userPrompt: string, retry = false): Promise<{ challeng
   const timeout = setTimeout(() => controller.abort(), 60000);
 
   try {
-    const finalUserPrompt = retry
-      ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
-      : userPrompt;
+    const finalUserPrompt =
+      attempt > 1
+        ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
+        : userPrompt;
 
     const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
@@ -166,6 +167,10 @@ async function callGemini(userPrompt: string, retry = false): Promise<{ challeng
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) {
+      if (attempt < 3) {
+        console.warn(`Gemini empty response, retrying (attempt ${attempt + 1}/3)...`);
+        return callGemini(userPrompt, attempt + 1);
+      }
       throw new Error('GEMINI_EMPTY_RESPONSE');
     }
 
@@ -176,8 +181,9 @@ async function callGemini(userPrompt: string, retry = false): Promise<{ challeng
       }
       return parsed;
     } catch {
-      if (!retry) {
-        return callGemini(userPrompt, true);
+      if (attempt < 3) {
+        console.warn(`Gemini invalid JSON, retrying (attempt ${attempt + 1}/3)...`);
+        return callGemini(userPrompt, attempt + 1);
       }
       throw new Error('GEMINI_INVALID_JSON');
     }
