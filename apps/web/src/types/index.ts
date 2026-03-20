@@ -26,6 +26,7 @@ export interface Challenge {
   starter_files_dir: string | null;
   starter_files: StarterFile[] | null;
   sessions_limit: number | null;
+  allowed_emails: string[] | null;
   created_at: string;
 }
 

@@ -22,6 +22,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
     }
 
+    // Allowlist check — if set, only allowed emails may proceed
+    if (Array.isArray(challenge.allowed_emails) && challenge.allowed_emails.length > 0) {
+      const normalizedInput = candidate_email.trim().toLowerCase();
+      const allowed = challenge.allowed_emails.map((e: string) => e.trim().toLowerCase());
+      if (!allowed.includes(normalizedInput)) {
+        return NextResponse.json(
+          { error: 'Only invited participants are allowed to attempt the assessment.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if this candidate already has a pending/active session for this challenge
     const [existing] = await sql`
       SELECT token, status FROM sessions
