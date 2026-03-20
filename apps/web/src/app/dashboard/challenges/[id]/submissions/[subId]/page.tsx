@@ -139,7 +139,7 @@ export default function ReportPage() {
     { key: 'overview', label: 'Overview' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'analysis', label: 'Analysis' },
-    { key: 'transcript', label: 'Transcript' },
+    { key: 'transcript', label: 'Narrative' },
   ];
 
   return (

@@ -2,6 +2,8 @@
 
 import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import type { Interaction } from '@/types';
 
 interface TranscriptViewerProps {
@@ -190,7 +192,7 @@ export default function TranscriptViewer({
           prose-blockquote:border-l-primary prose-blockquote:text-neutral-400
         "
       >
-        <ReactMarkdown>{narrative}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{narrative}</ReactMarkdown>
       </div>
     </div>
   );
