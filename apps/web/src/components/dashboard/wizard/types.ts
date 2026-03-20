@@ -18,6 +18,7 @@ export interface WizardInputs {
   seniority: SeniorityLevel;
   focusAreas: FocusArea[];
   context: string;
+  time_limit_min: number;
 }
 
 export interface GeneratedChallenge {

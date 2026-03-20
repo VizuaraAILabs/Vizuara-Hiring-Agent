@@ -14,6 +14,8 @@ export default function CreateChallengeForm() {
   const [timeLimit, setTimeLimit] = useState(30);
   const [sessionsLimit, setSessionsLimit] = useState<string>('');
   const [starterFiles, setStarterFiles] = useState<StarterFile[]>([]);
+  const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
+  const [emailDraft, setEmailDraft] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -26,12 +28,47 @@ export default function CreateChallengeForm() {
         if (data.description) setDescription(data.description);
         if (data.timeLimit) setTimeLimit(Math.max(10, Math.min(45, data.timeLimit)));
         if (data.starterFiles) setStarterFiles(data.starterFiles);
+        if (Array.isArray(data.allowedEmails)) setAllowedEmails(data.allowedEmails);
       } catch {
         // ignore invalid JSON
       }
       sessionStorage.removeItem('prefill_challenge');
     }
   }, []);
+
+  function commitEmailDraft() {
+    const trimmed = emailDraft.trim().toLowerCase();
+    if (trimmed && !allowedEmails.includes(trimmed)) {
+      setAllowedEmails((prev) => [...prev, trimmed]);
+    }
+    setEmailDraft('');
+  }
+
+  function handleEmailKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+      e.preventDefault();
+      commitEmailDraft();
+    } else if (e.key === 'Backspace' && emailDraft === '' && allowedEmails.length > 0) {
+      setAllowedEmails((prev) => prev.slice(0, -1));
+    }
+  }
+
+  function handleEmailPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text');
+    const newEmails = pasted
+      .split(/[\s,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    setAllowedEmails((prev) => {
+      const merged = [...prev];
+      for (const email of newEmails) {
+        if (!merged.includes(email)) merged.push(email);
+      }
+      return merged;
+    });
+    setEmailDraft('');
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +85,7 @@ export default function CreateChallengeForm() {
           time_limit_min: timeLimit,
           starter_files: starterFiles.length > 0 ? starterFiles : undefined,
           sessions_limit: user?.isAdmin && sessionsLimit !== '' ? parseInt(sessionsLimit) : undefined,
+          allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
         }),
       });
 
@@ -131,6 +169,55 @@ export default function CreateChallengeForm() {
           />
         </div>
       )}
+
+      <div>
+        <label className="block text-sm font-medium text-neutral-400 mb-1">
+          Participant Restrictions <span className="text-neutral-600">(optional)</span>
+        </label>
+        <p className="text-xs text-neutral-600 mb-2">
+          {allowedEmails.length === 0
+            ? 'Anyone with the link can attempt this assessment. Add emails to restrict access.'
+            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can attempt this assessment.`}
+        </p>
+        <div
+          className="bg-[#0a0a0a] px-3 py-2 min-h-12 flex flex-wrap gap-2 items-center cursor-text"
+          style={{ border: '2px solid #c0c0c0', borderRadius: '10px' }}
+          onClick={(e) => {
+            const input = (e.currentTarget as HTMLElement).querySelector('input');
+            input?.focus();
+          }}
+        >
+          {allowedEmails.map((email) => (
+            <span
+              key={email}
+              className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full"
+            >
+              {email}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAllowedEmails((prev) => prev.filter((em) => em !== email));
+                }}
+                className="text-primary/60 hover:text-primary leading-none cursor-pointer"
+                aria-label={`Remove ${email}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            type="email"
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            onKeyDown={handleEmailKeyDown}
+            onPaste={handleEmailPaste}
+            onBlur={commitEmailDraft}
+            placeholder={allowedEmails.length === 0 ? 'Type an email and press Enter or comma…' : ''}
+            className="flex-1 min-w-55 bg-transparent text-white text-sm placeholder:text-neutral-600 focus:outline-none"
+          />
+        </div>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-neutral-400 mb-2">

@@ -134,6 +134,7 @@ export default function WizardContainer() {
       {step === 4 && (
         <StepResults
           challenges={challenges}
+          timeLimitMin={wizardInputs?.time_limit_min ?? 30}
           onRegenerate={handleRegenerate}
           onBack={handleBackToDetails}
         />

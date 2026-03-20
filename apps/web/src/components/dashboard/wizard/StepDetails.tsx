@@ -41,6 +41,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
   const [seniority, setSeniority] = useState<SeniorityLevel>('mid');
   const [focusAreas, setFocusAreas] = useState<FocusArea[]>([]);
   const [context, setContext] = useState('');
+  const [timeLimitMin, setTimeLimitMin] = useState(30);
 
   const suggestions = techSuggestions[role];
 
@@ -75,7 +76,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSubmit({ role, techStack, seniority, focusAreas, context });
+    onSubmit({ role, techStack, seniority, focusAreas, context, time_limit_min: timeLimitMin });
   }
 
   const canSubmit = techStack.length > 0 && focusAreas.length > 0;
@@ -99,7 +100,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
             {techStack.map((tech) => (
               <span
                 key={tech}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#00a854]/10 border border-[#00a854]/30 text-[#00a854] rounded-full text-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary rounded-full text-sm"
               >
                 {tech}
                 <button
@@ -123,7 +124,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
                 key={tech}
                 type="button"
                 onClick={() => addTech(tech)}
-                className="px-3 py-1.5 bg-[#111] border border-white/10 text-neutral-400 rounded-full text-sm hover:border-[#00a854]/30 hover:text-white transition-all"
+                className="px-3 py-1.5 bg-[#111] border border-white/10 text-neutral-400 rounded-full text-sm hover:border-primary/30 hover:text-white transition-all"
               >
                 + {tech}
               </button>
@@ -173,7 +174,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
                 onClick={() => toggleFocus(opt.value)}
                 className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                   selected
-                    ? 'bg-[#00a854]/10 border-[#00a854]/50 text-[#00a854]'
+                    ? 'bg-primary/10 border-[#00a854]/50 text-primary'
                     : 'bg-[#111] border-white/10 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
                 } ${!selected && focusAreas.length >= 4 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
               >
@@ -182,6 +183,21 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
             );
           })}
         </div>
+      </div>
+
+      {/* Time Limit */}
+      <div>
+        <label className="block text-sm font-medium text-neutral-400 mb-2">
+          Time Limit <span className="text-neutral-600">(minutes, 10–45)</span>
+        </label>
+        <input
+          type="number"
+          min={10}
+          max={45}
+          value={timeLimitMin}
+          onChange={(e) => setTimeLimitMin(Math.max(10, Math.min(45, parseInt(e.target.value) || 30)))}
+          className="w-28 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
+        />
       </div>
 
       {/* Context */}
@@ -193,7 +209,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
           value={context}
           onChange={(e) => setContext(e.target.value)}
           rows={3}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all text-sm"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
           placeholder="Tell us about your team, product, or specific requirements..."
         />
       </div>

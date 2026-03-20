@@ -14,11 +14,12 @@ const difficultyColors: Record<string, string> = {
 
 interface StepResultsProps {
   challenges: GeneratedChallenge[];
+  timeLimitMin: number;
   onRegenerate: () => void;
   onBack: () => void;
 }
 
-export default function StepResults({ challenges, onRegenerate, onBack }: StepResultsProps) {
+export default function StepResults({ challenges, timeLimitMin, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -26,9 +27,45 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
   const [customizingIndex, setCustomizingIndex] = useState<number | null>(null);
   const [sessionsLimits, setSessionsLimits] = useState<Record<number, string>>({});
+  const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
+  const [emailDraft, setEmailDraft] = useState('');
   const [error, setError] = useState('');
   const [fileWarning, setFileWarning] = useState('');
   const [progressMessage, setProgressMessage] = useState('');
+
+  function commitEmailDraft() {
+    const trimmed = emailDraft.trim().toLowerCase();
+    if (trimmed && !allowedEmails.includes(trimmed)) {
+      setAllowedEmails((prev) => [...prev, trimmed]);
+    }
+    setEmailDraft('');
+  }
+
+  function handleEmailKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+      e.preventDefault();
+      commitEmailDraft();
+    } else if (e.key === 'Backspace' && emailDraft === '' && allowedEmails.length > 0) {
+      setAllowedEmails((prev) => prev.slice(0, -1));
+    }
+  }
+
+  function handleEmailPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text');
+    const newEmails = pasted
+      .split(/[\s,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    setAllowedEmails((prev) => {
+      const merged = [...prev];
+      for (const email of newEmails) {
+        if (!merged.includes(email)) merged.push(email);
+      }
+      return merged;
+    });
+    setEmailDraft('');
+  }
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
     setCreatingIndex(index);
@@ -63,9 +100,10 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
         body: JSON.stringify({
           title: challenge.title,
           description: challenge.description,
-          time_limit_min: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
+          time_limit_min: timeLimitMin,
           starter_files: starterFiles,
           sessions_limit: user?.isAdmin && sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
+          allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
         }),
       });
 
@@ -112,8 +150,9 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
       JSON.stringify({
         title: challenge.title,
         description: challenge.description,
-        timeLimit: Math.max(10, Math.min(45, challenge.duration_minutes || 30)),
+        timeLimit: timeLimitMin,
         starterFiles,
+        allowedEmails: allowedEmails.length > 0 ? allowedEmails : undefined,
       })
     );
     setCustomizingIndex(null);
@@ -145,6 +184,54 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
           {fileWarning}
         </div>
       )}
+
+      {/* Participant Restrictions */}
+      <div className="bg-[#111] border border-white/10 rounded-xl p-5 mb-6">
+        <p className="text-sm font-medium text-white mb-1">Participant Restrictions</p>
+        <p className="text-xs text-neutral-500 mb-3">
+          {allowedEmails.length === 0
+            ? 'Anyone with the link can attempt this assessment. Add emails to restrict access.'
+            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can attempt this assessment.`}
+        </p>
+        <div
+          className="bg-[#0a0a0a] px-3 py-2 min-h-12 flex flex-wrap gap-2 items-center cursor-text"
+          style={{ border: '2px solid #c0c0c0', borderRadius: '10px' }}
+          onClick={(e) => {
+            const input = (e.currentTarget as HTMLElement).querySelector('input');
+            input?.focus();
+          }}
+        >
+          {allowedEmails.map((email) => (
+            <span
+              key={email}
+              className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full"
+            >
+              {email}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAllowedEmails((prev) => prev.filter((em) => em !== email));
+                }}
+                className="text-primary/60 hover:text-primary leading-none cursor-pointer"
+                aria-label={`Remove ${email}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            type="email"
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            onKeyDown={handleEmailKeyDown}
+            onPaste={handleEmailPaste}
+            onBlur={commitEmailDraft}
+            placeholder={allowedEmails.length === 0 ? 'Type an email and press Enter or comma…' : ''}
+            className="flex-1 min-w-55 bg-transparent text-white text-sm placeholder:text-neutral-600 focus:outline-none"
+          />
+        </div>
+      </div>
 
       <div className="space-y-4 mb-8">
         {challenges.map((challenge, i) => {
@@ -188,7 +275,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
                 <button
                   type="button"
                   onClick={() => setExpandedIndex(isExpanded ? null : i)}
-                  className="text-[#00a854] text-sm mt-2 hover:underline"
+                  className="text-primary text-sm mt-2 hover:underline"
                 >
                   {isExpanded ? 'Show less' : 'Show full description'}
                 </button>
@@ -237,7 +324,7 @@ export default function StepResults({ challenges, onRegenerate, onBack }: StepRe
                 <button
                   onClick={() => handleUseChallenge(challenge, i)}
                   disabled={creatingIndex !== null || customizingIndex !== null}
-                  className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black font-semibold px-5 py-2.5 rounded-lg text-sm transition-all"
+                  className="bg-primary hover:bg-primary-light disabled:opacity-50 text-black font-semibold px-5 py-2.5 rounded-lg text-sm transition-all"
                 >
                   {creatingIndex === i ? 'Creating...' : 'Use This Challenge'}
                 </button>
