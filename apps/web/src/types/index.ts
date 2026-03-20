@@ -29,6 +29,9 @@ export interface Challenge {
   allowed_emails: string[] | null;
   role: string | null;
   tech_stack: string | null;
+  seniority: string | null;
+  focus_areas: string | null;
+  context: string | null;
   created_at: string;
 }
 

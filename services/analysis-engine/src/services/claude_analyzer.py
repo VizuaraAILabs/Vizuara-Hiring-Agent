@@ -354,6 +354,9 @@ or fabricate any actions or content."""
         observations: dict,
         challenge_role: str | None = None,
         challenge_tech_stack: str | None = None,
+        challenge_seniority: str | None = None,
+        challenge_focus_areas: str | None = None,
+        challenge_context: str | None = None,
     ) -> str:
         metadata_lines = [f"- **{k}**: {v}" for k, v in session_metadata.items()]
         metadata_block = "\n".join(metadata_lines) if metadata_lines else "N/A"
@@ -361,16 +364,19 @@ or fabricate any actions or content."""
         observations_json = json.dumps(observations, indent=2)
 
         context_block = ""
-        if challenge_role or challenge_tech_stack:
-            context_lines = []
-            if challenge_role:
-                context_lines.append(f"- **Role**: {challenge_role}")
-            if challenge_tech_stack:
-                context_lines.append(f"- **Tech Stack**: {challenge_tech_stack}")
+        ctx_fields = [
+            ("Role", challenge_role),
+            ("Seniority Level", challenge_seniority),
+            ("Tech Stack", challenge_tech_stack),
+            ("Focus Areas", challenge_focus_areas),
+            ("Additional Context", challenge_context),
+        ]
+        ctx_lines = [f"- **{k}**: {v}" for k, v in ctx_fields if v]
+        if ctx_lines:
             context_block = (
                 "\n## Challenge Context\n\n"
-                + "\n".join(context_lines)
-                + "\n\nUse the role and tech stack above **exactly as provided** when calibrating "
+                + "\n".join(ctx_lines)
+                + "\n\nUse the values above **exactly as provided** when calibrating "
                 "scoring expectations and writing `comparison` and `expected_standard` fields. "
                 "Do NOT infer or re-derive them from the challenge description.\n"
             )
@@ -420,11 +426,16 @@ Now produce the complete evaluation."""
         observations: dict,
         challenge_role: str | None = None,
         challenge_tech_stack: str | None = None,
+        challenge_seniority: str | None = None,
+        challenge_focus_areas: str | None = None,
+        challenge_context: str | None = None,
     ) -> dict:
         """Pass 2: Score the candidate based on extracted observations."""
         message = self._build_pass2_message(
             challenge_description, session_metadata, observations,
             challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
+            challenge_seniority=challenge_seniority, challenge_focus_areas=challenge_focus_areas,
+            challenge_context=challenge_context,
         )
 
         last_error: Exception | None = None
@@ -487,6 +498,8 @@ Now produce the complete evaluation."""
                     original_message = self._build_pass2_message(
                         challenge_description, session_metadata, observations,
                         challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
+                        challenge_seniority=challenge_seniority, challenge_focus_areas=challenge_focus_areas,
+                        challenge_context=challenge_context,
                     )
                     message = (
                         f"{original_message}\n\n"
@@ -693,6 +706,9 @@ Write the full narrative document now:"""
         existing_dimension_details: dict,
         challenge_role: str | None = None,
         challenge_tech_stack: str | None = None,
+        challenge_seniority: str | None = None,
+        challenge_focus_areas: str | None = None,
+        challenge_context: str | None = None,
     ) -> dict:
         """Generate observed_points and expected_standard for all 8 dimensions.
 
@@ -702,17 +718,20 @@ Write the full narrative document now:"""
         """
         existing_json = json.dumps(existing_dimension_details, indent=2)
 
+        enrich_ctx_fields = [
+            ("Role", challenge_role),
+            ("Seniority Level", challenge_seniority),
+            ("Tech Stack", challenge_tech_stack),
+            ("Focus Areas", challenge_focus_areas),
+            ("Additional Context", challenge_context),
+        ]
+        enrich_ctx_lines = [f"- **{k}**: {v}" for k, v in enrich_ctx_fields if v]
         context_block = ""
-        if challenge_role or challenge_tech_stack:
-            context_lines = []
-            if challenge_role:
-                context_lines.append(f"- **Role**: {challenge_role}")
-            if challenge_tech_stack:
-                context_lines.append(f"- **Tech Stack**: {challenge_tech_stack}")
+        if enrich_ctx_lines:
             context_block = (
                 "\n## Challenge Context\n\n"
-                + "\n".join(context_lines)
-                + "\n\nUse the role and tech stack above **exactly as provided** when writing "
+                + "\n".join(enrich_ctx_lines)
+                + "\n\nUse the values above **exactly as provided** when writing "
                 "`comparison` and `expected_standard` fields. Do NOT infer or re-derive them "
                 "from the challenge description.\n"
             )
@@ -833,6 +852,9 @@ explaining what was absent and what should have been present."""
         transcript: str,
         challenge_role: str | None = None,
         challenge_tech_stack: str | None = None,
+        challenge_seniority: str | None = None,
+        challenge_focus_areas: str | None = None,
+        challenge_context: str | None = None,
     ) -> dict:
         """Run the full two-pass analysis pipeline.
 
@@ -851,6 +873,8 @@ explaining what was absent and what should have been present."""
         result = self._run_pass2(
             challenge_description, session_metadata, observations,
             challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
+            challenge_seniority=challenge_seniority, challenge_focus_areas=challenge_focus_areas,
+            challenge_context=challenge_context,
         )
 
         # Attach observations for transparency/debugging

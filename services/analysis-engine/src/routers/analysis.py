@@ -155,6 +155,9 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
             existing_dimension_details=dimension_details,
             challenge_role=challenge.get("role") or None,
             challenge_tech_stack=challenge.get("tech_stack") or None,
+            challenge_seniority=challenge.get("seniority") or None,
+            challenge_focus_areas=challenge.get("focus_areas") or None,
+            challenge_context=challenge.get("context") or None,
         )
 
         # Merge observed_points and expected_standard into existing dimension_details
@@ -371,6 +374,9 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
                 transcript=transcript,
                 challenge_role=challenge.get("role") or None,
                 challenge_tech_stack=challenge.get("tech_stack") or None,
+                challenge_seniority=challenge.get("seniority") or None,
+                challenge_focus_areas=challenge.get("focus_areas") or None,
+                challenge_context=challenge.get("context") or None,
             )
             logger.info("Gemini two-pass analysis complete")
 

@@ -92,8 +92,11 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
     );
   }
 
+  const files = snapshot.files ?? [];
+  const tree = snapshot.tree ?? [];
+
   const selectedFile: WorkspaceFile | undefined = selectedPath
-    ? snapshot.files.find((f) => f.path === selectedPath)
+    ? files.find((f) => f.path === selectedPath)
     : undefined;
 
   return (
@@ -103,7 +106,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
         <div>
           <h3 className="text-lg font-semibold text-white">Workspace Files</h3>
           <p className="text-xs text-neutral-600 mt-0.5">
-            {snapshot.files.length} file{snapshot.files.length !== 1 ? 's' : ''} archived
+            {files.length} file{files.length !== 1 ? 's' : ''} archived
             {' · '}
             {new Date(snapshot.archived_at).toLocaleString()}
           </p>
@@ -114,10 +117,10 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
       <div className="flex h-[600px]">
         {/* File tree sidebar */}
         <div className="w-56 shrink-0 border-r border-white/5 overflow-y-auto p-2">
-          {snapshot.tree.length === 0 ? (
+          {tree.length === 0 ? (
             <p className="text-neutral-700 text-xs px-2 py-3">No files</p>
           ) : (
-            snapshot.tree.map((node) => (
+            tree.map((node) => (
               <TreeNode
                 key={node.path}
                 node={node}

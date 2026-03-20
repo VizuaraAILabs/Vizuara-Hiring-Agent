@@ -232,6 +232,9 @@ export default function ReportPage() {
             challengeTitle={challenge?.title ?? null}
             challengeRole={challenge?.role ?? null}
             challengeTechStack={challenge?.tech_stack ?? null}
+            challengeSeniority={challenge?.seniority ?? null}
+            challengeFocusAreas={challenge?.focus_areas ?? null}
+            challengeContext={challenge?.context ?? null}
           />
         </div>
       )}

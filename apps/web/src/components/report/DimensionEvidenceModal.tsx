@@ -14,6 +14,9 @@ interface DimensionEvidenceModalProps {
   challengeTitle?: string | null;
   challengeRole?: string | null;
   challengeTechStack?: string | null;
+  challengeSeniority?: string | null;
+  challengeFocusAreas?: string | null;
+  challengeContext?: string | null;
 }
 
 export default function DimensionEvidenceModal({
@@ -24,6 +27,9 @@ export default function DimensionEvidenceModal({
   challengeTitle,
   challengeRole,
   challengeTechStack,
+  challengeSeniority,
+  challengeFocusAreas,
+  challengeContext,
 }: DimensionEvidenceModalProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -54,25 +60,46 @@ export default function DimensionEvidenceModal({
                 {score.toFixed(0)} / 100
               </span>
             </div>
-            {(challengeTitle || challengeRole || challengeTechStack) && (
+            {(challengeTitle || challengeRole || challengeTechStack || challengeSeniority || challengeFocusAreas || challengeContext) && (
               <div className="flex items-center gap-3 flex-wrap">
                 {challengeTitle && (
                   <span className="text-xs text-neutral-500">{challengeTitle}</span>
                 )}
-                {(challengeRole || challengeTechStack) && challengeTitle && (
-                  <span className="text-neutral-700">·</span>
-                )}
                 {challengeRole && (
-                  <span className="text-xs text-neutral-500">
-                    <span className="text-neutral-600">Role:</span> {challengeRole}
-                  </span>
+                  <>
+                    {challengeTitle && <span className="text-neutral-700">·</span>}
+                    <span className="text-xs text-neutral-500">
+                      <span className="text-neutral-600">Role:</span> {challengeRole}
+                    </span>
+                  </>
                 )}
-                {challengeRole && challengeTechStack && (
-                  <span className="text-neutral-700">·</span>
+                {challengeSeniority && (
+                  <>
+                    <span className="text-neutral-700">·</span>
+                    <span className="text-xs text-neutral-500">
+                      <span className="text-neutral-600">Seniority:</span> {challengeSeniority}
+                    </span>
+                  </>
                 )}
                 {challengeTechStack && (
-                  <span className="text-xs text-neutral-500">
-                    <span className="text-neutral-600">Stack:</span> {challengeTechStack}
+                  <>
+                    <span className="text-neutral-700">·</span>
+                    <span className="text-xs text-neutral-500">
+                      <span className="text-neutral-600">Stack:</span> {challengeTechStack}
+                    </span>
+                  </>
+                )}
+                {challengeFocusAreas && (
+                  <>
+                    <span className="text-neutral-700">·</span>
+                    <span className="text-xs text-neutral-500">
+                      <span className="text-neutral-600">Focus:</span> {challengeFocusAreas}
+                    </span>
+                  </>
+                )}
+                {challengeContext && (
+                  <span className="text-xs text-neutral-500 w-full mt-0.5">
+                    <span className="text-neutral-600">Context:</span> {challengeContext}
                   </span>
                 )}
               </div>

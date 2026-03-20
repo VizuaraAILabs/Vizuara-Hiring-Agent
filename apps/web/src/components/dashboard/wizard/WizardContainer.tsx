@@ -137,6 +137,9 @@ export default function WizardContainer() {
           timeLimitMin={wizardInputs?.time_limit_min ?? 30}
           role={wizardInputs?.role ?? null}
           techStack={wizardInputs?.techStack ?? []}
+          seniority={wizardInputs?.seniority ?? null}
+          focusAreas={wizardInputs?.focusAreas ?? []}
+          context={wizardInputs?.context ?? null}
           onRegenerate={handleRegenerate}
           onBack={handleBackToDetails}
         />

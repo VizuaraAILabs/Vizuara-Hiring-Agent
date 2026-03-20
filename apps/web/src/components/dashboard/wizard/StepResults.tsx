@@ -17,11 +17,14 @@ interface StepResultsProps {
   timeLimitMin: number;
   role?: string | null;
   techStack?: string[];
+  seniority?: string | null;
+  focusAreas?: string[];
+  context?: string | null;
   onRegenerate: () => void;
   onBack: () => void;
 }
 
-export default function StepResults({ challenges, timeLimitMin, role, techStack, onRegenerate, onBack }: StepResultsProps) {
+export default function StepResults({ challenges, timeLimitMin, role, techStack, seniority, focusAreas, context, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -108,6 +111,9 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
           allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
           role: role || undefined,
           tech_stack: techStack && techStack.length > 0 ? techStack.join(', ') : undefined,
+          seniority: seniority || undefined,
+          focus_areas: focusAreas && focusAreas.length > 0 ? focusAreas : undefined,
+          context: context || undefined,
         }),
       });
 
