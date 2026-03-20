@@ -100,7 +100,7 @@ _DIMENSION_SCHEMA = {
                     },
                     "comparison": {
                         "type": "string",
-                        "description": "How this compares to what would be expected of a strong candidate for this specific role and challenge — grounded in the stack, domain, and difficulty level described in the challenge, not a generic senior-engineer bar",
+                        "description": "How this compares to what would be expected of a strong candidate for this specific role and challenge — grounded in the provided role, stack, and difficulty level, not a generic senior-engineer bar",
                     },
                 },
                 "required": ["transcript_quote", "observation", "comparison"],
@@ -109,7 +109,7 @@ _DIMENSION_SCHEMA = {
         },
         "expected_standard": {
             "type": "string",
-            "description": "2-4 sentences describing what a strong, well-prepared candidate for THIS specific role and challenge would ideally do on this dimension. Derive the bar from the challenge description: infer the role level, stack, domain, and difficulty, then set expectations accordingly. Do NOT default to 'senior engineer at 100' — calibrate to what this particular challenge actually demands.",
+            "description": "2-4 sentences describing what a strong, well-prepared candidate for THIS specific role and challenge would ideally do on this dimension. Use the provided role and tech stack to calibrate the bar — do NOT default to 'senior engineer at 100' and do NOT infer the role or stack from the description when they have been explicitly provided.",
         },
     },
     "required": ["score", "narrative", "evidence", "observed_points", "expected_standard"],
@@ -352,17 +352,34 @@ or fabricate any actions or content."""
         challenge_description: str,
         session_metadata: dict,
         observations: dict,
+        challenge_role: str | None = None,
+        challenge_tech_stack: str | None = None,
     ) -> str:
         metadata_lines = [f"- **{k}**: {v}" for k, v in session_metadata.items()]
         metadata_block = "\n".join(metadata_lines) if metadata_lines else "N/A"
 
         observations_json = json.dumps(observations, indent=2)
 
+        context_block = ""
+        if challenge_role or challenge_tech_stack:
+            context_lines = []
+            if challenge_role:
+                context_lines.append(f"- **Role**: {challenge_role}")
+            if challenge_tech_stack:
+                context_lines.append(f"- **Tech Stack**: {challenge_tech_stack}")
+            context_block = (
+                "\n## Challenge Context\n\n"
+                + "\n".join(context_lines)
+                + "\n\nUse the role and tech stack above **exactly as provided** when calibrating "
+                "scoring expectations and writing `comparison` and `expected_standard` fields. "
+                "Do NOT infer or re-derive them from the challenge description.\n"
+            )
+
         return f"""\
 ## Challenge Description
 
 {challenge_description}
-
+{context_block}
 ## Session Metadata
 
 {metadata_block}
@@ -401,10 +418,13 @@ Now produce the complete evaluation."""
         challenge_description: str,
         session_metadata: dict,
         observations: dict,
+        challenge_role: str | None = None,
+        challenge_tech_stack: str | None = None,
     ) -> dict:
         """Pass 2: Score the candidate based on extracted observations."""
         message = self._build_pass2_message(
-            challenge_description, session_metadata, observations
+            challenge_description, session_metadata, observations,
+            challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
         )
 
         last_error: Exception | None = None
@@ -465,7 +485,8 @@ Now produce the complete evaluation."""
                     # Re-send the ORIGINAL message with error context appended
                     # so Gemini retains all the observations and rubrics.
                     original_message = self._build_pass2_message(
-                        challenge_description, session_metadata, observations
+                        challenge_description, session_metadata, observations,
+                        challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
                     )
                     message = (
                         f"{original_message}\n\n"
@@ -670,6 +691,8 @@ Write the full narrative document now:"""
         transcript: str,
         challenge_description: str,
         existing_dimension_details: dict,
+        challenge_role: str | None = None,
+        challenge_tech_stack: str | None = None,
     ) -> dict:
         """Generate observed_points and expected_standard for all 8 dimensions.
 
@@ -679,10 +702,26 @@ Write the full narrative document now:"""
         """
         existing_json = json.dumps(existing_dimension_details, indent=2)
 
+        context_block = ""
+        if challenge_role or challenge_tech_stack:
+            context_lines = []
+            if challenge_role:
+                context_lines.append(f"- **Role**: {challenge_role}")
+            if challenge_tech_stack:
+                context_lines.append(f"- **Tech Stack**: {challenge_tech_stack}")
+            context_block = (
+                "\n## Challenge Context\n\n"
+                + "\n".join(context_lines)
+                + "\n\nUse the role and tech stack above **exactly as provided** when writing "
+                "`comparison` and `expected_standard` fields. Do NOT infer or re-derive them "
+                "from the challenge description.\n"
+            )
+
         prompt = f"""\
 ## Challenge Description
 
 {challenge_description}
+{context_block}
 
 ## Existing Dimension Scores and Narratives
 
@@ -708,15 +747,14 @@ Copy directly from the transcript — do NOT paraphrase.
    - `observation`: What this specific action reveals about the candidate's competence \
 on this dimension (1-2 analytical sentences).
    - `comparison`: How this compares to what would be expected from a strong, \
-well-prepared candidate for this specific role and challenge. Infer the role level, \
-stack, and difficulty from the challenge description — do not default to a generic \
+well-prepared candidate for this specific role and challenge. Use the provided role \
+and tech stack to calibrate expectations — do not default to a generic \
 senior-engineer bar (1-2 sentences).
    Include at least 2-5 points per dimension where the transcript provides evidence.
 
 2. **expected_standard** — 2-4 sentences describing what a strong, well-prepared \
 candidate for THIS specific role and challenge would ideally do on this dimension. \
-Derive the bar from the challenge description: infer the role level, stack, domain, \
-and difficulty, then set expectations accordingly. Be concrete and specific — \
+Use the provided role and tech stack to set the bar — be concrete and specific, \
 do NOT use a generic senior-engineer-at-100 baseline.
 
 RULES:
@@ -793,6 +831,8 @@ explaining what was absent and what should have been present."""
         challenge_description: str,
         session_metadata: dict,
         transcript: str,
+        challenge_role: str | None = None,
+        challenge_tech_stack: str | None = None,
     ) -> dict:
         """Run the full two-pass analysis pipeline.
 
@@ -809,7 +849,8 @@ explaining what was absent and what should have been present."""
 
         # Pass 2: Score based on observations
         result = self._run_pass2(
-            challenge_description, session_metadata, observations
+            challenge_description, session_metadata, observations,
+            challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
         )
 
         # Attach observations for transparency/debugging
