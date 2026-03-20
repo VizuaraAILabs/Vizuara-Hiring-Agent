@@ -15,11 +15,13 @@ const difficultyColors: Record<string, string> = {
 interface StepResultsProps {
   challenges: GeneratedChallenge[];
   timeLimitMin: number;
+  role?: string | null;
+  techStack?: string[];
   onRegenerate: () => void;
   onBack: () => void;
 }
 
-export default function StepResults({ challenges, timeLimitMin, onRegenerate, onBack }: StepResultsProps) {
+export default function StepResults({ challenges, timeLimitMin, role, techStack, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
   const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
@@ -104,6 +106,8 @@ export default function StepResults({ challenges, timeLimitMin, onRegenerate, on
           starter_files: starterFiles,
           sessions_limit: user?.isAdmin && sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
           allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
+          role: role || undefined,
+          tech_stack: techStack && techStack.length > 0 ? techStack.join(', ') : undefined,
         }),
       });
 

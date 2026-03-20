@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot } from '@/types';
+import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot, Challenge } from '@/types';
 import ReportHeader from '@/components/report/ReportHeader';
 import ScoreSummary from '@/components/report/ScoreSummary';
 import KeyMoments from '@/components/report/KeyMoments';
@@ -29,6 +29,7 @@ export default function ReportPage() {
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -76,6 +77,7 @@ export default function ReportPage() {
         const challengeRes = await fetch(`/api/challenges/${challengeId}`);
         if (challengeRes.ok) {
           const challengeData = await challengeRes.json();
+          setChallenge(challengeData);
           const sess = challengeData.sessions?.find((s: Session) => s.id === sessionId);
           if (sess) setSession(sess);
 
@@ -227,6 +229,9 @@ export default function ReportPage() {
             dimensions={analysis.dimension_details}
             scores={scores}
             enriching={enrichingDimensions}
+            challengeTitle={challenge?.title ?? null}
+            challengeRole={challenge?.role ?? null}
+            challengeTechStack={challenge?.tech_stack ?? null}
           />
         </div>
       )}

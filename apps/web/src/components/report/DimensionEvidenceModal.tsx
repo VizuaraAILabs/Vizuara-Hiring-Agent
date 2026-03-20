@@ -11,6 +11,9 @@ interface DimensionEvidenceModalProps {
   score: number;
   detail: DimensionDetail;
   onClose: () => void;
+  challengeTitle?: string | null;
+  challengeRole?: string | null;
+  challengeTechStack?: string | null;
 }
 
 export default function DimensionEvidenceModal({
@@ -18,6 +21,9 @@ export default function DimensionEvidenceModal({
   score,
   detail,
   onClose,
+  challengeTitle,
+  challengeRole,
+  challengeTechStack,
 }: DimensionEvidenceModalProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -39,13 +45,38 @@ export default function DimensionEvidenceModal({
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-white font-semibold text-base">{label}</span>
-            <span
-              className={`text-xs font-bold px-2.5 py-1 rounded-full ${getScoreBgColor(score)} text-white`}
-            >
-              {score.toFixed(0)} / 100
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <span className="text-white font-semibold text-base">{label}</span>
+              <span
+                className={`text-xs font-bold px-2.5 py-1 rounded-full ${getScoreBgColor(score)} text-white`}
+              >
+                {score.toFixed(0)} / 100
+              </span>
+            </div>
+            {(challengeTitle || challengeRole || challengeTechStack) && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {challengeTitle && (
+                  <span className="text-xs text-neutral-500">{challengeTitle}</span>
+                )}
+                {(challengeRole || challengeTechStack) && challengeTitle && (
+                  <span className="text-neutral-700">·</span>
+                )}
+                {challengeRole && (
+                  <span className="text-xs text-neutral-500">
+                    <span className="text-neutral-600">Role:</span> {challengeRole}
+                  </span>
+                )}
+                {challengeRole && challengeTechStack && (
+                  <span className="text-neutral-700">·</span>
+                )}
+                {challengeTechStack && (
+                  <span className="text-xs text-neutral-500">
+                    <span className="text-neutral-600">Stack:</span> {challengeTechStack}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}

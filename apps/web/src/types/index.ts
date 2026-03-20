@@ -27,6 +27,8 @@ export interface Challenge {
   starter_files: StarterFile[] | null;
   sessions_limit: number | null;
   allowed_emails: string[] | null;
+  role: string | null;
+  tech_stack: string | null;
   created_at: string;
 }
 

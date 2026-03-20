@@ -10,6 +10,9 @@ interface ScoreSummaryProps {
   dimensions: Record<string, DimensionDetail>;
   scores: Record<string, number>;
   enriching?: boolean;
+  challengeTitle?: string | null;
+  challengeRole?: string | null;
+  challengeTechStack?: string | null;
 }
 
 const dimensionLabels: Record<string, string> = {
@@ -23,7 +26,7 @@ const dimensionLabels: Record<string, string> = {
   efficiency: 'Efficiency',
 };
 
-export default function ScoreSummary({ dimensions, scores, enriching = false }: ScoreSummaryProps) {
+export default function ScoreSummary({ dimensions, scores, enriching = false, challengeTitle, challengeRole, challengeTechStack }: ScoreSummaryProps) {
   const [openDimension, setOpenDimension] = useState<string | null>(null);
   const entries = Object.entries(dimensionLabels);
 
@@ -84,6 +87,9 @@ export default function ScoreSummary({ dimensions, scores, enriching = false }: 
           score={scores[openDimension] ?? 0}
           detail={openDetail}
           onClose={() => setOpenDimension(null)}
+          challengeTitle={challengeTitle}
+          challengeRole={challengeRole}
+          challengeTechStack={challengeTechStack}
         />
       )}
     </>
