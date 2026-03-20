@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { Session } from '@/types';
+import type { Session, SessionWithChallenge } from '@/types';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   try {
     const { token } = await params;
 
-    const [session] = await sql<Session & { challenge_title: string; challenge_description: string }[]>`
+    const [session] = await sql<SessionWithChallenge[]>`
       SELECT s.*, c.title as challenge_title, c.description as challenge_description
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
