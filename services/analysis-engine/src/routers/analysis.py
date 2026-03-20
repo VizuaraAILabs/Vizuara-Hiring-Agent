@@ -89,6 +89,97 @@ async def _fetch_interactions(pool: asyncpg.Pool, session_id: str) -> list[dict]
     return result
 
 
+@router.post("/enrich-dimensions")
+async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
+    """Add observed_points and expected_standard to all 8 dimensions in an existing analysis.
+
+    Safe to call on analyses that already have these fields — returns immediately if all
+    dimensions already contain at least one observed_point.
+    """
+    session_id = request.session_id
+    logger.info("Dimension enrichment requested for session: %s", session_id)
+
+    pool = await _get_pool()
+
+    existing = await pool.fetchrow(
+        "SELECT dimension_details FROM analysis_results WHERE session_id = $1",
+        session_id,
+    )
+    if not existing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        )
+
+    import json as _json
+
+    raw_details = existing["dimension_details"]
+    if isinstance(raw_details, str):
+        dimension_details: dict = _json.loads(raw_details)
+    else:
+        dimension_details = dict(raw_details) if raw_details else {}
+
+    # Check if already enriched (all dims have at least 1 observed_point)
+    dims = [
+        "problem_decomposition", "first_principles", "creativity",
+        "iteration_quality", "debugging_approach", "architecture_thinking",
+        "communication_clarity", "efficiency",
+    ]
+    already_enriched = all(
+        dimension_details.get(d, {}).get("observed_points")
+        for d in dims
+    )
+    if already_enriched:
+        logger.info("Dimensions already enriched for session %s — returning cached", session_id)
+        return {"dimension_details": dimension_details}
+
+    session = await _fetch_session(pool, session_id)
+    challenge = await _fetch_challenge(pool, session["challenge_id"])
+    interactions = await _fetch_interactions(pool, session_id)
+
+    if not interactions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No interactions found for session '{session_id}'",
+        )
+
+    try:
+        parser = TranscriptParser()
+        transcript = parser.parse(interactions)
+        logger.info("Parsed transcript for enrichment: %d characters", len(transcript))
+
+        analyzer = ClaudeAnalyzer()
+        enrichment = analyzer.enrich_dimension_evidence(
+            transcript=transcript,
+            challenge_description=challenge.get("description", ""),
+            existing_dimension_details=dimension_details,
+        )
+
+        # Merge observed_points and expected_standard into existing dimension_details
+        for dim in dims:
+            if dim in enrichment and dim in dimension_details:
+                dimension_details[dim]["observed_points"] = enrichment[dim].get("observed_points", [])
+                dimension_details[dim]["expected_standard"] = enrichment[dim].get("expected_standard", "")
+
+        await pool.execute(
+            "UPDATE analysis_results SET dimension_details = $1::jsonb WHERE session_id = $2",
+            _json.dumps(dimension_details),
+            session_id,
+        )
+        logger.info("Dimension evidence saved for session %s", session_id)
+
+        return {"dimension_details": dimension_details}
+
+    except Exception as exc:
+        logger.error(
+            "Failed to enrich dimensions for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/transcript-narrative")
 async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
     """Generate a detailed human-readable markdown narrative for a session's transcript.
@@ -132,12 +223,20 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         transcript = parser.parse(interactions)
         logger.info("Parsed transcript for narrative: %d characters", len(transcript))
 
+        def _fmt_dt(dt) -> str:
+            if dt is None:
+                return "Unknown"
+            try:
+                return dt.strftime("%d/%m/%Y %H:%M:%S")
+            except AttributeError:
+                return str(dt)
+
         session_metadata = {
             "Candidate Name": session.get("candidate_name", "Unknown"),
             "Challenge Title": challenge.get("title", "Unknown"),
             "Time Limit (minutes)": challenge.get("time_limit_min", "Unknown"),
-            "Session Started": str(session.get("started_at", "Unknown")),
-            "Session Ended": str(session.get("ended_at", "Unknown")),
+            "Session Started": _fmt_dt(session.get("started_at")),
+            "Session Ended": _fmt_dt(session.get("ended_at")),
         }
 
         analyzer = ClaudeAnalyzer()
@@ -245,13 +344,21 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
             analysis = insufficient_result
         else:
             # -- Step 4: Two-pass Gemini analysis --
+            def _fmt_dt(dt) -> str:
+                if dt is None:
+                    return "Unknown"
+                try:
+                    return dt.strftime("%d/%m/%Y %H:%M:%S")
+                except AttributeError:
+                    return str(dt)
+
             session_metadata = {
                 "Candidate Name": session.get("candidate_name", "Unknown"),
                 "Candidate Email": session.get("candidate_email", "Unknown"),
                 "Challenge Title": challenge.get("title", "Unknown"),
                 "Time Limit (minutes)": challenge.get("time_limit_min", "Unknown"),
-                "Session Started": str(session.get("started_at", "Unknown")),
-                "Session Ended": str(session.get("ended_at", "Unknown")),
+                "Session Started": _fmt_dt(session.get("started_at")),
+                "Session Ended": _fmt_dt(session.get("ended_at")),
                 "Total Interactions": len(interactions),
             }
 

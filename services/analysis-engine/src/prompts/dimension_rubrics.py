@@ -160,4 +160,32 @@ output relative to time spent.
 
 Use these rubrics to assign precise scores. Provide specific evidence from the \
 transcript for each score. Be fair but rigorous.
+
+---
+
+## Observed vs Expected Evidence
+
+For each dimension you MUST populate both `observed_points` and `expected_standard`.
+
+### observed_points
+Provide one entry per meaningful candidate action that is relevant to this dimension. \
+Aim for at least 2-5 points per dimension where evidence exists (more is better). For each entry:
+
+- **transcript_quote**: Copy the exact or near-verbatim text of what the candidate typed \
+or prompted. This is the raw evidence — do not paraphrase it.
+- **observation**: In 1-2 sentences, explain what this specific action reveals about \
+the candidate's competence on this dimension. Be analytical and precise.
+- **comparison**: In 1-2 sentences, describe how a senior engineer masterful in this \
+challenge's domain would have handled the same situation differently (or confirm if \
+the candidate's approach was already expert-level).
+
+If a dimension genuinely has no relevant evidence in the transcript, still provide \
+at least one entry explaining what was absent and what should have been present.
+
+### expected_standard
+Write 2-4 sentences describing the ideal interaction a senior engineer who is a \
+master in the domain of this challenge would have with this dimension — this \
+represents a score of 100. Be concrete and specific to the challenge: reference \
+the type of work, the tools, the patterns, and the quality of decision-making \
+expected at that level. Do NOT write generic advice.
 """

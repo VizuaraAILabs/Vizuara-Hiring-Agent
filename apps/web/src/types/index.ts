@@ -53,10 +53,18 @@ export interface Interaction {
   metadata: string;
 }
 
+export interface ObservedPoint {
+  transcript_quote: string;
+  observation: string;
+  comparison: string;
+}
+
 export interface DimensionDetail {
   score: number;
   narrative: string;
   evidence: string[];
+  observed_points?: ObservedPoint[];
+  expected_standard?: string;
 }
 
 export interface KeyMoment {

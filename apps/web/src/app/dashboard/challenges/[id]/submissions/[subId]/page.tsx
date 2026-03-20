@@ -34,6 +34,7 @@ export default function ReportPage() {
   const [highlightIndex, setHighlightIndex] = useState<number | undefined>();
   const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [enrichingDimensions, setEnrichingDimensions] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -44,6 +45,27 @@ export default function ReportPage() {
           setAnalysis(data);
           if (data.transcript_narrative) {
             setTranscriptNarrative(data.transcript_narrative);
+          }
+
+          // If any dimension is missing observed_points, enrich in the background
+          const details: Record<string, { observed_points?: unknown[] }> =
+            data.dimension_details ?? {};
+          const needsEnrichment = Object.values(details).some(
+            (d) => !d?.observed_points?.length,
+          );
+          if (needsEnrichment) {
+            setEnrichingDimensions(true);
+            fetch(`/api/analysis/${sessionId}/enrich-dimensions`, { method: 'POST' })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((enriched) => {
+                if (enriched?.dimension_details) {
+                  setAnalysis((prev) =>
+                    prev ? { ...prev, dimension_details: enriched.dimension_details } : prev,
+                  );
+                }
+              })
+              .catch((err) => console.error('Failed to enrich dimension evidence:', err))
+              .finally(() => setEnrichingDimensions(false));
           }
         }
 
@@ -176,7 +198,11 @@ export default function ReportPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <RadarChart scores={scores} />
-          <ScoreSummary dimensions={analysis.dimension_details} scores={scores} />
+          <ScoreSummary
+            dimensions={analysis.dimension_details}
+            scores={scores}
+            enriching={enrichingDimensions}
+          />
         </div>
       )}
 

@@ -5,12 +5,32 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class ObservedPoint(BaseModel):
+    transcript_quote: str = Field(
+        ..., description="Near-verbatim quote from the candidate's transcript"
+    )
+    observation: str = Field(
+        ..., description="What this action reveals about the candidate for this dimension"
+    )
+    comparison: str = Field(
+        ..., description="How this compares to what a senior engineer would have done"
+    )
+
+
 class DimensionScore(BaseModel):
     score: float = Field(..., ge=0, le=100, description="Score from 0 to 100")
     narrative: str = Field(..., description="Qualitative narrative for this dimension")
     evidence: list[str] = Field(
         default_factory=list,
         description="Specific evidence from the transcript supporting this score",
+    )
+    observed_points: list[ObservedPoint] = Field(
+        default_factory=list,
+        description="Transcript-grounded observed vs expected evidence points",
+    )
+    expected_standard: str = Field(
+        default="",
+        description="What a senior engineer would ideally do for this dimension in this challenge",
     )
 
 

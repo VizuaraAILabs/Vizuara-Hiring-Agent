@@ -85,8 +85,34 @@ _DIMENSION_SCHEMA = {
             "items": {"type": "string"},
             "description": "Specific evidence from the observations supporting this score",
         },
+        "observed_points": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "transcript_quote": {
+                        "type": "string",
+                        "description": "Near-verbatim quote of what the candidate typed or did, taken directly from the transcript",
+                    },
+                    "observation": {
+                        "type": "string",
+                        "description": "What this specific action reveals about the candidate's ability on this dimension",
+                    },
+                    "comparison": {
+                        "type": "string",
+                        "description": "How this compares to what a senior engineer would have done in the same situation",
+                    },
+                },
+                "required": ["transcript_quote", "observation", "comparison"],
+            },
+            "description": "Transcript-grounded evidence points for this dimension. Include one entry per meaningful candidate action relevant to this dimension (aim for 2-5 points minimum where evidence exists).",
+        },
+        "expected_standard": {
+            "type": "string",
+            "description": "2-4 sentences describing what a senior engineer masterful in this challenge's domain would ideally do for this dimension — the concrete baseline for a score of 100. Must be specific to the challenge, not generic advice.",
+        },
     },
-    "required": ["score", "narrative", "evidence"],
+    "required": ["score", "narrative", "evidence", "observed_points", "expected_standard"],
 }
 
 _SCORING_SCHEMA = {
@@ -525,6 +551,145 @@ Write the full narrative document now:"""
             "Transcript narrative generated: %d characters", len(response.text)
         )
         return response.text
+
+    # ------------------------------------------------------------------
+    # Dimension Evidence Enrichment
+    # ------------------------------------------------------------------
+
+    _ENRICH_SCHEMA = {
+        "type": "object",
+        "properties": {
+            dim: {
+                "type": "object",
+                "properties": {
+                    "observed_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "transcript_quote": {"type": "string"},
+                                "observation": {"type": "string"},
+                                "comparison": {"type": "string"},
+                            },
+                            "required": ["transcript_quote", "observation", "comparison"],
+                        },
+                    },
+                    "expected_standard": {"type": "string"},
+                },
+                "required": ["observed_points", "expected_standard"],
+            }
+            for dim in [
+                "problem_decomposition", "first_principles", "creativity",
+                "iteration_quality", "debugging_approach", "architecture_thinking",
+                "communication_clarity", "efficiency",
+            ]
+        },
+        "required": [
+            "problem_decomposition", "first_principles", "creativity",
+            "iteration_quality", "debugging_approach", "architecture_thinking",
+            "communication_clarity", "efficiency",
+        ],
+    }
+
+    def enrich_dimension_evidence(
+        self,
+        transcript: str,
+        challenge_description: str,
+        existing_dimension_details: dict,
+    ) -> dict:
+        """Generate observed_points and expected_standard for all 8 dimensions.
+
+        Called when an analysis already exists but was created before these fields
+        were introduced. Returns a dict keyed by dimension name, each containing
+        'observed_points' and 'expected_standard'.
+        """
+        existing_json = json.dumps(existing_dimension_details, indent=2)
+
+        prompt = f"""\
+## Challenge Description
+
+{challenge_description}
+
+## Existing Dimension Scores and Narratives
+
+The following scores and narratives were already generated for this session. \
+Do NOT change them — your only task is to add evidence.
+
+```json
+{existing_json}
+```
+
+## Transcript
+
+{transcript}
+
+## Your Task
+
+For EACH of the 8 dimensions above, generate:
+
+1. **observed_points** — a list of specific moments from the transcript relevant to \
+this dimension. For every meaningful candidate action, provide:
+   - `transcript_quote`: The exact or near-verbatim text the candidate typed or prompted. \
+Copy directly from the transcript — do NOT paraphrase.
+   - `observation`: What this specific action reveals about the candidate's competence \
+on this dimension (1-2 analytical sentences).
+   - `comparison`: How a senior engineer mastering this challenge's domain would have \
+handled the same situation differently — or confirm if the candidate's approach was \
+already expert-level (1-2 sentences).
+   Include at least 2-5 points per dimension where the transcript provides evidence.
+
+2. **expected_standard** — 2-4 sentences describing what a senior engineer who is \
+a master in the domain of this challenge would ideally do for this dimension, \
+representing a perfect score of 100. Be concrete and specific to this challenge — \
+not generic advice.
+
+RULES:
+- All transcript_quote values must be copied verbatim or near-verbatim from the transcript.
+- Do NOT invent quotes that are not present in the transcript.
+- Do NOT re-score or alter the existing scores and narratives.
+- If a dimension has no relevant evidence in the transcript, still provide 1 entry \
+explaining what was absent and what should have been present."""
+
+        last_error: Exception | None = None
+        message = prompt
+
+        for attempt in range(1, self.MAX_RETRIES + 2):
+            logger.info(
+                "Dimension enrichment attempt %d/%d", attempt, self.MAX_RETRIES + 1
+            )
+            response = self.client.models.generate_content(
+                model=self.MODEL,
+                contents=message,
+                config=types.GenerateContentConfig(
+                    system_instruction=(
+                        "You are a precise transcript analyst and technical evaluator. "
+                        "Extract exact quotes from the transcript and provide rigorous, "
+                        "evidence-based analysis of each dimension. Never fabricate quotes."
+                    ),
+                    temperature=0.2,
+                    max_output_tokens=32000,
+                    response_mime_type="application/json",
+                    response_schema=self._ENRICH_SCHEMA,
+                ),
+            )
+
+            try:
+                result = json.loads(response.text)
+                logger.info("Dimension enrichment complete")
+                return result
+            except (json.JSONDecodeError, ValueError, TypeError) as exc:
+                last_error = exc
+                logger.warning("Enrichment attempt %d failed: %s", attempt, exc)
+                if attempt <= self.MAX_RETRIES:
+                    message = (
+                        f"{prompt}\n\nNOTE: Your previous response was invalid JSON. "
+                        f"Error: {exc}\n\nPlease produce a complete, valid JSON response."
+                    )
+
+        raise ValueError(
+            f"Dimension enrichment failed after {self.MAX_RETRIES + 1} attempts. "
+            f"Last error: {last_error}"
+        )
 
     # ------------------------------------------------------------------
     # Helpers
