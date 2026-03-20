@@ -110,13 +110,18 @@ export function useInterview(token: string) {
           return false;
         }
 
-        const { reply, sequence_num } = await res.json();
+        const { reply, sequence_num, candidate_sequence_num } = await res.json();
 
-        // Add AI reply
+        // Replace optimistic with confirmed candidate message + AI reply
         setMessages((prev) => {
-          // Replace optimistic candidate message with nothing (poll will fill it)
-          // and add AI reply immediately
           const withoutOptimistic = prev.filter((m) => m.id !== -tempSeq);
+          const confirmedCandidate: InterviewMessage = {
+            id: -(candidate_sequence_num as number),
+            sequence_num: candidate_sequence_num as number,
+            timestamp: new Date().toISOString(),
+            role: 'candidate',
+            content: content.trim(),
+          };
           const aiMsg: InterviewMessage = {
             id: -(sequence_num as number),
             sequence_num: sequence_num as number,
@@ -124,9 +129,9 @@ export function useInterview(token: string) {
             role: 'interviewer',
             content: reply as string,
           };
-          // Update lastSeq so poll doesn't re-fetch
+          // Advance lastSeq past both messages so poll doesn't re-fetch them
           lastSeqRef.current = Math.max(lastSeqRef.current, sequence_num as number);
-          return [...withoutOptimistic, aiMsg];
+          return [...withoutOptimistic, confirmedCandidate, aiMsg];
         });
 
         return true;

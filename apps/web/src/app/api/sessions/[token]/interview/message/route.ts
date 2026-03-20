@@ -114,7 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       )
     `;
 
-    return NextResponse.json({ reply: aiReply, sequence_num: nextSeq });
+    return NextResponse.json({ reply: aiReply, sequence_num: nextSeq, candidate_sequence_num: inserted.sequence_num });
   } catch (error) {
     console.error('Error processing interview message:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

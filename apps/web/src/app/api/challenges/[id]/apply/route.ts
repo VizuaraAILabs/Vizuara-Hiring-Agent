@@ -34,16 +34,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
-    // Check if this candidate already has a pending/active session for this challenge
+    // Check if this candidate already has any session for this challenge
     const [existing] = await sql`
       SELECT token, status FROM sessions
       WHERE challenge_id = ${id} AND candidate_email = ${candidate_email}
       ORDER BY created_at DESC LIMIT 1
     `;
 
-    if (existing && (existing.status === 'pending' || existing.status === 'active')) {
-      // Return existing session token so they can resume
-      return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
+    if (existing) {
+      if (existing.status === 'pending' || existing.status === 'active') {
+        // Return existing session token so they can resume
+        return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
+      }
+      // Already completed or analyzed — block reattempt
+      return NextResponse.json(
+        { error: 'You have already completed this assessment. Each candidate may only attempt it once.' },
+        { status: 403 }
+      );
     }
 
     // Look up the company email to determine if this is an admin-created challenge
