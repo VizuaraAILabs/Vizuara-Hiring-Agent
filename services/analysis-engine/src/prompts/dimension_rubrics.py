@@ -161,6 +161,29 @@ output relative to time spent.
 Use these rubrics to assign precise scores. Provide specific evidence from the \
 transcript for each score. Be fair but rigorous.
 
+### Interviewer Dialogue Evidence
+If the transcript includes a LIVE INTERVIEWER DIALOGUE section, incorporate it into \
+your scoring as follows:
+
+- **First Principles Thinking**: Candidate questions to the interviewer that probe \
+constraints, assumptions, or non-obvious edge cases (e.g. "Does this need to handle \
+concurrent writes?", "What's the expected p99 latency?") are strong positive signals. \
+Generic questions ("Can you clarify the problem?") are neutral.
+
+- **Architecture Thinking**: Replies to probing questions that articulate trade-offs, \
+reference system-level concerns (consistency vs. availability, storage vs. compute), \
+or compare design alternatives are strong positive signals for this dimension.
+
+- **Communication Clarity**: How well the candidate expresses their reasoning in \
+spoken dialogue — concise, specific, and well-structured answers score higher than \
+vague or confused responses.
+
+- **Problem Decomposition**: Candidate questions that seek to clarify scope or \
+boundary conditions before diving in signal structured thinking.
+
+- **Efficiency**: A candidate who asks targeted clarifying questions early and doesn't \
+waste time on wrong assumptions demonstrates efficient problem-solving strategy.
+
 ---
 
 ## Observed vs Expected Evidence

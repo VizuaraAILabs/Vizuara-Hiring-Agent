@@ -19,6 +19,8 @@ const CLAUDE_PROMPT_MARKERS = [
 
 const SHELL_PROMPT_PATTERN = /^\$\s|^%\s|^#\s|^bash-|^zsh/;
 
+type FlushListener = (sessionId: string, content: string, contentType: string) => void;
+
 export class InteractionLogger {
   private sql: Sql;
   private buffer: PendingInteraction[] = [];
@@ -28,6 +30,13 @@ export class InteractionLogger {
   private flushTimer: NodeJS.Timeout | null = null;
   private inClaudeSession: Map<string, boolean> = new Map();
   private flushing: boolean = false;
+  /** Listeners called after each successful flush with the flushed interactions. */
+  private flushListeners: FlushListener[] = [];
+
+  /** Subscribe to aggregated, classified interactions as they are flushed to DB. */
+  onFlush(listener: FlushListener) {
+    this.flushListeners.push(listener);
+  }
 
   constructor(sql: Sql) {
     this.sql = sql;
@@ -163,6 +172,12 @@ export class InteractionLogger {
           INSERT INTO interactions (session_id, sequence_num, timestamp, direction, content, content_type, metadata)
           VALUES (${item.session_id}, ${item.sequence_num}, NOW(), ${item.direction}, ${item.content}, ${item.content_type}, ${item.metadata}::jsonb)
         `;
+      }
+      // Notify listeners with aggregated, classified content
+      for (const item of toInsert) {
+        for (const listener of this.flushListeners) {
+          try { listener(item.session_id, item.content, item.content_type); } catch { /* non-fatal */ }
+        }
       }
     } catch (err) {
       console.error('Failed to flush interactions:', err);

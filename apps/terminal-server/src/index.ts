@@ -9,6 +9,7 @@ import { validateSessionToken } from './auth-middleware';
 import * as fs from 'fs';
 import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
 import { CostTracker } from './cost-tracker';
+import { ActivityMonitor } from './activity-monitor';
 
 // Load env from root — __dirname is apps/terminal-server/src, root is ../../..
 const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
@@ -16,6 +17,7 @@ dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 
 const PORT = parseInt(process.env.TERMINAL_PORT || '3001');
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://hiring:hiring@localhost:5432/hiring_agent';
+const NEXT_APP_URL = process.env.NEXT_APP_URL || 'http://localhost:3000';
 
 // Initialize postgres connection
 const sql = postgres(DATABASE_URL, {
@@ -28,9 +30,18 @@ const dockerManager = new DockerManager();
 const logger = new InteractionLogger(sql);
 const costTracker = new CostTracker(sql);
 
+// Route aggregated, classified interactions to the per-session activity monitor.
+// This fires after the debounce window collapses keystrokes into complete commands.
+logger.onFlush((sessionId, content, contentType) => {
+  activityMonitors.get(sessionId)?.observe(content, contentType);
+});
+
 // Grace period before killing containers on WebSocket disconnect (allows page refresh)
 const DISCONNECT_GRACE_MS = 15_000;
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+
+// Per-session activity monitors for the AI interviewer
+const activityMonitors: Map<string, ActivityMonitor> = new Map();
 
 // Archive all workspace files to PostgreSQL when a session ends.
 // Non-fatal: errors are logged but never block session completion.
@@ -348,6 +359,17 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
     // Send initial message
     ws.send(JSON.stringify({ type: 'connected', sessionId }));
+
+    // Spin up activity monitor for this session (new connection only).
+    // It subscribes to the logger's flush events so it sees aggregated,
+    // classified interactions rather than raw PTY bytes.
+    if (!activityMonitors.has(sessionId)) {
+      const monitor = new ActivityMonitor({
+        sessionToken: token,
+        nextAppUrl: NEXT_APP_URL,
+      });
+      activityMonitors.set(sessionId, monitor);
+    }
   }
 
   // Reattach container output → this WebSocket + Logger + CostTracker
@@ -408,6 +430,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
       await costTracker.endSession(sessionId);
       await logger.flush();
 
+      // Clean up activity monitor
+      activityMonitors.get(sessionId)?.destroy();
+      activityMonitors.delete(sessionId);
+
       // Archive workspace files before killing — session still in dockerManager map
       const dyingSession = dockerManager.getSession(sessionId);
       if (dyingSession) {
@@ -444,6 +470,8 @@ async function shutdown() {
     clearTimeout(timer);
   }
   disconnectTimers.clear();
+  for (const monitor of activityMonitors.values()) monitor.destroy();
+  activityMonitors.clear();
   await costTracker.destroy();
   await logger.destroy();
   await dockerManager.killAll();

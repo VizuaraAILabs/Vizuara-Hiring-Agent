@@ -79,6 +79,8 @@ class TranscriptParser:
         "command": "[CANDIDATE COMMAND]",
         "response": "[AI RESPONSE]",
         "terminal": "[TERMINAL OUTPUT]",
+        "interview_question": "[INTERVIEWER QUESTION]",
+        "interview_response": "[CANDIDATE REPLY TO INTERVIEWER]",
     }
 
     # ── Text cleaning ─────────────────────────────────────────────────
@@ -429,6 +431,50 @@ class TranscriptParser:
 
         return f"{header}\n{content}\n"
 
+    # ── Interview exchange rendering ───────────────────────────────────
+
+    def _render_interview_section(self, interview_interactions: list[dict]) -> str:
+        """Render interview_question / interview_response interactions as a structured
+        dialogue section for the analysis engine."""
+        if not interview_interactions:
+            return ""
+
+        sorted_iv = sorted(interview_interactions, key=lambda x: x.get("sequence_num", 0))
+
+        lines: list[str] = [
+            "",
+            "=" * 60,
+            "LIVE INTERVIEWER DIALOGUE",
+            "(AI interviewer probed the candidate in real time; candidate could also ask",
+            "clarifying questions. Both are captured below. This dialogue is SIGNIFICANT",
+            "for scoring: question quality reveals first-principles thinking, and answer",
+            "depth reveals communication and architecture thinking.)",
+            "=" * 60,
+            "",
+        ]
+
+        for entry in sorted_iv:
+            content_type = entry.get("content_type", "")
+            content = entry.get("content", "").strip()
+            timestamp = entry.get("timestamp", "")
+            if not content:
+                continue
+
+            ts_str = f" [{timestamp}]" if timestamp else ""
+            if content_type == "interview_question":
+                lines.append(f"--- [INTERVIEWER QUESTION]{ts_str} ---")
+                lines.append(content)
+            else:
+                lines.append(f"--- [CANDIDATE REPLY / QUESTION TO INTERVIEWER]{ts_str} ---")
+                lines.append(content)
+            lines.append("")
+
+        lines.append("=" * 60)
+        lines.append("END OF INTERVIEWER DIALOGUE")
+        lines.append("=" * 60)
+
+        return "\n".join(lines)
+
     # ── Main entry point ──────────────────────────────────────────────
 
     def parse(self, interactions: list[dict]) -> str:
@@ -440,10 +486,21 @@ class TranscriptParser:
             interactions, key=lambda x: x.get("sequence_num", 0)
         )
 
-        if self._is_tui_session(sorted_interactions):
-            segments = self._extract_tui_conversation(sorted_interactions)
+        # Separate interview exchanges from terminal interactions
+        interview_types = {"interview_question", "interview_response"}
+        interview_interactions = [
+            i for i in sorted_interactions
+            if i.get("content_type") in interview_types
+        ]
+        terminal_interactions = [
+            i for i in sorted_interactions
+            if i.get("content_type") not in interview_types
+        ]
+
+        if self._is_tui_session(terminal_interactions):
+            segments = self._extract_tui_conversation(terminal_interactions)
         else:
-            segments = self._collapse_consecutive(sorted_interactions)
+            segments = self._collapse_consecutive(terminal_interactions)
 
         segments = [s for s in segments if s.get("content", "").strip()]
         segments = self._truncate_ai_responses(segments)
@@ -463,5 +520,9 @@ class TranscriptParser:
         parts.append("=" * 60)
         parts.append("END OF TRANSCRIPT")
         parts.append("=" * 60)
+
+        # Append interview dialogue section if present
+        if interview_interactions:
+            parts.append(self._render_interview_section(interview_interactions))
 
         return "\n".join(parts)

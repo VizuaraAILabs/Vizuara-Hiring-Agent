@@ -9,6 +9,7 @@ import TerminalToolbar from '@/components/terminal/TerminalToolbar';
 // Dynamic imports to avoid SSR issues with xterm.js
 const Terminal = dynamic(() => import('@/components/terminal/Terminal'), { ssr: false });
 const FileExplorer = dynamic(() => import('@/components/terminal/FileExplorer'), { ssr: false });
+const InterviewWidget = dynamic(() => import('@/components/terminal/InterviewWidget'), { ssr: false });
 
 export default function TerminalPage() {
   const params = useParams();
@@ -92,6 +93,7 @@ export default function TerminalPage() {
           <Terminal token={token} />
         </div>
       </div>
+      <InterviewWidget token={token} />
     </div>
   );
 }
