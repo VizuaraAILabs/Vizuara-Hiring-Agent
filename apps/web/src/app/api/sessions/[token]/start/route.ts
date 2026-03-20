@@ -70,7 +70,7 @@ async function generateOpeningQuestion(sessionId: string, title: string, descrip
       'output',
       ${greeting},
       'interview_question',
-      ${{ trigger_type: 'session_start' }}::jsonb
+      ${JSON.stringify({ trigger_type: 'session_start' })}::jsonb
     )
   `;
 }
