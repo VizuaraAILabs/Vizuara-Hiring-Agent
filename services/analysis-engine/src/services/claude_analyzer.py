@@ -504,31 +504,102 @@ Now produce the complete evaluation."""
 
 ## Your Task
 
-Write a comprehensive, detailed markdown document that describes everything the candidate \
-did during this session. This document will be read by a hiring company to understand the \
-candidate's technical approach, decisions, and capabilities.
+Write a comprehensive, richly detailed markdown document that reconstructs everything \
+the candidate did during this session. This document will be read by a hiring company \
+as the primary written record of the session — it must stand alone as a complete, \
+faithful account without the reader having to look at the transcript.
 
-**Requirements:**
+---
 
-- Write in third person ("The candidate...")
-- Be **very detailed** — cover every meaningful action, tool used, file created, command \
-run, package installed, error encountered, and decision made. Do not skip anything significant.
-- Organize chronologically with clear markdown headings for each distinct phase \
-(e.g., `## Project Setup`, `## Server Implementation`, `## Debugging`, `## Testing`, etc.). \
-Use as many phases as the session warrants.
-- Use bullet points freely to enumerate: specific shell commands run, packages installed, \
-files created or modified, API endpoints defined, functions written, errors encountered, etc.
-- Use inline code formatting (backticks) for ALL technical terms: commands, filenames, \
-package names, function names, endpoints, variable names, etc.
-- Describe how the candidate used AI assistance in detail — what they asked, how specific \
-or vague their prompts were, whether they followed AI suggestions or modified them.
-- Note every error or failed attempt and exactly how it was resolved.
-- Capture the candidate's reasoning and approach where it is visible from their prompts \
-and commands.
-- Do NOT evaluate, score, or judge the candidate — only describe what happened.
-- Do NOT omit steps to be concise. The goal is a thorough, complete record.
-- The document should be detailed enough that a reader who never saw the session can \
-fully reconstruct what happened technically.
+### Structural Requirements
+
+- Organise the document **chronologically** into clearly labelled phases using level-2 \
+headings (e.g., `## Initial Exploration`, `## Environment Setup`, \
+`## Core Implementation`, `## Debugging Session`, `## Refinement and Testing`, etc.). \
+Create as many phases as the session naturally contains — do not collapse distinct \
+stages into one.
+- Within each phase, use nested bullet points and sub-sections to separate: \
+shell commands, AI prompts, AI responses, code changes, errors, and decisions.
+- End the document with a `## Session Summary` section that gives a concise \
+(3-5 sentence) overview of what the candidate accomplished, where they struggled, \
+and how they left the project.
+
+---
+
+### Content Requirements — What to Include
+
+**Shell commands and terminal output:**
+- Quote every command the candidate ran, using inline code (e.g., `npm install express`).
+- Describe what the command was intended to do and what its output indicated \
+(success, error, warnings). If a command produced an error, quote the key error \
+message verbatim.
+
+**File operations:**
+- Name every file created, modified, or deleted. Describe its purpose and, where \
+visible, its key contents (exported functions, API routes, schema definitions, etc.).
+
+**AI prompts (candidate → AI):**
+- Quote the candidate's prompt as closely to verbatim as possible, using a \
+blockquote (`> "..."`) or inline code block.
+- Describe the intent behind the prompt: what problem were they trying to solve?
+- Note the specificity and clarity of the prompt — was it precise and well-scoped, \
+or vague and broad?
+
+**AI responses and generated code:**
+- Describe what the AI produced in response: which files it created or edited, \
+which packages it suggested, which patterns it used.
+- Note whether the candidate accepted the output as-is, modified it, partially \
+applied it, or rejected it — and if they changed it, describe what they changed \
+and why (if discernible).
+
+**Errors and failures:**
+- Quote the exact error message or exception for every error encountered.
+- Describe the candidate's diagnostic process: did they read the error carefully, \
+paste it to the AI, make a targeted change, or try random fixes?
+- State how (or whether) the error was resolved and how many attempts it took.
+
+**Decision points and reasoning:**
+- Wherever the transcript reveals the candidate's thinking (through their prompts, \
+comments, or the sequence of their actions), describe that reasoning explicitly.
+- If the candidate changed approach mid-way, note what triggered the change.
+
+**Packages and dependencies:**
+- List every package installed, the command used, and the apparent reason.
+
+**Testing and verification:**
+- Describe any tests run, test commands used, pass/fail results, and how failures \
+were addressed.
+
+---
+
+### Accuracy Rules — What NOT to Do
+
+- **Do NOT invent, infer, or extrapolate.** Every statement must be directly \
+supported by something present in the transcript. If the transcript does not show \
+something, do not include it.
+- **Do NOT paraphrase prompts loosely** — use the candidate's actual words as much \
+as possible.
+- **Do NOT skip transcript segments** because they seem minor. A single-character \
+input, a repeated command, or an apparently trivial action may be significant to \
+the reader.
+- **Do NOT evaluate or score** the candidate — this document is descriptive, not \
+judgemental. Use neutral, factual language throughout.
+- **Do NOT summarise away detail.** "The candidate set up the project" is \
+unacceptable. "The candidate ran `npm init -y`, then installed `express` and \
+`cors` using `npm install express cors`, and created an `index.js` file" is correct.
+
+---
+
+### Formatting Rules
+
+- Write in **third person** throughout ("The candidate...", "They then...").
+- Use inline code (backticks) for ALL technical terms: filenames, commands, \
+package names, function names, API endpoints, environment variables, error names, etc.
+- Use blockquotes (`>`) for verbatim AI prompts and key error messages.
+- Use **bold** sparingly — only for genuinely critical moments (a breakthrough, \
+a serious error, a key architectural decision).
+- Do not use horizontal rules inside phases; reserve them only between major sections \
+if needed.
 
 Write the full narrative document now:"""
 
@@ -537,13 +608,16 @@ Write the full narrative document now:"""
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=(
-                    "You are a technical writer creating detailed session documentation. "
-                    "Write comprehensive markdown that describes the candidate's actions "
-                    "step by step with full technical detail. Use proper markdown headings, "
-                    "bullet points, and inline code formatting throughout."
+                    "You are a meticulous technical writer producing a complete, faithful "
+                    "session record for a hiring company. Your only source of truth is the "
+                    "transcript provided — you must not fabricate, infer, or add anything "
+                    "that is not directly supported by what appears in the transcript. "
+                    "Write with precision and richness: quote commands verbatim, name every "
+                    "file, describe every error, and capture every decision visible in the "
+                    "candidate's actions and prompts. Use clear markdown structure throughout."
                 ),
-                temperature=0.3,
-                max_output_tokens=8000,
+                temperature=0.1,
+                max_output_tokens=16000,
             ),
         )
 
