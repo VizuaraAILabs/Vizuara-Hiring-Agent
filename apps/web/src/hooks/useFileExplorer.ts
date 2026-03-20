@@ -64,7 +64,7 @@ export function useFileExplorer(token: string) {
         throw new Error(data.error);
       }
       const data = await res.json();
-      setTree(data.tree);
+      setTree(data.tree ?? []);
       setError(null);
     } catch (err: any) {
       setError(err.message);

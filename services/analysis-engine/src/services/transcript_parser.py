@@ -61,6 +61,7 @@ class TranscriptParser:
         re.compile(r"·\s*↑"),                                       # separator
         re.compile(r"~/.claude/plans/\S+"),                         # plan file paths
         re.compile(r"/private/var/folders/\S+"),                     # temp paths
+        re.compile(r"(?:[|/\-\\]\s*){10,}"),                         # npm/progress spinner chars
     ]
 
     # Patterns that indicate a turn is ONLY TUI chrome with no real content
@@ -335,9 +336,14 @@ class TranscriptParser:
 
     # ── Standard (non-TUI) processing ─────────────────────────────────
 
+    # Repeated progress-spinner chars emitted by tools like npm (e.g. |/-|/-...)
+    _PROGRESS_SPINNER_RE = re.compile(r"(?:[|/\-\\]\s*){10,}")
+
     def _clean_text(self, text: str) -> str:
         """Remove ANSI escapes, control characters, and terminal artifacts."""
         text = self._strip_ansi(text)
+        # Strip repeated progress-spinner characters (e.g. npm install noise)
+        text = self._PROGRESS_SPINNER_RE.sub("", text)
         text = re.sub(r"\n{4,}", "\n\n\n", text)
         return text
 
