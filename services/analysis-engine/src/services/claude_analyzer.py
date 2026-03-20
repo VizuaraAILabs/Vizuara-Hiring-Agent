@@ -453,6 +453,80 @@ Now produce the complete evaluation."""
         )
 
     # ------------------------------------------------------------------
+    # Transcript Narrative Generation
+    # ------------------------------------------------------------------
+
+    def generate_transcript_narrative(
+        self,
+        cleaned_transcript: str,
+        session_metadata: dict | None = None,
+    ) -> str:
+        """Generate a detailed human-readable markdown narrative of the candidate's session.
+
+        This is a single-pass call — no scoring, no structured schema. The output
+        is raw markdown intended to be rendered in the report UI for hiring companies.
+        """
+        metadata_block = ""
+        if session_metadata:
+            lines = [f"- **{k}**: {v}" for k, v in session_metadata.items()]
+            metadata_block = "## Session Metadata\n\n" + "\n".join(lines) + "\n\n"
+
+        prompt = f"""\
+{metadata_block}## Transcript
+
+{cleaned_transcript}
+
+## Your Task
+
+Write a comprehensive, detailed markdown document that describes everything the candidate \
+did during this session. This document will be read by a hiring company to understand the \
+candidate's technical approach, decisions, and capabilities.
+
+**Requirements:**
+
+- Write in third person ("The candidate...")
+- Be **very detailed** — cover every meaningful action, tool used, file created, command \
+run, package installed, error encountered, and decision made. Do not skip anything significant.
+- Organize chronologically with clear markdown headings for each distinct phase \
+(e.g., `## Project Setup`, `## Server Implementation`, `## Debugging`, `## Testing`, etc.). \
+Use as many phases as the session warrants.
+- Use bullet points freely to enumerate: specific shell commands run, packages installed, \
+files created or modified, API endpoints defined, functions written, errors encountered, etc.
+- Use inline code formatting (backticks) for ALL technical terms: commands, filenames, \
+package names, function names, endpoints, variable names, etc.
+- Describe how the candidate used AI assistance in detail — what they asked, how specific \
+or vague their prompts were, whether they followed AI suggestions or modified them.
+- Note every error or failed attempt and exactly how it was resolved.
+- Capture the candidate's reasoning and approach where it is visible from their prompts \
+and commands.
+- Do NOT evaluate, score, or judge the candidate — only describe what happened.
+- Do NOT omit steps to be concise. The goal is a thorough, complete record.
+- The document should be detailed enough that a reader who never saw the session can \
+fully reconstruct what happened technically.
+
+Write the full narrative document now:"""
+
+        response = self.client.models.generate_content(
+            model=self.MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "You are a technical writer creating detailed session documentation. "
+                    "Write comprehensive markdown that describes the candidate's actions "
+                    "step by step with full technical detail. Use proper markdown headings, "
+                    "bullet points, and inline code formatting throughout."
+                ),
+                temperature=0.3,
+                max_output_tokens=8000,
+            ),
+        )
+
+        logger.info(
+            "Transcript narrative generated: %d characters", len(response.text)
+        )
+        return response.text
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 

@@ -32,6 +32,8 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [highlightIndex, setHighlightIndex] = useState<number | undefined>();
+  const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -40,6 +42,9 @@ export default function ReportPage() {
         if (analysisRes.ok) {
           const data = await analysisRes.json();
           setAnalysis(data);
+          if (data.transcript_narrative) {
+            setTranscriptNarrative(data.transcript_narrative);
+          }
         }
 
         const challengeRes = await fetch(`/api/challenges/${challengeId}`);
@@ -68,6 +73,26 @@ export default function ReportPage() {
   const handleViewInTranscript = (index: number) => {
     setHighlightIndex(index);
     setActiveTab('transcript');
+  };
+
+  const handleTabChange = async (tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === 'transcript' && !transcriptNarrative && !narrativeLoading) {
+      setNarrativeLoading(true);
+      try {
+        const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTranscriptNarrative(data.transcript_narrative ?? null);
+        }
+      } catch (err) {
+        console.error('Failed to generate transcript narrative:', err);
+      } finally {
+        setNarrativeLoading(false);
+      }
+    }
   };
 
   if (loading) {
@@ -135,7 +160,7 @@ export default function ReportPage() {
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => handleTabChange(tab.key)}
             className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
               activeTab === tab.key
                 ? 'bg-white/5 text-white'
@@ -184,6 +209,9 @@ export default function ReportPage() {
         <TranscriptViewer
           interactions={interactions}
           highlightIndex={highlightIndex}
+          narrative={transcriptNarrative}
+          narrativeLoading={narrativeLoading}
+          candidateName={session.candidate_name}
         />
       )}
 

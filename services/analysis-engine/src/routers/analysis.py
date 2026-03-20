@@ -89,6 +89,83 @@ async def _fetch_interactions(pool: asyncpg.Pool, session_id: str) -> list[dict]
     return result
 
 
+@router.post("/transcript-narrative")
+async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
+    """Generate a detailed human-readable markdown narrative for a session's transcript.
+
+    If the narrative already exists in the database it is returned immediately
+    without calling Gemini again.
+    """
+    session_id = request.session_id
+    logger.info("Transcript narrative requested for session: %s", session_id)
+
+    pool = await _get_pool()
+
+    # Check if narrative already exists
+    existing = await pool.fetchrow(
+        "SELECT transcript_narrative FROM analysis_results WHERE session_id = $1",
+        session_id,
+    )
+    if not existing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        )
+    if existing["transcript_narrative"]:
+        logger.info("Returning cached transcript narrative for session %s", session_id)
+        return {"transcript_narrative": existing["transcript_narrative"]}
+
+    # Fetch session and challenge for metadata
+    session = await _fetch_session(pool, session_id)
+    challenge = await _fetch_challenge(pool, session["challenge_id"])
+    interactions = await _fetch_interactions(pool, session_id)
+
+    if not interactions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No interactions found for session '{session_id}'",
+        )
+
+    try:
+        # Parse transcript
+        parser = TranscriptParser()
+        transcript = parser.parse(interactions)
+        logger.info("Parsed transcript for narrative: %d characters", len(transcript))
+
+        session_metadata = {
+            "Candidate Name": session.get("candidate_name", "Unknown"),
+            "Challenge Title": challenge.get("title", "Unknown"),
+            "Time Limit (minutes)": challenge.get("time_limit_min", "Unknown"),
+            "Session Started": str(session.get("started_at", "Unknown")),
+            "Session Ended": str(session.get("ended_at", "Unknown")),
+        }
+
+        analyzer = ClaudeAnalyzer()
+        narrative = analyzer.generate_transcript_narrative(
+            cleaned_transcript=transcript,
+            session_metadata=session_metadata,
+        )
+
+        # Persist to DB
+        await pool.execute(
+            "UPDATE analysis_results SET transcript_narrative = $1 WHERE session_id = $2",
+            narrative,
+            session_id,
+        )
+        logger.info("Transcript narrative saved for session %s", session_id)
+
+        return {"transcript_narrative": narrative}
+
+    except Exception as exc:
+        logger.error(
+            "Failed to generate transcript narrative for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("")
 async def analyze_session(request: AnalyzeRequest) -> dict:
     """Analyze a candidate's terminal interaction session.

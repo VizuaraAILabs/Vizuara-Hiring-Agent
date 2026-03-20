@@ -102,6 +102,7 @@ export interface AnalysisResult {
   hiring_recommendation: 'strong_yes' | 'yes' | 'neutral' | 'no' | 'strong_no';
   raw_claude_response: string | null;
   model_used: string | null;
+  transcript_narrative: string | null;
   created_at: string;
 }
 
