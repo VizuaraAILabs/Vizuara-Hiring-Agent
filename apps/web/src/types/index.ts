@@ -30,6 +30,27 @@ export interface Challenge {
   created_at: string;
 }
 
+export interface FileNode {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  children?: FileNode[];
+}
+
+export interface WorkspaceFile {
+  path: string;
+  content: string;
+  language: string;
+  size: number;
+  truncated: boolean;
+}
+
+export interface WorkspaceSnapshot {
+  archived_at: string;
+  tree: FileNode[];
+  files: WorkspaceFile[];
+}
+
 export interface Session {
   id: string;
   challenge_id: string;
@@ -40,6 +61,7 @@ export interface Session {
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
+  workspace_snapshot: WorkspaceSnapshot | null;
 }
 
 export interface Interaction {

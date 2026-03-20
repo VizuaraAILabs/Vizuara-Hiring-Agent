@@ -6,7 +6,8 @@ import dotenv from 'dotenv';
 import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
-import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile } from './file-service';
+import * as fs from 'fs';
+import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
 import { CostTracker } from './cost-tracker';
 
 // Load env from root — __dirname is apps/terminal-server/src, root is ../../..
@@ -30,6 +31,45 @@ const costTracker = new CostTracker(sql);
 // Grace period before killing containers on WebSocket disconnect (allows page refresh)
 const DISCONNECT_GRACE_MS = 15_000;
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+
+// Archive all workspace files to PostgreSQL when a session ends.
+// Non-fatal: errors are logged but never block session completion.
+async function archiveWorkspace(sessionId: string, workDir: string): Promise<void> {
+  if (!fs.existsSync(workDir)) {
+    console.log(`[Archive] No workspace dir for ${sessionId}, skipping`);
+    return;
+  }
+  try {
+    const tree = buildFileTree(workDir);
+    const filePaths: string[] = [];
+    function collect(nodes: FileNode[]) {
+      for (const n of nodes) {
+        if (n.type === 'file') filePaths.push(n.path);
+        else if (n.children) collect(n.children);
+      }
+    }
+    collect(tree);
+
+    const files = [];
+    for (const p of filePaths) {
+      try {
+        files.push(readFileContent(workDir, p));
+      } catch {
+        // skip binary / unreadable files
+      }
+    }
+
+    const snapshot = { archived_at: new Date().toISOString(), tree, files };
+    await sql`
+      UPDATE sessions
+      SET workspace_snapshot = ${JSON.stringify(snapshot)}::jsonb
+      WHERE id = ${sessionId}
+    `;
+    console.log(`[Archive] Saved ${files.length} file(s) for session ${sessionId}`);
+  } catch (err) {
+    console.error(`[Archive] Failed for session ${sessionId}:`, err);
+  }
+}
 
 // HTTP server for health checks and file API
 const server = http.createServer(async (req, res) => {
@@ -367,6 +407,13 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
       await costTracker.endSession(sessionId);
       await logger.flush();
+
+      // Archive workspace files before killing — session still in dockerManager map
+      const dyingSession = dockerManager.getSession(sessionId);
+      if (dyingSession) {
+        await archiveWorkspace(sessionId, dyingSession.workDir);
+      }
+
       await dockerManager.kill(sessionId);
 
       // Mark session as completed

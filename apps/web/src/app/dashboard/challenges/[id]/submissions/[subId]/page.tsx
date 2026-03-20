@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import type { AnalysisResult, Session, Interaction } from '@/types';
+import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot } from '@/types';
 import ReportHeader from '@/components/report/ReportHeader';
 import ScoreSummary from '@/components/report/ScoreSummary';
 import KeyMoments from '@/components/report/KeyMoments';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
+import WorkspaceViewer from '@/components/report/WorkspaceViewer';
 import InlineFeedback from '@/components/feedback/InlineFeedback';
 import NpsPrompt from '@/components/feedback/NpsPrompt';
 import CompletionSurvey from '@/components/feedback/CompletionSurvey';
@@ -19,7 +20,7 @@ const TimelineChart = dynamic(() => import('@/components/report/TimelineChart'),
 const PromptComplexity = dynamic(() => import('@/components/report/PromptComplexity'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('@/components/report/CategoryBreakdown'), { ssr: false });
 
-type Tab = 'overview' | 'timeline' | 'analysis' | 'transcript';
+type Tab = 'overview' | 'timeline' | 'analysis' | 'transcript' | 'files';
 
 export default function ReportPage() {
   const params = useParams();
@@ -35,6 +36,9 @@ export default function ReportPage() {
   const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
   const [enrichingDimensions, setEnrichingDimensions] = useState(false);
+  const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -115,6 +119,26 @@ export default function ReportPage() {
         setNarrativeLoading(false);
       }
     }
+    if (tab === 'files' && !workspaceSnapshot && !workspaceLoading) {
+      setWorkspaceLoading(true);
+      setWorkspaceError(null);
+      try {
+        const res = await fetch(`/api/analysis/${sessionId}/workspace`);
+        if (res.ok) {
+          setWorkspaceSnapshot(await res.json());
+        } else if (res.status === 409) {
+          setWorkspaceError('This session is still in progress.');
+        } else if (res.status === 404) {
+          setWorkspaceError('No workspace files were captured for this session.');
+        } else {
+          setWorkspaceError('Failed to load workspace files.');
+        }
+      } catch {
+        setWorkspaceError('Failed to load workspace files.');
+      } finally {
+        setWorkspaceLoading(false);
+      }
+    }
   };
 
   if (loading) {
@@ -162,6 +186,7 @@ export default function ReportPage() {
     { key: 'timeline', label: 'Timeline' },
     { key: 'analysis', label: 'Analysis' },
     { key: 'transcript', label: 'Narrative' },
+    { key: 'files', label: 'Files' },
   ];
 
   return (
@@ -238,6 +263,14 @@ export default function ReportPage() {
           narrative={transcriptNarrative}
           narrativeLoading={narrativeLoading}
           candidateName={session.candidate_name}
+        />
+      )}
+
+      {activeTab === 'files' && (
+        <WorkspaceViewer
+          snapshot={workspaceSnapshot}
+          loading={workspaceLoading}
+          error={workspaceError}
         />
       )}
 
