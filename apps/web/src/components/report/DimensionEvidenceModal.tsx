@@ -69,7 +69,7 @@ export default function DimensionEvidenceModal({
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 size={14} className="text-[#00a854]" />
                 <span className="text-xs font-semibold text-[#00a854] uppercase tracking-wide">
-                  Expected Standard — Score: 100
+                  Expected Standard
                 </span>
               </div>
               <p className="text-sm text-neutral-300 leading-relaxed">{detail.expected_standard}</p>

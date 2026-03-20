@@ -100,7 +100,7 @@ _DIMENSION_SCHEMA = {
                     },
                     "comparison": {
                         "type": "string",
-                        "description": "How this compares to what a senior engineer would have done in the same situation",
+                        "description": "How this compares to what would be expected of a strong candidate for this specific role and challenge — grounded in the stack, domain, and difficulty level described in the challenge, not a generic senior-engineer bar",
                     },
                 },
                 "required": ["transcript_quote", "observation", "comparison"],
@@ -109,7 +109,7 @@ _DIMENSION_SCHEMA = {
         },
         "expected_standard": {
             "type": "string",
-            "description": "2-4 sentences describing what a senior engineer masterful in this challenge's domain would ideally do for this dimension — the concrete baseline for a score of 100. Must be specific to the challenge, not generic advice.",
+            "description": "2-4 sentences describing what a strong, well-prepared candidate for THIS specific role and challenge would ideally do on this dimension. Derive the bar from the challenge description: infer the role level, stack, domain, and difficulty, then set expectations accordingly. Do NOT default to 'senior engineer at 100' — calibrate to what this particular challenge actually demands.",
         },
     },
     "required": ["score", "narrative", "evidence", "observed_points", "expected_standard"],
@@ -707,15 +707,17 @@ this dimension. For every meaningful candidate action, provide:
 Copy directly from the transcript — do NOT paraphrase.
    - `observation`: What this specific action reveals about the candidate's competence \
 on this dimension (1-2 analytical sentences).
-   - `comparison`: How a senior engineer mastering this challenge's domain would have \
-handled the same situation differently — or confirm if the candidate's approach was \
-already expert-level (1-2 sentences).
+   - `comparison`: How this compares to what would be expected from a strong, \
+well-prepared candidate for this specific role and challenge. Infer the role level, \
+stack, and difficulty from the challenge description — do not default to a generic \
+senior-engineer bar (1-2 sentences).
    Include at least 2-5 points per dimension where the transcript provides evidence.
 
-2. **expected_standard** — 2-4 sentences describing what a senior engineer who is \
-a master in the domain of this challenge would ideally do for this dimension, \
-representing a perfect score of 100. Be concrete and specific to this challenge — \
-not generic advice.
+2. **expected_standard** — 2-4 sentences describing what a strong, well-prepared \
+candidate for THIS specific role and challenge would ideally do on this dimension. \
+Derive the bar from the challenge description: infer the role level, stack, domain, \
+and difficulty, then set expectations accordingly. Be concrete and specific — \
+do NOT use a generic senior-engineer-at-100 baseline.
 
 RULES:
 - All transcript_quote values must be copied verbatim or near-verbatim from the transcript.
