@@ -441,7 +441,7 @@ export default function LandingPage() {
         >
           <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-[0_0_80px_rgba(0,168,84,0.06)]">
             <iframe
-              src="https://www.youtube.com/embed/keuQqCLKOuU?rel=0&modestbranding=1&controls=1"
+              src="https://www.youtube.com/embed/ILodeuqQpsU?start=8&rel=0&modestbranding=1&controls=1"
               title="ArcEval product demo"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
