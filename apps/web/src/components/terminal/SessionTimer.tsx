@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTimer } from '@/hooks/useTimer';
 
 interface SessionTimerProps {
@@ -11,9 +12,11 @@ interface SessionTimerProps {
 export default function SessionTimer({ durationMinutes, startedAt, onExpired }: SessionTimerProps) {
   const { formattedTime, isExpired, isWarning, isCritical } = useTimer(durationMinutes, startedAt);
 
-  if (isExpired && onExpired) {
-    onExpired();
-  }
+  useEffect(() => {
+    if (isExpired && onExpired) {
+      onExpired();
+    }
+  }, [isExpired, onExpired]);
 
   return (
     <div
