@@ -116,6 +116,7 @@ async function callGemini(prompt: string, retry = false): Promise<{ path: string
 
   let lastError: Error = new Error('GEMINI_API_ERROR: unknown');
   for (const key of keys) {
+    console.log(`Trying Gemini key: ${key}`);
     try {
       return await callGeminiWithKey(key, finalPrompt);
     } catch (err) {
