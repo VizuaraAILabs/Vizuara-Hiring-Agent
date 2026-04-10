@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { callWithKeyRotation } from '@/lib/gemini';
 import type { Challenge } from '@/types';
 
 const GEMINI_URL =
@@ -47,11 +48,6 @@ ${title}
 ${description}
 
 Generate all the files needed for a candidate to start working on this challenge. The project should compile/run but contain the specific issues described in the challenge for the candidate to fix.`;
-}
-
-function getGeminiKeys(): string[] {
-  const raw = process.env.GEMINI_API_KEY ?? '';
-  return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
 
 async function callGeminiWithKey(apiKey: string, prompt: string): Promise<{ path: string; content: string }[]> {
@@ -105,32 +101,18 @@ async function callGeminiWithKey(apiKey: string, prompt: string): Promise<{ path
 }
 
 async function callGemini(prompt: string, retry = false): Promise<{ path: string; content: string }[]> {
-  const keys = getGeminiKeys();
-  if (keys.length === 0) {
-    throw new Error('GEMINI_API_KEY_MISSING');
-  }
-
   const finalPrompt = retry
     ? prompt + '\n\nIMPORTANT: Return ONLY valid JSON with a "files" array. No markdown fences, no extra text.'
     : prompt;
 
-  let lastError: Error = new Error('GEMINI_API_ERROR: unknown');
-  for (const key of keys) {
-    console.log(`Trying Gemini key: ${key}`);
-    try {
-      return await callGeminiWithKey(key, finalPrompt);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error('GEMINI_API_ERROR: unknown');
-      console.warn(`Gemini key failed, trying next. Error: ${lastError.message}`);
+  try {
+    return await callWithKeyRotation(key => callGeminiWithKey(key, finalPrompt));
+  } catch (err) {
+    if (!retry) {
+      return callGemini(prompt, true);
     }
+    throw err;
   }
-
-  // All keys failed — retry once with JSON reminder if not already retried
-  if (!retry) {
-    return callGemini(prompt, true);
-  }
-
-  throw lastError;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

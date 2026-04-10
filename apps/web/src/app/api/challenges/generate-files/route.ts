@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { callWithKeyRotation } from '@/lib/gemini';
 
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -44,27 +45,18 @@ function validateFiles(files: unknown[]): { path: string; content: string }[] {
   return validated;
 }
 
-async function callGemini(userPrompt: string, retry = false): Promise<{ files: { path: string; content: string }[] }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY_MISSING');
-  }
-
+async function callGeminiWithKey(apiKey: string, userPrompt: string): Promise<{ files: { path: string; content: string }[] }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
   try {
-    const finalUserPrompt = retry
-      ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
-      : userPrompt;
-
     const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         contents: [
-          { role: 'user', parts: [{ text: finalUserPrompt }] },
+          { role: 'user', parts: [{ text: userPrompt }] },
         ],
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
@@ -88,24 +80,32 @@ async function callGemini(userPrompt: string, retry = false): Promise<{ files: {
       throw new Error('GEMINI_EMPTY_RESPONSE');
     }
 
-    try {
-      const parsed = JSON.parse(text);
-      if (!parsed.files || !Array.isArray(parsed.files)) {
-        throw new Error('INVALID_STRUCTURE');
-      }
-      const files = validateFiles(parsed.files);
-      if (files.length === 0) {
-        throw new Error('INVALID_STRUCTURE');
-      }
-      return { files };
-    } catch {
-      if (!retry) {
-        return callGemini(userPrompt, true);
-      }
-      throw new Error('GEMINI_INVALID_JSON');
+    const parsed = JSON.parse(text);
+    if (!parsed.files || !Array.isArray(parsed.files)) {
+      throw new Error('INVALID_STRUCTURE');
     }
+    const files = validateFiles(parsed.files);
+    if (files.length === 0) {
+      throw new Error('INVALID_STRUCTURE');
+    }
+    return { files };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function callGemini(userPrompt: string, retry = false): Promise<{ files: { path: string; content: string }[] }> {
+  const finalUserPrompt = retry
+    ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
+    : userPrompt;
+
+  try {
+    return await callWithKeyRotation(key => callGeminiWithKey(key, finalUserPrompt));
+  } catch (err) {
+    if (!retry) {
+      return callGemini(userPrompt, true);
+    }
+    throw err;
   }
 }
 

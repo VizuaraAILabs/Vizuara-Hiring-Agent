@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { callWithKeyRotation } from '@/lib/gemini';
 
 const QUESTION_GENERATION_PROMPT = `You are a senior technical interviewer watching a candidate solve a programming challenge in real time.
 Based on what the candidate just did (shown below), generate ONE focused question.
@@ -81,13 +80,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       }
     }
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: QUESTION_GENERATION_PROMPT,
+    const question = await callWithKeyRotation(async key => {
+      const model = new GoogleGenerativeAI(key).getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        systemInstruction: QUESTION_GENERATION_PROMPT,
+      });
+      const result = await model.generateContent(contextParts.join('\n'));
+      return result.response.text().trim();
     });
-
-    const result = await model.generateContent(contextParts.join('\n'));
-    const question = result.response.text().trim();
 
     if (!question || question === 'NO_QUESTION') {
       return NextResponse.json({ ok: true, generated: false });

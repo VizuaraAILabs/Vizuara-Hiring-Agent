@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { callWithKeyRotation } from '@/lib/gemini';
 
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -125,28 +126,18 @@ Each challenge must be appropriate for the seniority level. Include a "why_itera
   return prompt;
 }
 
-async function callGemini(userPrompt: string, attempt = 1): Promise<{ challenges: unknown[] }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY_MISSING');
-  }
-
+async function callGeminiWithKey(apiKey: string, userPrompt: string): Promise<{ challenges: unknown[] }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
 
   try {
-    const finalUserPrompt =
-      attempt > 1
-        ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
-        : userPrompt;
-
     const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         contents: [
-          { role: 'user', parts: [{ text: finalUserPrompt }] },
+          { role: 'user', parts: [{ text: userPrompt }] },
         ],
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
@@ -167,28 +158,31 @@ async function callGemini(userPrompt: string, attempt = 1): Promise<{ challenges
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!text) {
-      if (attempt < 3) {
-        console.warn(`Gemini empty response, retrying (attempt ${attempt + 1}/3)...`);
-        return callGemini(userPrompt, attempt + 1);
-      }
       throw new Error('GEMINI_EMPTY_RESPONSE');
     }
 
-    try {
-      const parsed = JSON.parse(text);
-      if (!parsed.challenges || !Array.isArray(parsed.challenges)) {
-        throw new Error('INVALID_STRUCTURE');
-      }
-      return parsed;
-    } catch {
-      if (attempt < 3) {
-        console.warn(`Gemini invalid JSON, retrying (attempt ${attempt + 1}/3)...`);
-        return callGemini(userPrompt, attempt + 1);
-      }
-      throw new Error('GEMINI_INVALID_JSON');
+    const parsed = JSON.parse(text);
+    if (!parsed.challenges || !Array.isArray(parsed.challenges)) {
+      throw new Error('INVALID_STRUCTURE');
     }
+    return parsed;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function callGemini(userPrompt: string, retry = false): Promise<{ challenges: unknown[] }> {
+  const finalUserPrompt = retry
+    ? userPrompt + '\n\nIMPORTANT: Return ONLY valid JSON. No markdown fences, no extra text.'
+    : userPrompt;
+
+  try {
+    return await callWithKeyRotation(key => callGeminiWithKey(key, finalUserPrompt));
+  } catch (err) {
+    if (!retry) {
+      return callGemini(userPrompt, true);
+    }
+    throw err;
   }
 }
 

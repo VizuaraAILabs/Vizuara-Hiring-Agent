@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callWithKeyRotation } from '@/lib/gemini';
 import type { Session, SessionWithChallenge } from '@/types';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const OPENING_SYSTEM_PROMPT = `You are a senior technical interviewer opening a live software engineering assessment.
 Greet the candidate warmly but briefly, acknowledge the challenge they're about to work on, and ask one sharp opening question that probes how they plan to approach it — trade-offs, data structures, or design choices.
@@ -52,14 +51,15 @@ async function generateOpeningQuestion(sessionId: string, title: string, descrip
   `;
   const seq = (seqRow?.max ?? 0) + 1;
 
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    systemInstruction: OPENING_SYSTEM_PROMPT,
-  });
-
   const prompt = `Challenge: ${title}\n\nProblem statement: ${description.slice(0, 800)}\n\nOpen the interview.`;
-  const result = await model.generateContent(prompt);
-  const greeting = result.response.text().trim();
+  const greeting = await callWithKeyRotation(async key => {
+    const model = new GoogleGenerativeAI(key).getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: OPENING_SYSTEM_PROMPT,
+    });
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  });
 
   await sql`
     INSERT INTO interactions (session_id, sequence_num, timestamp, direction, content, content_type, metadata)

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { callWithKeyRotation } from '@/lib/gemini';
 
 const INTERVIEWER_SYSTEM_PROMPT = `You are a senior technical interviewer conducting a live software engineering assessment.
 Your role is to probe the candidate's thinking — ask about trade-offs, design decisions, scalability, and first principles.
@@ -92,13 +91,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     conversationParts.push('');
     conversationParts.push('Respond as the interviewer. Follow the scope rules strictly.');
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: INTERVIEWER_SYSTEM_PROMPT,
+    const aiReply = await callWithKeyRotation(async key => {
+      const model = new GoogleGenerativeAI(key).getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        systemInstruction: INTERVIEWER_SYSTEM_PROMPT,
+      });
+      const result = await model.generateContent(conversationParts.join('\n'));
+      return result.response.text().trim();
     });
-
-    const result = await model.generateContent(conversationParts.join('\n'));
-    const aiReply = result.response.text().trim();
 
     // Store AI reply as interview_question
     await sql`
