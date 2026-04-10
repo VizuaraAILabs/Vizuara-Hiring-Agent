@@ -49,27 +49,23 @@ ${description}
 Generate all the files needed for a candidate to start working on this challenge. The project should compile/run but contain the specific issues described in the challenge for the candidate to fix.`;
 }
 
-async function callGemini(prompt: string, retry = false): Promise<{ path: string; content: string }[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY_MISSING');
-  }
+function getGeminiKeys(): string[] {
+  const raw = process.env.GEMINI_API_KEY ?? '';
+  return raw.split(',').map(k => k.trim()).filter(Boolean);
+}
 
+async function callGeminiWithKey(apiKey: string, prompt: string): Promise<{ path: string; content: string }[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000); // 60s — file generation takes longer
 
   try {
-    const finalPrompt = retry
-      ? prompt + '\n\nIMPORTANT: Return ONLY valid JSON with a "files" array. No markdown fences, no extra text.'
-      : prompt;
-
     const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         contents: [
-          { role: 'user', parts: [{ text: finalPrompt }] },
+          { role: 'user', parts: [{ text: prompt }] },
         ],
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
@@ -93,27 +89,47 @@ async function callGemini(prompt: string, retry = false): Promise<{ path: string
       throw new Error('GEMINI_EMPTY_RESPONSE');
     }
 
-    try {
-      const parsed = JSON.parse(text);
-      if (!parsed.files || !Array.isArray(parsed.files)) {
-        throw new Error('INVALID_STRUCTURE');
-      }
-      // Validate each file has path and content
-      for (const file of parsed.files) {
-        if (typeof file.path !== 'string' || typeof file.content !== 'string') {
-          throw new Error('INVALID_FILE_ENTRY');
-        }
-      }
-      return parsed.files;
-    } catch {
-      if (!retry) {
-        return callGemini(prompt, true);
-      }
-      throw new Error('GEMINI_INVALID_JSON');
+    const parsed = JSON.parse(text);
+    if (!parsed.files || !Array.isArray(parsed.files)) {
+      throw new Error('INVALID_STRUCTURE');
     }
+    for (const file of parsed.files) {
+      if (typeof file.path !== 'string' || typeof file.content !== 'string') {
+        throw new Error('INVALID_FILE_ENTRY');
+      }
+    }
+    return parsed.files;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function callGemini(prompt: string, retry = false): Promise<{ path: string; content: string }[]> {
+  const keys = getGeminiKeys();
+  if (keys.length === 0) {
+    throw new Error('GEMINI_API_KEY_MISSING');
+  }
+
+  const finalPrompt = retry
+    ? prompt + '\n\nIMPORTANT: Return ONLY valid JSON with a "files" array. No markdown fences, no extra text.'
+    : prompt;
+
+  let lastError: Error = new Error('GEMINI_API_ERROR: unknown');
+  for (const key of keys) {
+    try {
+      return await callGeminiWithKey(key, finalPrompt);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('GEMINI_API_ERROR: unknown');
+      console.warn(`Gemini key failed, trying next. Error: ${lastError.message}`);
+    }
+  }
+
+  // All keys failed — retry once with JSON reminder if not already retried
+  if (!retry) {
+    return callGemini(prompt, true);
+  }
+
+  throw lastError;
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
