@@ -41,6 +41,32 @@ const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 // Per-session activity monitors for the AI interviewer
 const activityMonitors: Map<string, ActivityMonitor> = new Map();
 
+// Periodically kill containers for sessions that have been ended (by button or timer expiry)
+// but whose WebSocket was already disconnected so the close handler couldn't clean up.
+setInterval(async () => {
+  const activeSessionIds = dockerManager.sessionIds;
+  if (activeSessionIds.length === 0) return;
+
+  try {
+    const rows = await sql<{ id: string; status: string }[]>`
+      SELECT id, status FROM sessions WHERE id = ANY(${activeSessionIds})
+    `;
+    for (const row of rows) {
+      if (row.status === 'completed' || row.status === 'analyzed') {
+        console.log(`[Terminal] Periodic check: killing container for completed session ${row.id}`);
+        await costTracker.endSession(row.id);
+        activityMonitors.get(row.id)?.destroy();
+        activityMonitors.delete(row.id);
+        const dyingSession = dockerManager.getSession(row.id);
+        if (dyingSession) await archiveWorkspace(row.id, dyingSession.workDir);
+        await dockerManager.kill(row.id);
+      }
+    }
+  } catch (err) {
+    console.error('[Terminal] Periodic session check failed:', err);
+  }
+}, 30_000);
+
 // Archive all workspace files to PostgreSQL when a session ends.
 // Non-fatal: errors are logged but never block session completion.
 async function archiveWorkspace(sessionId: string, workDir: string): Promise<void> {

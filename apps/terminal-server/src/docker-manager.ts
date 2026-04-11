@@ -61,6 +61,11 @@ export class DockerManager {
     return this.sessions.size;
   }
 
+  /** IDs of all active sandbox sessions */
+  get sessionIds(): string[] {
+    return [...this.sessions.keys()];
+  }
+
   /** Maximum concurrent sandboxes allowed */
   get maxConcurrent(): number {
     return MAX_CONCURRENT_SANDBOXES;
