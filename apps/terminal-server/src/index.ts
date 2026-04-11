@@ -383,6 +383,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
     costTracker.processOutput(sessionId, data);
   };
 
+  // Trigger a resize so the shell redraws its prompt — the initial prompt is
+  // output during exec.start() before onData is set, so it gets lost without this.
+  setTimeout(() => dockerManager.resize(sessionId, 220, 50), 150);
+
   dockerSession!.onExit = (exitCode: number) => {
     console.log(`[Terminal] Container exited for session ${sessionId} with code ${exitCode}`);
     if (ws.readyState === WebSocket.OPEN) {
