@@ -330,6 +330,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
           position: dockerManager.queueLength + 1,
           message: 'Server is at capacity. You are in the queue...',
         }));
+      } else {
+        ws.send(JSON.stringify({ type: 'spawning' }));
       }
       dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
     } catch (err: any) {

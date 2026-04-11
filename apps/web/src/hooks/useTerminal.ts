@@ -17,6 +17,8 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const [connected, setConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const spawnAckedRef = useRef(false);
+
   const connect = useCallback(() => {
     // NEXT_PUBLIC_* vars are inlined at build time. In production Docker builds
     // they may be absent, so derive from the current page URL (Caddy routes
@@ -25,6 +27,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     const wsUrl = process.env.NEXT_PUBLIC_TERMINAL_WS_URL || `${protocol}//${window.location.host}/terminal`;
     const ws = new WebSocket(`${wsUrl}?token=${token}`);
     wsRef.current = ws;
+    spawnAckedRef.current = false;
 
     ws.onopen = () => {
       console.log('[Terminal] WebSocket connected');
@@ -34,7 +37,12 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
       try {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
+          case 'spawning':
+            spawnAckedRef.current = true;
+            console.log('[Terminal] Container spawning...');
+            break;
           case 'connected':
+            spawnAckedRef.current = true;
             setConnected(true);
             if (msg.reconnected) {
               console.log('[Terminal] Reconnected to existing session');
@@ -58,13 +66,15 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
 
     ws.onclose = () => {
       setConnected(false);
-      // Attempt reconnection after 2 seconds
+      // If the server acked a spawn but hasn't sent 'connected' yet, wait longer
+      // before reconnecting so we don't interrupt an in-progress container spawn.
+      const delay = spawnAckedRef.current ? 5000 : 2000;
       reconnectTimeoutRef.current = setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.CLOSED) {
           console.log('[Terminal] Attempting reconnection...');
           connect();
         }
-      }, 2000);
+      }, delay);
     };
 
     ws.onerror = (err) => {
