@@ -10,7 +10,7 @@ const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251
 
 // Resource management constants
 const MAX_CONCURRENT_SANDBOXES = parseInt(process.env.SANDBOX_MAX_CONCURRENT || '5');
-const SANDBOX_IDLE_TTL_MS = parseInt(process.env.SANDBOX_IDLE_TTL_MS || String(15 * 60 * 1000)); // 15 min
+const SANDBOX_IDLE_TTL_MS = parseInt(process.env.SANDBOX_IDLE_TTL_MS || String(4 * 60 * 60 * 1000)); // 4h safety net
 const QUEUE_TIMEOUT_MS = parseInt(process.env.SANDBOX_QUEUE_TIMEOUT_MS || '60000'); // 60s
 
 export interface DockerSession {

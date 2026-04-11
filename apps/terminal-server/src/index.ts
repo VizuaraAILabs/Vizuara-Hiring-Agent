@@ -36,8 +36,6 @@ logger.onFlush((sessionId, content, contentType) => {
   activityMonitors.get(sessionId)?.observe(content, contentType);
 });
 
-// Grace period before killing containers on WebSocket disconnect (allows page refresh)
-const DISCONNECT_GRACE_MS = 15_000;
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 
 // Per-session activity monitors for the AI interviewer
@@ -425,39 +423,38 @@ wss.on('connection', async (ws: WebSocket, req) => {
   });
 
   ws.on('close', async () => {
-    console.log(`[Terminal] Session disconnected: ${sessionId}, starting ${DISCONNECT_GRACE_MS / 1000}s grace period`);
+    console.log(`[Terminal] Session disconnected: ${sessionId}`);
 
-    // Start a grace period instead of immediately killing the container.
-    // If the candidate reconnects (e.g. page refresh), the timer is cancelled above.
-    const timer = setTimeout(async () => {
-      disconnectTimers.delete(sessionId);
-      console.log(`[Terminal] Grace period expired for ${sessionId}, terminating`);
+    // Check if the session has already been ended (by the candidate or timer expiry).
+    // If so, clean up immediately. Otherwise, keep the container alive so the
+    // candidate can reconnect (page refresh, network drop, etc.).
+    let isCompleted = false;
+    try {
+      const [row] = await sql<{ status: string }[]>`SELECT status FROM sessions WHERE id = ${sessionId}`;
+      isCompleted = row?.status === 'completed' || row?.status === 'analyzed';
+    } catch (err) {
+      console.error(`[Terminal] Failed to check session status for ${sessionId}:`, err);
+    }
 
-      await costTracker.endSession(sessionId);
-      await logger.flush();
+    if (!isCompleted) {
+      console.log(`[Terminal] Session ${sessionId} still active — keeping container alive for reconnection`);
+      return;
+    }
 
-      // Clean up activity monitor
-      activityMonitors.get(sessionId)?.destroy();
-      activityMonitors.delete(sessionId);
+    console.log(`[Terminal] Session ${sessionId} is completed — terminating container`);
 
-      // Archive workspace files before killing — session still in dockerManager map
-      const dyingSession = dockerManager.getSession(sessionId);
-      if (dyingSession) {
-        await archiveWorkspace(sessionId, dyingSession.workDir);
-      }
+    await costTracker.endSession(sessionId);
+    await logger.flush();
 
-      await dockerManager.kill(sessionId);
+    activityMonitors.get(sessionId)?.destroy();
+    activityMonitors.delete(sessionId);
 
-      // Mark session as completed
-      try {
-        await sql`UPDATE sessions SET status = 'completed', ended_at = NOW() WHERE id = ${sessionId} AND status = 'active'`;
-        console.log(`[Terminal] Session marked as completed: ${sessionId}`);
-      } catch (err) {
-        console.error(`[Terminal] Failed to update session status for ${sessionId}:`, err);
-      }
-    }, DISCONNECT_GRACE_MS);
+    const dyingSession = dockerManager.getSession(sessionId);
+    if (dyingSession) {
+      await archiveWorkspace(sessionId, dyingSession.workDir);
+    }
 
-    disconnectTimers.set(sessionId, timer);
+    await dockerManager.kill(sessionId);
   });
 
   ws.on('error', (err) => {

@@ -31,6 +31,15 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
 
     ws.onopen = () => {
       console.log('[Terminal] WebSocket connected');
+      // Send a ping every 30s to keep the connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 30_000);
+      ws.addEventListener('close', () => clearInterval(pingInterval));
     };
 
     ws.onmessage = (event) => {
