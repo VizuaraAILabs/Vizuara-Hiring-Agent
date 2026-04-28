@@ -12,9 +12,9 @@ const PLAN_LIMITS: Record<PlanTier, number> = {
   enterprise: Infinity,
 };
 
-interface EnrollmentDoc {
-  status: string;
-  enrollmentDate: Date | null;
+interface ActiveSubscription {
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
 }
 
 /**
@@ -47,15 +47,15 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
 
   const trialEndsAt = company.trial_ends_at;
 
-  // 2. Trial plans: check Firestore for an upgrade, then fall through
+  // 2. Trial plans: check Firestore for an active subscription, then fall through
   if (company.plan === 'trial') {
     if (company.firebase_uid) {
-      const enrollment = await readEnrollmentDoc(company.firebase_uid);
-      if (enrollment?.status === 'ACTIVE') {
+      const subscription = await readActiveSubscription(company.firebase_uid);
+      if (subscription) {
         // Default to starter plan when newly enrolled
         const newPlan: PlanTier = 'starter';
         await sql`UPDATE companies SET plan = ${newPlan} WHERE id = ${companyId}`;
-        const sessionsUsed = await countSessionsSince(companyId, enrollment.enrollmentDate);
+        const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
         return checkPaidPlan(newPlan, sessionsUsed, trialEndsAt);
       }
     }
@@ -97,11 +97,11 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
     };
   }
 
-  // 3. Paid plans: verify enrollment is still active and use enrollmentDate as the period start
+  // 3. Paid plans: verify subscription is still active and use currentPeriodStart as the period anchor
   if (company.firebase_uid) {
-    const enrollment = await readEnrollmentDoc(company.firebase_uid);
-    if (!enrollment || enrollment.status !== 'ACTIVE') {
-      // Payment lapsed — downgrade to trial
+    const subscription = await readActiveSubscription(company.firebase_uid);
+    if (!subscription) {
+      // Subscription lapsed — downgrade to trial
       await sql`UPDATE companies SET plan = 'trial' WHERE id = ${companyId}`;
       const sessionsUsed = await countSessionsSince(companyId, null);
       return {
@@ -114,7 +114,7 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
         paymentUrl,
       };
     }
-    const sessionsUsed = await countSessionsSince(companyId, enrollment.enrollmentDate);
+    const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
     return checkPaidPlan(company.plan, sessionsUsed, trialEndsAt);
   }
 
@@ -154,7 +154,8 @@ function checkPaidPlan(
 
 /**
  * Count sessions for a company, optionally only those created on or after `since`.
- * For paid plans, `since` is the latest enrollmentDate so renewals reset the quota.
+ * For paid plans, `since` is the active subscription's currentPeriodStart so renewals
+ * reset the quota.
  */
 async function countSessionsSince(companyId: string, since: Date | null): Promise<number> {
   if (since) {
@@ -175,24 +176,57 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
 }
 
 /**
- * Read the Firestore Enrollment doc, returning status and the latest enrollmentDate.
- * enrollmentDate is treated as the current billing period start — it should be bumped
- * by the payment system on each renewal.
+ * Find the active subscription for this user + course in the `subscriptions` Firestore
+ * collection. Returns null if none is currently active. If multiple actives exist
+ * (shouldn't, but defensively), the one with the latest currentPeriodStart wins.
+ *
+ * The `currentPeriodStart` field is the source of truth for the billing-period anchor —
+ * Razorpay's webhook bumps it on each renewal, which automatically resets the quota.
  */
-async function readEnrollmentDoc(firebaseUid: string): Promise<EnrollmentDoc | null> {
+async function readActiveSubscription(firebaseUid: string): Promise<ActiveSubscription | null> {
   try {
     const db = getAdminFirestore();
-    const doc = await db.collection('Enrollments').doc(`${firebaseUid}_${ENROLLMENT_ID}`).get();
-    if (!doc.exists) return null;
-    const data = doc.data()!;
-    const raw = data.enrollmentDate;
-    let enrollmentDate: Date | null = null;
-    if (raw?.toDate) enrollmentDate = raw.toDate();
-    else if (typeof raw === 'string' || typeof raw === 'number') enrollmentDate = new Date(raw);
-    else if (raw instanceof Date) enrollmentDate = raw;
-    return { status: data.status, enrollmentDate };
+    const snap = await db
+      .collection('subscriptions')
+      .where('userId', '==', firebaseUid)
+      .where('courseId', '==', ENROLLMENT_ID)
+      .where('status', '==', 'ACTIVE')
+      .get();
+
+    if (snap.empty) return null;
+
+    let latest: ActiveSubscription | null = null;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const sub = {
+        currentPeriodStart: toDate(data.currentPeriodStart),
+        currentPeriodEnd: toDate(data.currentPeriodEnd),
+      };
+      if (
+        !latest ||
+        (sub.currentPeriodStart &&
+          (!latest.currentPeriodStart ||
+            sub.currentPeriodStart.getTime() > latest.currentPeriodStart.getTime()))
+      ) {
+        latest = sub;
+      }
+    }
+    return latest;
   } catch (err) {
-    console.error('Error reading enrollment doc:', err);
+    console.error('Error reading active subscription:', err);
     return null;
   }
+}
+
+function toDate(raw: unknown): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  if (typeof raw === 'object' && raw !== null && 'toDate' in raw && typeof (raw as { toDate: unknown }).toDate === 'function') {
+    return (raw as { toDate: () => Date }).toDate();
+  }
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
