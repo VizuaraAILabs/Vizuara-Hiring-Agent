@@ -84,6 +84,12 @@ function TrialBanner() {
         color: 'border-red-500/30 bg-red-500/5',
         textColor: 'text-red-300',
       },
+      subscription_lapsed: {
+        title: 'Your subscription has expired',
+        message: `You've used ${planStatus.sessionsUsed} of ${planStatus.sessionsLimit} assessments this period. Renew to continue creating new ones.`,
+        color: 'border-red-500/30 bg-red-500/5',
+        textColor: 'text-red-300',
+      },
       not_enrolled: {
         title: 'Subscription required',
         message: 'Subscribe to start creating assessments.',

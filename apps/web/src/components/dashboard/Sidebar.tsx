@@ -90,6 +90,11 @@ export default function Sidebar() {
                   {trialDaysLeft}d left
                 </span>
               )}
+              {planStatus.reason === 'subscription_lapsed' && (
+                <span className="text-xs text-red-400 font-medium" title="Your subscription has expired">
+                  Expired
+                </span>
+              )}
             </div>
 
             {!isUnlimited && (
@@ -126,7 +131,7 @@ export default function Sidebar() {
                 href={planStatus.paymentUrl}
                 className="mt-3 block w-full text-center bg-primary hover:bg-primary/90 text-black text-xs font-semibold py-2 rounded-lg transition-colors"
               >
-                Upgrade Plan
+                {planStatus.reason === 'subscription_lapsed' ? 'Renew Subscription' : 'Upgrade Plan'}
               </a>
             )}
           </div>

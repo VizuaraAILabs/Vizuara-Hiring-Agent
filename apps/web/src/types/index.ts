@@ -217,7 +217,7 @@ export interface SessionCostSummary {
 
 // Plan & enrollment types
 
-export type EnrollmentCheckReason = 'ok' | 'trial_active' | 'trial_expired' | 'quota_exceeded' | 'not_enrolled';
+export type EnrollmentCheckReason = 'ok' | 'trial_active' | 'trial_expired' | 'quota_exceeded' | 'not_enrolled' | 'subscription_lapsed';
 
 export interface PlanStatus {
   canCreateSession: boolean;

@@ -101,15 +101,17 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
   if (company.firebase_uid) {
     const subscription = await readActiveSubscription(company.firebase_uid);
     if (!subscription) {
-      // Subscription lapsed — downgrade to trial
-      await sql`UPDATE companies SET plan = 'trial' WHERE id = ${companyId}`;
+      // Subscription lapsed — preserve their tier (so admin & sidebar agree, and renewal
+      // restores access without a fresh trial-upgrade). Block new sessions, but still show
+      // the actual usage against the actual plan limit.
       const sessionsUsed = await countSessionsSince(companyId, null);
+      const limit = PLAN_LIMITS[company.plan];
       return {
         canCreateSession: false,
-        reason: 'not_enrolled',
+        reason: 'subscription_lapsed',
         sessionsUsed,
-        sessionsLimit: PLAN_LIMITS.trial,
-        plan: 'trial',
+        sessionsLimit: limit === Infinity ? -1 : limit,
+        plan: company.plan,
         trialEndsAt,
         paymentUrl,
       };
