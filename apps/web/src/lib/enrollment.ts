@@ -12,6 +12,11 @@ const PLAN_LIMITS: Record<PlanTier, number> = {
   enterprise: Infinity,
 };
 
+interface EnrollmentDoc {
+  status: string;
+  enrollmentDate: Date | null;
+}
+
 /**
  * Core quota & enrollment checker.
  * Determines whether a company can create a new assessment session.
@@ -40,26 +45,22 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
     };
   }
 
-  // 2. Count total sessions for this company
-  const [{ count }] = await sql<{ count: number }[]>`
-    SELECT COUNT(*)::int AS count FROM sessions s
-    JOIN challenges c ON s.challenge_id = c.id
-    WHERE c.company_id = ${companyId}
-  `;
-
-  const sessionsUsed = count;
   const trialEndsAt = company.trial_ends_at;
 
-  // 3. If on trial plan, check if they've upgraded via Firestore first
+  // 2. Trial plans: check Firestore for an upgrade, then fall through
   if (company.plan === 'trial') {
-    // Always check Firestore for enrollment — catches mid-trial upgrades
     if (company.firebase_uid) {
-      const updatedPlan = await syncEnrollmentFromFirestore(companyId, company.firebase_uid);
-      if (updatedPlan) {
-        return checkPaidPlan(companyId, updatedPlan, sessionsUsed, trialEndsAt);
+      const enrollment = await readEnrollmentDoc(company.firebase_uid);
+      if (enrollment?.status === 'ACTIVE') {
+        // Default to starter plan when newly enrolled
+        const newPlan: PlanTier = 'starter';
+        await sql`UPDATE companies SET plan = ${newPlan} WHERE id = ${companyId}`;
+        const sessionsUsed = await countSessionsSince(companyId, enrollment.enrollmentDate);
+        return checkPaidPlan(newPlan, sessionsUsed, trialEndsAt);
       }
     }
 
+    const sessionsUsed = await countSessionsSince(companyId, null);
     const trialExpired = trialEndsAt ? new Date(trialEndsAt) < new Date() : false;
 
     if (!trialExpired && sessionsUsed < PLAN_LIMITS.trial) {
@@ -96,12 +97,13 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
     };
   }
 
-  // 4. For paid plans, verify enrollment is still active
+  // 3. Paid plans: verify enrollment is still active and use enrollmentDate as the period start
   if (company.firebase_uid) {
-    const stillActive = await isEnrollmentActive(company.firebase_uid);
-    if (!stillActive) {
+    const enrollment = await readEnrollmentDoc(company.firebase_uid);
+    if (!enrollment || enrollment.status !== 'ACTIVE') {
       // Payment lapsed — downgrade to trial
       await sql`UPDATE companies SET plan = 'trial' WHERE id = ${companyId}`;
+      const sessionsUsed = await countSessionsSince(companyId, null);
       return {
         canCreateSession: false,
         reason: 'not_enrolled',
@@ -112,13 +114,15 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
         paymentUrl,
       };
     }
+    const sessionsUsed = await countSessionsSince(companyId, enrollment.enrollmentDate);
+    return checkPaidPlan(company.plan, sessionsUsed, trialEndsAt);
   }
 
-  return checkPaidPlan(companyId, company.plan, sessionsUsed, trialEndsAt);
+  const sessionsUsed = await countSessionsSince(companyId, null);
+  return checkPaidPlan(company.plan, sessionsUsed, trialEndsAt);
 }
 
 function checkPaidPlan(
-  _companyId: string,
   plan: PlanTier,
   sessionsUsed: number,
   trialEndsAt: string | null
@@ -149,45 +153,46 @@ function checkPaidPlan(
 }
 
 /**
- * Check if the Firestore enrollment doc is still ACTIVE.
+ * Count sessions for a company, optionally only those created on or after `since`.
+ * For paid plans, `since` is the latest enrollmentDate so renewals reset the quota.
  */
-async function isEnrollmentActive(firebaseUid: string): Promise<boolean> {
-  try {
-    const db = getAdminFirestore();
-    const doc = await db.collection('Enrollments').doc(`${firebaseUid}_${ENROLLMENT_ID}`).get();
-    if (!doc.exists) return false;
-    const data = doc.data();
-    return data?.status === 'ACTIVE';
-  } catch (err) {
-    console.error('Error checking enrollment status:', err);
-    // Fail closed for paid plans
-    return false;
+async function countSessionsSince(companyId: string, since: Date | null): Promise<number> {
+  if (since) {
+    const [{ count }] = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM sessions s
+      JOIN challenges c ON s.challenge_id = c.id
+      WHERE c.company_id = ${companyId}
+        AND s.created_at >= ${since.toISOString()}
+    `;
+    return count;
   }
+  const [{ count }] = await sql<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM sessions s
+    JOIN challenges c ON s.challenge_id = c.id
+    WHERE c.company_id = ${companyId}
+  `;
+  return count;
 }
 
 /**
- * Sync enrollment from Firestore and update the company's plan in our DB.
- * Returns the new plan tier if enrollment is active, null otherwise.
+ * Read the Firestore Enrollment doc, returning status and the latest enrollmentDate.
+ * enrollmentDate is treated as the current billing period start — it should be bumped
+ * by the payment system on each renewal.
  */
-async function syncEnrollmentFromFirestore(
-  companyId: string,
-  firebaseUid: string
-): Promise<PlanTier | null> {
+async function readEnrollmentDoc(firebaseUid: string): Promise<EnrollmentDoc | null> {
   try {
     const db = getAdminFirestore();
     const doc = await db.collection('Enrollments').doc(`${firebaseUid}_${ENROLLMENT_ID}`).get();
-
     if (!doc.exists) return null;
-
-    const data = doc.data();
-    if (data?.status !== 'ACTIVE') return null;
-
-    // Default to starter plan when enrolled
-    const newPlan: PlanTier = 'starter';
-    await sql`UPDATE companies SET plan = ${newPlan} WHERE id = ${companyId}`;
-    return newPlan;
+    const data = doc.data()!;
+    const raw = data.enrollmentDate;
+    let enrollmentDate: Date | null = null;
+    if (raw?.toDate) enrollmentDate = raw.toDate();
+    else if (typeof raw === 'string' || typeof raw === 'number') enrollmentDate = new Date(raw);
+    else if (raw instanceof Date) enrollmentDate = raw;
+    return { status: data.status, enrollmentDate };
   } catch (err) {
-    console.error('Error syncing enrollment from Firestore:', err);
+    console.error('Error reading enrollment doc:', err);
     return null;
   }
 }
