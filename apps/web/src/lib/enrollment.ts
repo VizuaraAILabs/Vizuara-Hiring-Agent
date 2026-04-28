@@ -189,7 +189,7 @@ async function readActiveSubscription(firebaseUid: string): Promise<ActiveSubscr
   try {
     const db = getAdminFirestore();
     const snap = await db
-      .collection('subscriptions')
+      .collection('Subscriptions')
       .where('userId', '==', firebaseUid)
       .where('courseId', '==', ENROLLMENT_ID)
       .where('status', '==', 'ACTIVE')
