@@ -251,6 +251,20 @@ export default function ChallengeDetailPage() {
             {allowedEmailsSaved && (
               <span className="text-xs text-primary">Saved!</span>
             )}
+            {allowedEmails.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAllowedEmails([]);
+                  setEmailDraft('');
+                  setAllowedEmailsSaved(false);
+                }}
+                disabled={allowedEmailsSaving}
+                className="bg-white/5 hover:bg-white/10 disabled:opacity-50 text-neutral-300 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer"
+              >
+                Clear All
+              </button>
+            )}
             <button
               onClick={handleSaveAllowedEmails}
               disabled={allowedEmailsSaving}
