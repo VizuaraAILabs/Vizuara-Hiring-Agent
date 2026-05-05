@@ -47,6 +47,35 @@ export default function ChallengeDetailPage() {
       .finally(() => setLoading(false));
   }, [fetchChallengeDetail]);
 
+  const hasAnalyzingSession = challenge?.sessions.some((session) => session.status === 'analyzing') ?? false;
+
+  useEffect(() => {
+    if (!hasAnalyzingSession) return;
+
+    let cancelled = false;
+    let timeout: number;
+
+    async function poll() {
+      try {
+        const data = await fetchChallengeDetail();
+        if (!cancelled) setChallenge(data);
+      } catch (error) {
+        console.error(error);
+      }
+
+      if (!cancelled) {
+        timeout = window.setTimeout(poll, 5000);
+      }
+    }
+
+    timeout = window.setTimeout(poll, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [hasAnalyzingSession, fetchChallengeDetail]);
+
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
     if (trimmed && !allowedEmails.includes(trimmed)) {
@@ -141,6 +170,7 @@ export default function ChallengeDetailPage() {
     pending: 'bg-amber-500/10 text-amber-400',
     active: 'bg-blue-500/10 text-blue-400',
     completed: 'bg-neutral-800 text-neutral-400',
+    analyzing: 'bg-violet-500/10 text-violet-300',
     analyzed: 'bg-[#00a854]/10 text-[#00a854]',
   };
 
@@ -354,6 +384,15 @@ export default function ChallengeDetailPage() {
                       >
                         View Report
                       </Link>
+                    )}
+                    {session.status === 'analyzing' && (
+                      <span className="text-violet-300 text-sm font-medium flex items-center gap-2">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Analyzing...
+                      </span>
                     )}
                     {session.status === 'completed' && (
                       <button

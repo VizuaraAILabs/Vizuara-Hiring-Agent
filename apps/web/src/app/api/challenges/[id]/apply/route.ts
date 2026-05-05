@@ -46,6 +46,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Return existing session token so they can resume
         return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
       }
+      if (existing.status === 'analyzing') {
+        return NextResponse.json(
+          { error: 'Your assessment has been submitted and is currently being evaluated.' },
+          { status: 403 }
+        );
+      }
       // Already completed or analyzed — block reattempt
       return NextResponse.json(
         { error: 'You have already completed this assessment. Each candidate may only attempt it once.' },

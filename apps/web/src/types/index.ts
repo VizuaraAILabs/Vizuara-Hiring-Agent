@@ -62,7 +62,7 @@ export interface Session {
   candidate_name: string;
   candidate_email: string;
   token: string;
-  status: 'pending' | 'active' | 'completed' | 'analyzed';
+  status: 'pending' | 'active' | 'completed' | 'analyzing' | 'analyzed';
   started_at: string | null;
   ended_at: string | null;
   created_at: string;

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-import asyncio
 
 import asyncpg
 from fastapi import APIRouter, HTTPException
@@ -273,8 +273,96 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.post("/start")
+async def start_analysis_session(request: AnalyzeRequest) -> dict:
+    """Start analysis in the background and return immediately."""
+    session_id = request.session_id
+    logger.info("Background analysis requested for session: %s", session_id)
+
+    pool = await _get_pool()
+
+    session = await _fetch_session(pool, session_id)
+
+    existing = await pool.fetchrow(
+        "SELECT id FROM analysis_results WHERE session_id = $1", session_id
+    )
+    if existing:
+        await pool.execute(
+            "UPDATE sessions SET status = 'analyzed' WHERE id = $1",
+            session_id,
+        )
+        return {
+            "status": "already_analyzed",
+            "analysis_id": str(existing["id"]),
+            "session_id": session_id,
+        }
+
+    if session["status"] == "analyzing":
+        return {"status": "already_running", "session_id": session_id}
+
+    if session["status"] not in ("completed", "active"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Session '{session_id}' has status '{session['status']}'. "
+                "Only 'completed' or 'active' sessions can be analyzed."
+            ),
+        )
+
+    updated = await pool.fetchrow(
+        """
+        UPDATE sessions
+        SET status = 'analyzing'
+        WHERE id = $1 AND status IN ('completed', 'active')
+        RETURNING id
+        """,
+        session_id,
+    )
+    if not updated:
+        return {"status": "already_running", "session_id": session_id}
+
+    asyncio.create_task(_run_analysis_in_background(session_id))
+    return {"status": "started", "session_id": session_id}
+
+
+async def _run_analysis_in_background(session_id: str) -> None:
+    try:
+        await _analyze_session_impl(session_id, allowed_statuses=("analyzing",))
+        logger.info("Background analysis completed for session %s", session_id)
+    except Exception as exc:
+        logger.error(
+            "Background analysis failed for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        try:
+            pool = await _get_pool()
+            await pool.execute(
+                "UPDATE sessions SET status = 'completed' WHERE id = $1 AND status = 'analyzing'",
+                session_id,
+            )
+        except Exception as status_exc:
+            logger.error(
+                "Failed to restore completed status for session %s: %s",
+                session_id,
+                status_exc,
+                exc_info=True,
+            )
+
+
 @router.post("")
 async def analyze_session(request: AnalyzeRequest) -> dict:
+    return await _analyze_session_impl(
+        request.session_id,
+        allowed_statuses=("completed", "active"),
+    )
+
+
+async def _analyze_session_impl(
+    session_id: str,
+    allowed_statuses: tuple[str, ...],
+) -> dict:
     """Analyze a candidate's terminal interaction session.
 
     Pipeline:
@@ -287,7 +375,6 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
     7. Persist results to the database.
     8. Return the analysis.
     """
-    session_id = request.session_id
     logger.info("Starting analysis for session: %s", session_id)
 
     # -- Step 1: Fetch data from the database --
@@ -296,12 +383,12 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
     session = await _fetch_session(pool, session_id)
 
     # Verify session is in a valid state for analysis
-    if session["status"] not in ("completed", "active"):
+    if session["status"] not in allowed_statuses:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Session '{session_id}' has status '{session['status']}'. "
-                f"Only 'completed' or 'active' sessions can be analyzed."
+                f"Only {', '.join(repr(s) for s in allowed_statuses)} sessions can be analyzed."
             ),
         )
 

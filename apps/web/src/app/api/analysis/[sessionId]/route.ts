@@ -3,24 +3,6 @@ import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import type { AnalysisResult, Session, Challenge } from '@/types';
 
-function isFetchTimeout(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-
-  const maybeError = error as { name?: string; cause?: unknown };
-  if (maybeError.name === 'TimeoutError') return true;
-
-  const cause = maybeError.cause;
-  if (cause && typeof cause === 'object') {
-    const maybeCause = cause as { code?: string; name?: string };
-    return (
-      maybeCause.code === 'UND_ERR_HEADERS_TIMEOUT' ||
-      maybeCause.name === 'HeadersTimeoutError'
-    );
-  }
-
-  return false;
-}
-
 export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
     const user = await getAuthUser();
@@ -72,17 +54,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    if (session.status === 'analyzing') {
+      return NextResponse.json({ status: 'already_running', session_id: sessionId }, { status: 202 });
+    }
+
     if (session.status !== 'completed') {
       return NextResponse.json({ error: 'Session must be completed before analysis' }, { status: 400 });
     }
 
     const engineUrl = process.env.ANALYSIS_ENGINE_URL || 'http://localhost:8000';
 
-    const analysisResponse = await fetch(`${engineUrl}/analyze`, {
+    const analysisResponse = await fetch(`${engineUrl}/analyze/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
-      signal: AbortSignal.timeout(10 * 60 * 1000),
     });
 
     if (!analysisResponse.ok) {
@@ -92,21 +77,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     }
 
     const analysisData = await analysisResponse.json();
-
-    // Update session status to analyzed
-    await sql`UPDATE sessions SET status = 'analyzed' WHERE id = ${sessionId}`;
-
-    return NextResponse.json(analysisData);
+    return NextResponse.json(analysisData, { status: 202 });
   } catch (error) {
     console.error('Error triggering analysis:', error);
-    if (isFetchTimeout(error)) {
-      return NextResponse.json(
-        {
-          error: 'Analysis timed out and was cancelled. Please try again.',
-        },
-        { status: 504 },
-      );
-    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

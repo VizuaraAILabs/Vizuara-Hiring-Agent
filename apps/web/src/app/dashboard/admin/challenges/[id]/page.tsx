@@ -16,6 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-500/10 text-amber-400',
   active: 'bg-blue-500/10 text-blue-400',
   completed: 'bg-neutral-800 text-neutral-400',
+  analyzing: 'bg-violet-500/10 text-violet-300',
   analyzed: 'bg-primary/10 text-primary',
 };
 
