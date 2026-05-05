@@ -26,7 +26,7 @@ source .env.production
 set +a
 
 # Verify required vars
-for var in DOMAIN POSTGRES_PASSWORD ANTHROPIC_API_KEY GEMINI_API_KEY FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL FIREBASE_PRIVATE_KEY; do
+for var in DOMAIN DATABASE_URL ANTHROPIC_API_KEY GEMINI_API_KEY FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL FIREBASE_PRIVATE_KEY; do
   if [ -z "${!var}" ] || [[ "${!var}" == *"CHANGE_ME"* ]]; then
     echo "ERROR: $var is not set or still has placeholder value in .env.production"
     exit 1
@@ -37,23 +37,15 @@ echo "1. Building sandbox image..."
 docker build -t hiring-sandbox -f docker/Dockerfile.sandbox .
 
 echo ""
-echo "2. Building and starting services..."
-docker compose --env-file .env.production up -d --build
-
-echo ""
-echo "3. Waiting for PostgreSQL to be ready..."
-sleep 5
-
-echo ""
-echo "4. Running all database migrations..."
+echo "2. Running all database migrations..."
 for migration in database/migrations/*.sql; do
   echo "  Running $migration..."
-  docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent < "$migration"
+  docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" < "$migration"
 done
 
 echo ""
-echo "5. Running seed script..."
-docker compose --env-file .env.production exec -T postgres psql -U hiring -d hiring_agent <<'SQL'
+echo "3. Running seed script..."
+docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" <<'SQL'
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM companies WHERE email = 'demo@acme.com') THEN
@@ -74,6 +66,10 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
 END $$;
 SQL
+
+echo ""
+echo "4. Building and starting services..."
+docker compose --env-file .env.production up -d --build
 
 echo ""
 echo "=== Deployment complete! ==="
