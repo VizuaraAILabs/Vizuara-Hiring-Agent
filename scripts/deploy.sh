@@ -20,10 +20,30 @@ fi
 # Strip Windows line endings if present
 sed -i 's/\r$//' .env.production
 
-# Source the env file
-set -a
-source .env.production
-set +a
+read_env_var() {
+  local var_name="$1"
+  local line
+
+  line="$(grep -E "^${var_name}=" .env.production | tail -n 1 || true)"
+  line="${line#*=}"
+  line="${line%$'\r'}"
+
+  if [[ "$line" == \"*\" && "$line" == *\" ]]; then
+    line="${line:1:${#line}-2}"
+  elif [[ "$line" == \'*\' && "$line" == *\' ]]; then
+    line="${line:1:${#line}-2}"
+  fi
+
+  printf '%s' "$line"
+}
+
+DOMAIN="$(read_env_var DOMAIN)"
+DATABASE_URL="$(read_env_var DATABASE_URL)"
+ANTHROPIC_API_KEY="$(read_env_var ANTHROPIC_API_KEY)"
+GEMINI_API_KEY="$(read_env_var GEMINI_API_KEY)"
+FIREBASE_PROJECT_ID="$(read_env_var FIREBASE_PROJECT_ID)"
+FIREBASE_CLIENT_EMAIL="$(read_env_var FIREBASE_CLIENT_EMAIL)"
+FIREBASE_PRIVATE_KEY="$(read_env_var FIREBASE_PRIVATE_KEY)"
 
 # Verify required vars
 for var in DOMAIN DATABASE_URL ANTHROPIC_API_KEY GEMINI_API_KEY FIREBASE_PROJECT_ID FIREBASE_CLIENT_EMAIL FIREBASE_PRIVATE_KEY; do
