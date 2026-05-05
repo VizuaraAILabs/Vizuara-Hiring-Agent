@@ -27,6 +27,21 @@ DATABASE_URL = os.environ.get(
 
 # Connection pool — initialized lazily
 _pool: asyncpg.Pool | None = None
+_analysis_queue: asyncio.Queue[str] = asyncio.Queue()
+_queued_session_ids: set[str] = set()
+_analysis_workers: list[asyncio.Task] = []
+
+
+def _analysis_max_concurrent() -> int:
+    raw_value = os.environ.get("ANALYSIS_MAX_CONCURRENT", "2")
+    try:
+        return max(1, int(raw_value))
+    except ValueError:
+        logger.warning(
+            "Invalid ANALYSIS_MAX_CONCURRENT=%r; defaulting to 2",
+            raw_value,
+        )
+        return 2
 
 
 async def _get_pool() -> asyncpg.Pool:
@@ -35,6 +50,87 @@ async def _get_pool() -> asyncpg.Pool:
     if _pool is None:
         _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
     return _pool
+
+
+async def start_analysis_queue_workers() -> None:
+    """Start the bounded in-process analysis worker queue."""
+    if _analysis_workers:
+        return
+
+    worker_count = _analysis_max_concurrent()
+    for worker_id in range(worker_count):
+        _analysis_workers.append(
+            asyncio.create_task(_analysis_worker_loop(worker_id + 1))
+        )
+
+    logger.info("Started %d analysis queue worker(s)", worker_count)
+    await _recover_analyzing_sessions()
+
+
+async def stop_analysis_queue_workers() -> None:
+    """Stop analysis queue workers during application shutdown."""
+    for worker in _analysis_workers:
+        worker.cancel()
+
+    if _analysis_workers:
+        await asyncio.gather(*_analysis_workers, return_exceptions=True)
+
+    _analysis_workers.clear()
+    _queued_session_ids.clear()
+    logger.info("Stopped analysis queue workers")
+
+
+async def _recover_analyzing_sessions() -> None:
+    """Re-enqueue sessions that were left analyzing after a process restart."""
+    pool = await _get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT s.id
+        FROM sessions s
+        LEFT JOIN analysis_results ar ON ar.session_id = s.id
+        WHERE s.status = 'analyzing' AND ar.id IS NULL
+        ORDER BY s.created_at ASC
+        """
+    )
+
+    for row in rows:
+        _enqueue_analysis(str(row["id"]))
+
+    if rows:
+        logger.info("Recovered %d analyzing session(s) into the queue", len(rows))
+
+
+def _enqueue_analysis(session_id: str) -> bool:
+    if session_id in _queued_session_ids:
+        return False
+
+    _queued_session_ids.add(session_id)
+    _analysis_queue.put_nowait(session_id)
+    logger.info(
+        "Queued analysis for session %s (queue size: %d)",
+        session_id,
+        _analysis_queue.qsize(),
+    )
+    return True
+
+
+async def _analysis_worker_loop(worker_id: int) -> None:
+    logger.info("Analysis queue worker %d started", worker_id)
+    while True:
+        session_id = await _analysis_queue.get()
+        try:
+            logger.info("Analysis worker %d processing session %s", worker_id, session_id)
+            await _run_analysis_in_background(session_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Unexpected analysis worker error for session %s",
+                session_id,
+            )
+        finally:
+            _queued_session_ids.discard(session_id)
+            _analysis_queue.task_done()
 
 
 async def _fetch_session(pool: asyncpg.Pool, session_id: str) -> dict:
@@ -298,7 +394,11 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         }
 
     if session["status"] == "analyzing":
-        return {"status": "already_running", "session_id": session_id}
+        queued = _enqueue_analysis(session_id)
+        return {
+            "status": "queued" if queued else "already_running",
+            "session_id": session_id,
+        }
 
     if session["status"] not in ("completed", "active"):
         raise HTTPException(
@@ -321,8 +421,8 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
     if not updated:
         return {"status": "already_running", "session_id": session_id}
 
-    asyncio.create_task(_run_analysis_in_background(session_id))
-    return {"status": "started", "session_id": session_id}
+    _enqueue_analysis(session_id)
+    return {"status": "queued", "session_id": session_id}
 
 
 async def _run_analysis_in_background(session_id: str) -> None:

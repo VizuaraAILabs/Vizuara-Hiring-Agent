@@ -26,7 +26,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import the router after loading env so that env vars are available
-from .routers.analysis import router as analysis_router  # noqa: E402
+from .routers.analysis import (  # noqa: E402
+    router as analysis_router,
+    start_analysis_queue_workers,
+    stop_analysis_queue_workers,
+)
 
 app = FastAPI(
     title="ArcEval Analysis Engine",
@@ -45,6 +49,16 @@ app.add_middleware(
 
 # Include routers
 app.include_router(analysis_router)
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    await start_analysis_queue_workers()
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await stop_analysis_queue_workers()
 
 
 @app.get("/")

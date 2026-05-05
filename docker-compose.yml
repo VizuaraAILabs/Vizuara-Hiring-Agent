@@ -53,6 +53,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GOOGLE_API_KEY: ${GEMINI_API_KEY}
+      ANALYSIS_MAX_CONCURRENT: ${ANALYSIS_MAX_CONCURRENT:-2}
 
   caddy:
     image: caddy:2-alpine
