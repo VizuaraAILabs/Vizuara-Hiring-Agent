@@ -257,6 +257,70 @@ class ClaudeAnalyzer:
             return "****"
         return f"{api_key[:4]}...{api_key[-4:]}"
 
+    @staticmethod
+    def _response_to_json(response: types.GenerateContentResponse) -> dict:
+        parsed = getattr(response, "parsed", None)
+        if parsed is not None:
+            if hasattr(parsed, "model_dump"):
+                return parsed.model_dump()
+            if isinstance(parsed, dict):
+                return parsed
+
+        return json.loads(response.text)
+
+    def _repair_json_response(
+        self,
+        raw_text: str,
+        schema: dict,
+        label: str,
+    ) -> dict:
+        if not raw_text or not raw_text.strip():
+            raise ValueError(f"{label} response was empty; nothing to repair")
+
+        schema_json = json.dumps(schema, indent=2)
+        repair_prompt = f"""\
+The text below is malformed JSON returned by a previous model call.
+
+Repair it into valid JSON that matches the provided JSON schema.
+
+Rules:
+- Return only raw JSON. Do not include markdown fences, comments, or explanation.
+- Do not add new facts, observations, quotes, scores, or fields that are not supported by the malformed JSON.
+- Preserve all complete valid items from the malformed JSON.
+- If the malformed JSON is truncated, omit incomplete trailing objects/array items instead of inventing missing content.
+- Escape strings correctly. Do not leave unescaped newlines inside JSON strings.
+
+## JSON Schema
+
+```json
+{schema_json}
+```
+
+## Malformed JSON
+
+```json
+{raw_text}
+```
+"""
+
+        logger.info("Attempting JSON repair for %s", label)
+        response = self._generate_content_with_key_fallback(
+            model=self.MODEL,
+            contents=repair_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "You repair malformed JSON exactly. You do not infer, invent, "
+                    "complete missing facts, or add unsupported content. Return only "
+                    "valid JSON matching the requested schema."
+                ),
+                temperature=0.0,
+                max_output_tokens=32000,
+                response_mime_type="application/json",
+                response_schema=schema,
+            ),
+        )
+        return self._response_to_json(response)
+
     def _generate_content_with_key_fallback(self, **kwargs) -> types.GenerateContentResponse:
         last_error: Exception | None = None
 
@@ -375,7 +439,7 @@ or fabricate any actions or content."""
                 )
 
             try:
-                observations = json.loads(response.text)
+                observations = self._response_to_json(response)
                 logger.info(
                     "Pass 1 complete: %d candidate actions, %d AI interactions",
                     len(observations.get("candidate_actions", [])),
@@ -388,6 +452,24 @@ or fabricate any actions or content."""
                 logger.warning(
                     "Pass 1 attempt %d failed: %s", attempt, str(exc)
                 )
+                try:
+                    observations = self._repair_json_response(
+                        raw_text=getattr(response, "text", "") or "",
+                        schema=_OBSERVATION_SCHEMA,
+                        label="Pass 1 observations",
+                    )
+                    logger.info(
+                        "Pass 1 JSON repair complete: %d candidate actions, %d AI interactions",
+                        len(observations.get("candidate_actions", [])),
+                        len(observations.get("ai_interactions", [])),
+                    )
+                    return observations, pass1_usage
+                except (json.JSONDecodeError, ValueError, TypeError) as repair_exc:
+                    last_error = repair_exc
+                    logger.warning(
+                        "Pass 1 JSON repair failed: %s", str(repair_exc)
+                    )
+
                 if attempt <= self.MAX_RETRIES:
                     original_message = self._build_pass1_message(
                         challenge_description, session_metadata, transcript
@@ -521,7 +603,7 @@ Now produce the complete evaluation."""
             logger.debug("Pass 2 raw response length: %d chars", len(raw_text))
 
             try:
-                parsed = json.loads(raw_text)
+                parsed = self._response_to_json(response)
                 parsed = self._clamp_scores(parsed)
 
                 # Validate against Pydantic schema
@@ -552,6 +634,26 @@ Now produce the complete evaluation."""
                 logger.warning(
                     "Pass 2 attempt %d failed: %s", attempt, str(exc)
                 )
+                try:
+                    repaired = self._repair_json_response(
+                        raw_text=raw_text,
+                        schema=_SCORING_SCHEMA,
+                        label="Pass 2 scoring",
+                    )
+                    repaired = self._clamp_scores(repaired)
+                    validated = AnalysisResponse(**repaired)
+                    result = validated.model_dump()
+                    result["_raw_response"] = raw_text
+                    result["_model_used"] = self.MODEL
+                    result["_pass2_usage"] = pass2_usage if "pass2_usage" in locals() else {}
+                    logger.info("Pass 2 JSON repair complete")
+                    return result
+                except (json.JSONDecodeError, ValueError, TypeError) as repair_exc:
+                    last_error = repair_exc
+                    logger.warning(
+                        "Pass 2 JSON repair failed: %s", str(repair_exc)
+                    )
+
                 if attempt <= self.MAX_RETRIES:
                     # Re-send the ORIGINAL message with error context appended
                     # so Gemini retains all the observations and rubrics.
@@ -867,12 +969,26 @@ explaining what was absent and what should have been present."""
             )
 
             try:
-                result = json.loads(response.text)
+                result = self._response_to_json(response)
                 logger.info("Dimension enrichment complete")
                 return result
             except (json.JSONDecodeError, ValueError, TypeError) as exc:
                 last_error = exc
                 logger.warning("Enrichment attempt %d failed: %s", attempt, exc)
+                try:
+                    result = self._repair_json_response(
+                        raw_text=getattr(response, "text", "") or "",
+                        schema=self._ENRICH_SCHEMA,
+                        label="dimension enrichment",
+                    )
+                    logger.info("Dimension enrichment JSON repair complete")
+                    return result
+                except (json.JSONDecodeError, ValueError, TypeError) as repair_exc:
+                    last_error = repair_exc
+                    logger.warning(
+                        "Enrichment JSON repair failed: %s", str(repair_exc)
+                    )
+
                 if attempt <= self.MAX_RETRIES:
                     message = (
                         f"{prompt}\n\nNOTE: Your previous response was invalid JSON. "

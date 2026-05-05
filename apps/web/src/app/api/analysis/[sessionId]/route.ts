@@ -3,6 +3,24 @@ import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import type { AnalysisResult, Session, Challenge } from '@/types';
 
+function isFetchTimeout(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const maybeError = error as { name?: string; cause?: unknown };
+  if (maybeError.name === 'TimeoutError') return true;
+
+  const cause = maybeError.cause;
+  if (cause && typeof cause === 'object') {
+    const maybeCause = cause as { code?: string; name?: string };
+    return (
+      maybeCause.code === 'UND_ERR_HEADERS_TIMEOUT' ||
+      maybeCause.name === 'HeadersTimeoutError'
+    );
+  }
+
+  return false;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
     const user = await getAuthUser();
@@ -64,6 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
+      signal: AbortSignal.timeout(10 * 60 * 1000),
     });
 
     if (!analysisResponse.ok) {
@@ -80,6 +99,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     return NextResponse.json(analysisData);
   } catch (error) {
     console.error('Error triggering analysis:', error);
+    if (isFetchTimeout(error)) {
+      return NextResponse.json(
+        {
+          error: 'Analysis timed out and was cancelled. Please try again.',
+        },
+        { status: 504 },
+      );
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

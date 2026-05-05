@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import asyncio
 
 import asyncpg
 from fastapi import APIRouter, HTTPException
@@ -149,7 +150,8 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
         logger.info("Parsed transcript for enrichment: %d characters", len(transcript))
 
         analyzer = ClaudeAnalyzer()
-        enrichment = analyzer.enrich_dimension_evidence(
+        enrichment = await asyncio.to_thread(
+            analyzer.enrich_dimension_evidence,
             transcript=transcript,
             challenge_description=challenge.get("description", ""),
             existing_dimension_details=dimension_details,
@@ -245,7 +247,8 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         }
 
         analyzer = ClaudeAnalyzer()
-        narrative = analyzer.generate_transcript_narrative(
+        narrative = await asyncio.to_thread(
+            analyzer.generate_transcript_narrative,
             cleaned_transcript=transcript,
             session_metadata=session_metadata,
         )
@@ -368,7 +371,8 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
             }
 
             analyzer = ClaudeAnalyzer()
-            raw_analysis = analyzer.analyze(
+            raw_analysis = await asyncio.to_thread(
+                analyzer.analyze,
                 challenge_description=challenge.get("description", ""),
                 session_metadata=session_metadata,
                 transcript=transcript,
