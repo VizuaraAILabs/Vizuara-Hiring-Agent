@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
@@ -28,6 +28,17 @@ export default function AdminChallengeViewPage() {
   const [descriptionOpen, setDescriptionOpen] = useState(true);
   const [openFileIndex, setOpenFileIndex] = useState<number | null>(null);
 
+  const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
+    const res = await fetch(`/api/challenges/${params.id}`);
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !Array.isArray(data.sessions)) {
+      throw new Error(data?.error || 'Failed to load challenge');
+    }
+
+    return data;
+  }, [params.id]);
+
   useEffect(() => {
     if (!authLoading && (!user || !user.isAdmin)) {
       router.push('/dashboard');
@@ -35,12 +46,11 @@ export default function AdminChallengeViewPage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    fetch(`/api/challenges/${params.id}`)
-      .then((res) => res.json())
+    fetchChallengeDetail()
       .then((data) => setChallenge(data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [fetchChallengeDetail]);
 
   if (authLoading || !user?.isAdmin) return null;
 
@@ -53,7 +63,7 @@ export default function AdminChallengeViewPage() {
     );
   }
 
-  if (!challenge || 'error' in challenge) {
+  if (!challenge) {
     return <p className="text-neutral-500">Challenge not found.</p>;
   }
 

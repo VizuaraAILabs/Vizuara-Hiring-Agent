@@ -130,8 +130,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch('/api/challenges')
-      .then((res) => res.json())
-      .then((data) => setChallenges(data))
+      .then(async (res) => {
+        const data = await res.json().catch(() => []);
+        if (!res.ok || !Array.isArray(data)) {
+          throw new Error(data?.error || 'Failed to load challenges');
+        }
+        setChallenges(data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

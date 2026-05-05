@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
@@ -26,16 +26,26 @@ export default function ChallengeDetailPage() {
   const [allowedEmailsSaving, setAllowedEmailsSaving] = useState(false);
   const [allowedEmailsSaved, setAllowedEmailsSaved] = useState(false);
 
+  const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
+    const res = await fetch(`/api/challenges/${params.id}`);
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data || !Array.isArray(data.sessions)) {
+      throw new Error(data?.error || 'Failed to load challenge');
+    }
+
+    return data;
+  }, [params.id]);
+
   useEffect(() => {
-    fetch(`/api/challenges/${params.id}`)
-      .then((res) => res.json())
+    fetchChallengeDetail()
       .then((data) => {
         setChallenge(data);
         setAllowedEmails(data.allowed_emails ?? []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [fetchChallengeDetail]);
 
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
@@ -117,7 +127,7 @@ export default function ChallengeDetailPage() {
       if (res.ok) {
         setInviteLink(`${window.location.origin}${data.invite_url}`);
         setInviteForm({ name: '', email: '' });
-        const refreshed = await fetch(`/api/challenges/${params.id}`).then((r) => r.json());
+        const refreshed = await fetchChallengeDetail();
         setChallenge(refreshed);
       }
     } catch (err) {
@@ -341,8 +351,9 @@ export default function ChallengeDetailPage() {
                             if (!res.ok) {
                               const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
                               alert(err.error || 'Analysis failed. Check console for details.');
+                              return;
                             }
-                            const refreshed = await fetch(`/api/challenges/${params.id}`).then((r) => r.json());
+                            const refreshed = await fetchChallengeDetail();
                             setChallenge(refreshed);
                           } catch (err) {
                             console.error('Analysis error:', err);
