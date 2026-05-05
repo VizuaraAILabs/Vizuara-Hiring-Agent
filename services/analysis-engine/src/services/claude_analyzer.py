@@ -211,13 +211,73 @@ class ClaudeAnalyzer:
     MAX_RETRIES = 2
 
     def __init__(self) -> None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        self.api_keys = self._load_api_keys()
+        if not self.api_keys:
             raise ValueError(
                 "GEMINI_API_KEY environment variable is not set. "
                 "Please set it before starting the analysis engine."
             )
-        self.client = genai.Client(api_key=api_key)
+        # The Google SDK also reads GOOGLE_API_KEY/GEMINI_API_KEY from the
+        # environment and may prefer GOOGLE_API_KEY over an explicit client key.
+        # Hide env keys while constructing clients so comma-separated key pools
+        # are never sent to Gemini as a single invalid API key.
+        google_api_key = os.environ.pop("GOOGLE_API_KEY", None)
+        gemini_api_key = os.environ.pop("GEMINI_API_KEY", None)
+        try:
+            self.clients = [genai.Client(api_key=api_key) for api_key in self.api_keys]
+        finally:
+            if google_api_key is not None:
+                os.environ["GOOGLE_API_KEY"] = google_api_key
+            if gemini_api_key is not None:
+                os.environ["GEMINI_API_KEY"] = gemini_api_key
+        self.active_client_index = 0
+        logger.info("ClaudeAnalyzer initialized with %d Gemini API key(s)", len(self.api_keys))
+
+    @staticmethod
+    def _load_api_keys() -> list[str]:
+        raw_values = [
+            os.environ.get("GEMINI_API_KEY", ""),
+            os.environ.get("GOOGLE_API_KEY", ""),
+        ]
+        keys: list[str] = []
+        seen: set[str] = set()
+
+        for raw_value in raw_values:
+            for key in raw_value.split(","):
+                normalized = key.strip()
+                if normalized and normalized not in seen:
+                    keys.append(normalized)
+                    seen.add(normalized)
+
+        return keys
+
+    @staticmethod
+    def _redact_key(api_key: str) -> str:
+        if len(api_key) <= 8:
+            return "****"
+        return f"{api_key[:4]}...{api_key[-4:]}"
+
+    def _generate_content_with_key_fallback(self, **kwargs) -> types.GenerateContentResponse:
+        last_error: Exception | None = None
+
+        for offset in range(len(self.clients)):
+            client_index = (self.active_client_index + offset) % len(self.clients)
+            api_key = self.api_keys[client_index]
+            try:
+                response = self.clients[client_index].models.generate_content(**kwargs)
+                self.active_client_index = client_index
+                return response
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Gemini request failed with API key %s (%d/%d): %s",
+                    self._redact_key(api_key),
+                    offset + 1,
+                    len(self.clients),
+                    exc,
+                )
+
+        raise last_error or RuntimeError("Gemini request failed for all configured API keys")
 
     # ------------------------------------------------------------------
     # Pass 1: Extract factual observations
@@ -285,7 +345,7 @@ or fabricate any actions or content."""
                 attempt, self.MAX_RETRIES + 1,
             )
 
-            response = self.client.models.generate_content(
+            response = self._generate_content_with_key_fallback(
                 model=self.MODEL,
                 contents=message,
                 config=types.GenerateContentConfig(
@@ -445,7 +505,7 @@ Now produce the complete evaluation."""
                 "Pass 2: Scoring (attempt %d/%d)", attempt, self.MAX_RETRIES + 1
             )
 
-            response = self.client.models.generate_content(
+            response = self._generate_content_with_key_fallback(
                 model=self.MODEL,
                 contents=message,
                 config=types.GenerateContentConfig(
@@ -637,7 +697,7 @@ if needed.
 
 Write the full narrative document now:"""
 
-        response = self.client.models.generate_content(
+        response = self._generate_content_with_key_fallback(
             model=self.MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -790,7 +850,7 @@ explaining what was absent and what should have been present."""
             logger.info(
                 "Dimension enrichment attempt %d/%d", attempt, self.MAX_RETRIES + 1
             )
-            response = self.client.models.generate_content(
+            response = self._generate_content_with_key_fallback(
                 model=self.MODEL,
                 contents=message,
                 config=types.GenerateContentConfig(
