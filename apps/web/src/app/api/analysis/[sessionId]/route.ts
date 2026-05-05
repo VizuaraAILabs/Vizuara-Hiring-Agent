@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (session.status === 'analyzing') {
+    if (session.status === 'queued' || session.status === 'analyzing') {
       return NextResponse.json({ status: 'already_running', session_id: sessionId }, { status: 202 });
     }
 

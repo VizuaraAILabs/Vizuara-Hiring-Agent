@@ -64,7 +64,7 @@ async def start_analysis_queue_workers() -> None:
         )
 
     logger.info("Started %d analysis queue worker(s)", worker_count)
-    await _recover_analyzing_sessions()
+    await _recover_pending_analysis_sessions()
 
 
 async def stop_analysis_queue_workers() -> None:
@@ -80,15 +80,15 @@ async def stop_analysis_queue_workers() -> None:
     logger.info("Stopped analysis queue workers")
 
 
-async def _recover_analyzing_sessions() -> None:
-    """Re-enqueue sessions that were left analyzing after a process restart."""
+async def _recover_pending_analysis_sessions() -> None:
+    """Re-enqueue sessions that were left queued/analyzing after a restart."""
     pool = await _get_pool()
     rows = await pool.fetch(
         """
         SELECT s.id
         FROM sessions s
         LEFT JOIN analysis_results ar ON ar.session_id = s.id
-        WHERE s.status = 'analyzing' AND ar.id IS NULL
+        WHERE s.status IN ('queued', 'analyzing') AND ar.id IS NULL
         ORDER BY s.created_at ASC
         """
     )
@@ -97,7 +97,7 @@ async def _recover_analyzing_sessions() -> None:
         _enqueue_analysis(str(row["id"]))
 
     if rows:
-        logger.info("Recovered %d analyzing session(s) into the queue", len(rows))
+        logger.info("Recovered %d pending analysis session(s) into the queue", len(rows))
 
 
 def _enqueue_analysis(session_id: str) -> bool:
@@ -120,6 +120,13 @@ async def _analysis_worker_loop(worker_id: int) -> None:
         session_id = await _analysis_queue.get()
         try:
             logger.info("Analysis worker %d processing session %s", worker_id, session_id)
+            if not await _mark_analysis_running(session_id):
+                logger.info(
+                    "Analysis worker %d skipped session %s because it is no longer queued",
+                    worker_id,
+                    session_id,
+                )
+                continue
             await _run_analysis_in_background(session_id)
         except asyncio.CancelledError:
             raise
@@ -131,6 +138,24 @@ async def _analysis_worker_loop(worker_id: int) -> None:
         finally:
             _queued_session_ids.discard(session_id)
             _analysis_queue.task_done()
+
+
+async def _mark_analysis_running(session_id: str) -> bool:
+    pool = await _get_pool()
+    row = await pool.fetchrow(
+        """
+        UPDATE sessions
+        SET status = 'analyzing'
+        WHERE id = $1
+          AND status IN ('queued', 'analyzing')
+          AND NOT EXISTS (
+              SELECT 1 FROM analysis_results WHERE session_id = $1
+          )
+        RETURNING id
+        """,
+        session_id,
+    )
+    return row is not None
 
 
 async def _fetch_session(pool: asyncpg.Pool, session_id: str) -> dict:
@@ -393,7 +418,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
             "session_id": session_id,
         }
 
-    if session["status"] == "analyzing":
+    if session["status"] in ("queued", "analyzing"):
         queued = _enqueue_analysis(session_id)
         return {
             "status": "queued" if queued else "already_running",
@@ -412,7 +437,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
     updated = await pool.fetchrow(
         """
         UPDATE sessions
-        SET status = 'analyzing'
+        SET status = 'queued'
         WHERE id = $1 AND status IN ('completed', 'active')
         RETURNING id
         """,
@@ -439,7 +464,7 @@ async def _run_analysis_in_background(session_id: str) -> None:
         try:
             pool = await _get_pool()
             await pool.execute(
-                "UPDATE sessions SET status = 'completed' WHERE id = $1 AND status = 'analyzing'",
+                "UPDATE sessions SET status = 'completed' WHERE id = $1 AND status IN ('queued', 'analyzing')",
                 session_id,
             )
         except Exception as status_exc:

@@ -47,10 +47,12 @@ export default function ChallengeDetailPage() {
       .finally(() => setLoading(false));
   }, [fetchChallengeDetail]);
 
-  const hasAnalyzingSession = challenge?.sessions.some((session) => session.status === 'analyzing') ?? false;
+  const hasPendingAnalysisSession = challenge?.sessions.some(
+    (session) => session.status === 'queued' || session.status === 'analyzing'
+  ) ?? false;
 
   useEffect(() => {
-    if (!hasAnalyzingSession) return;
+    if (!hasPendingAnalysisSession) return;
 
     let cancelled = false;
     let timeout: number;
@@ -74,7 +76,7 @@ export default function ChallengeDetailPage() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [hasAnalyzingSession, fetchChallengeDetail]);
+  }, [hasPendingAnalysisSession, fetchChallengeDetail]);
 
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
@@ -170,6 +172,7 @@ export default function ChallengeDetailPage() {
     pending: 'bg-amber-500/10 text-amber-400',
     active: 'bg-blue-500/10 text-blue-400',
     completed: 'bg-neutral-800 text-neutral-400',
+    queued: 'bg-amber-500/10 text-amber-300',
     analyzing: 'bg-violet-500/10 text-violet-300',
     analyzed: 'bg-[#00a854]/10 text-[#00a854]',
   };
@@ -384,6 +387,11 @@ export default function ChallengeDetailPage() {
                       >
                         View Report
                       </Link>
+                    )}
+                    {session.status === 'queued' && (
+                      <span className="text-amber-300 text-sm font-medium">
+                        Queued
+                      </span>
                     )}
                     {session.status === 'analyzing' && (
                       <span className="text-violet-300 text-sm font-medium flex items-center gap-2">

@@ -46,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Return existing session token so they can resume
         return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
       }
-      if (existing.status === 'analyzing') {
+      if (existing.status === 'queued' || existing.status === 'analyzing') {
         return NextResponse.json(
           { error: 'Your assessment has been submitted and is currently being evaluated.' },
           { status: 403 }

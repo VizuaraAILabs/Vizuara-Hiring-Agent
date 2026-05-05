@@ -31,7 +31,7 @@ export default function SessionPage() {
     );
   }
 
-  if (session.status === 'completed' || session.status === 'analyzing' || session.status === 'analyzed') {
+  if (session.status === 'completed' || session.status === 'queued' || session.status === 'analyzing' || session.status === 'analyzed') {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center relative">
         <div className="absolute inset-0 bg-grid opacity-20" />

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   candidate_name TEXT NOT NULL,
   candidate_email TEXT NOT NULL,
   token TEXT NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'completed', 'analyzing', 'analyzed')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'completed', 'queued', 'analyzing', 'analyzed')),
   started_at TEXT,
   ended_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))

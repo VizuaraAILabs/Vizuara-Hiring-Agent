@@ -1,4 +1,4 @@
--- Allow sessions to enter an intermediate analysis state while reports run asynchronously.
+-- Allow sessions to distinguish queued analysis from active analysis.
 
 ALTER TABLE sessions DROP CONSTRAINT IF EXISTS sessions_status_check;
 
