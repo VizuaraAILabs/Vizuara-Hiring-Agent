@@ -83,17 +83,17 @@ export default function WizardContainer() {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-[#00a854] text-black'
+                      ? 'bg-primary text-black'
                       : isCompleted
-                        ? 'bg-[#00a854]/20 text-[#00a854] border border-[#00a854]/40'
-                        : 'bg-[#111] text-neutral-600 border border-white/10'
+                        ? 'bg-primary/20 text-primary border border-primary/40'
+                        : 'bg-surface text-neutral-600 border border-white/10'
                   }`}
                 >
                   {isCompleted ? '\u2713' : stepNum}
                 </div>
                 <span
                   className={`text-xs mt-1.5 ${
-                    isActive ? 'text-[#00a854]' : isCompleted ? 'text-neutral-500' : 'text-neutral-600'
+                    isActive ? 'text-primary' : isCompleted ? 'text-neutral-500' : 'text-neutral-600'
                   }`}
                 >
                   {label}
@@ -102,7 +102,7 @@ export default function WizardContainer() {
               {i < stepLabels.length - 1 && (
                 <div
                   className={`w-12 sm:w-20 h-px mx-2 mb-5 ${
-                    stepNum < activeStep ? 'bg-[#00a854]/40' : 'bg-white/10'
+                    stepNum < activeStep ? 'bg-primary/40' : 'bg-white/10'
                   }`}
                 />
               )}

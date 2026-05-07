@@ -15,17 +15,25 @@ interface CumulativeSpendChartProps {
 }
 
 export default function CumulativeSpendChart({ data }: CumulativeSpendChartProps) {
-  let running = 0;
-  const chartData = data.map((d) => {
-    running += Number(d.total);
-    return {
+  const { chartData } = data.reduce(
+    (acc, d) => {
+      const running = acc.running + Number(d.total);
+      return {
+        running,
+        chartData: [
+          ...acc.chartData,
+          {
       date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       cumulative: Math.round(running * 10000) / 10000,
-    };
-  });
+          },
+        ],
+      };
+    },
+    { running: 0, chartData: [] as { date: string; cumulative: number }[] }
+  );
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-serif italic text-white mb-1">Cumulative Spend</h3>
       <p className="text-xs text-neutral-600 mb-4">Running total over time</p>
 

@@ -25,9 +25,9 @@ export default function StepRoleSelect({ onSelect }: StepRoleSelectProps) {
           <button
             key={role.id}
             onClick={() => onSelect(role.id)}
-            className="group flex flex-col items-center gap-3 p-6 bg-[#111] border border-white/10 rounded-xl hover:border-[#00a854]/50 hover:bg-[#00a854]/5 transition-all text-left cursor-pointer"
+            className="group flex flex-col items-center gap-3 p-6 bg-surface border border-white/10 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-all text-left cursor-pointer"
           >
-            <span className="text-2xl font-mono text-[#00a854] group-hover:scale-110 transition-transform">
+            <span className="text-2xl font-mono text-primary group-hover:scale-110 transition-transform">
               {role.icon}
             </span>
             <span className="text-white font-medium">{role.name}</span>

@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}' },
@@ -25,6 +26,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { planStatus } = useSubscription();
+  const [now] = useState(() => Date.now());
 
   const planLabel = planStatus ? (PLAN_LABELS[planStatus.plan] || planStatus.plan) : null;
   const isUnlimited = planStatus?.sessionsLimit === -1;
@@ -34,11 +36,11 @@ export default function Sidebar() {
   const isBlocked = planStatus && !planStatus.canCreateSession;
 
   const trialDaysLeft = planStatus?.plan === 'trial' && planStatus.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(planStatus.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((new Date(planStatus.trialEndsAt).getTime() - now) / (1000 * 60 * 60 * 24)))
     : null;
 
   return (
-    <aside className="w-64 bg-[#111] border-r border-white/5 flex flex-col h-screen sticky top-0">
+    <aside className="w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <FPLLogo size={26} />

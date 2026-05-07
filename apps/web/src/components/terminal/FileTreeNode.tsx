@@ -145,7 +145,7 @@ export default function FileTreeNode({ node, depth, selectedFile, actions }: Fil
       onChange={(e) => setRenameValue(e.target.value)}
       onBlur={handleRenameSubmit}
       onKeyDown={handleRenameKeyDown}
-      className="bg-[#1a1a1a] border border-[#00a854]/50 rounded px-1 text-xs text-white outline-none w-full min-w-0"
+      className="bg-surface-light border border-primary/50 rounded px-1 text-xs text-white outline-none w-full min-w-0"
       onClick={(e) => e.stopPropagation()}
     />
   ) : (
@@ -164,7 +164,7 @@ export default function FileTreeNode({ node, depth, selectedFile, actions }: Fil
           onClick={() => setExpanded(!expanded)}
           onContextMenu={handleContextMenu}
           className={`w-full text-left flex items-center gap-1 py-0.5 hover:bg-white/5 text-xs ${
-            isSelected ? 'bg-[#00a854]/10 text-[#00a854]' : 'text-neutral-300'
+            isSelected ? 'bg-primary/10 text-primary' : 'text-neutral-300'
           }`}
           style={{ paddingLeft }}
         >
@@ -203,15 +203,15 @@ export default function FileTreeNode({ node, depth, selectedFile, actions }: Fil
         onContextMenu={handleContextMenu}
         className={`w-full text-left flex items-center gap-1 py-0.5 text-xs ${
           isSelected
-            ? 'bg-[#00a854]/10 text-[#00a854]'
+            ? 'bg-primary/10 text-primary'
             : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-300'
         }`}
         style={{ paddingLeft }}
       >
         {extLabel ? (
-          <span className="text-[9px] font-bold text-neutral-600 w-5 text-center flex-shrink-0">{extLabel}</span>
+          <span className="text-[9px] font-bold text-neutral-600 w-5 text-center shrink-0">{extLabel}</span>
         ) : (
-          <span className="w-5 flex-shrink-0" />
+          <span className="w-5 shrink-0" />
         )}
         {nameContent}
       </button>
@@ -230,7 +230,7 @@ function ContextMenu({ x, y, items }: {
 }) {
   return (
     <div
-      className="fixed z-50 bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-2xl min-w-[140px]"
+      className="fixed z-50 bg-surface-light border border-white/10 rounded-lg py-1 shadow-2xl min-w-[140px]"
       style={{ left: x, top: y }}
       onClick={(e) => e.stopPropagation()}
     >

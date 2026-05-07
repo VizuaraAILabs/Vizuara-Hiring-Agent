@@ -39,41 +39,10 @@ const team = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2.5">
-            <FPLLogo size={30} />
-            <span className="text-lg font-semibold text-white">
-              Arc<span className="text-[#00a854]">Eval</span>
-            </span>
-          </Link>
-          <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
-            <Link href="/#how-it-works" className="hover:text-white transition-colors">How it works</Link>
-            <Link href="/#pricing" className="hover:text-white transition-colors">Pricing</Link>
-            <Link href="/about" className="text-white">About Us</Link>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/register"
-              className="bg-[#00a854] hover:bg-[#00c96b] text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
-            >
-              Get Started
-            </Link>
-          </div>
-        </div>
-      </nav>
-
       {/* Hero */}
       <section className="relative pt-36 pb-16 px-6">
         <div className="absolute inset-0 bg-grid opacity-50" />
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-[#7c5ce0]/5 blur-[120px] pointer-events-none" />
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-125 h-125 rounded-full bg-[#7c5ce0]/5 blur-[120px] pointer-events-none" />
 
         <motion.div
           className="max-w-4xl mx-auto text-center relative"
@@ -90,7 +59,7 @@ export default function AboutPage() {
             className="text-5xl sm:text-6xl font-serif italic leading-[1.1] mb-6 tracking-tight"
           >
             Built by{' '}
-            <span className="bg-gradient-to-r from-[#7c5ce0] to-[#a8b4ff] bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-[#7c5ce0] to-[#a8b4ff] bg-clip-text text-transparent">
               First Principle Labs
             </span>
           </motion.h1>
@@ -115,7 +84,7 @@ export default function AboutPage() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl font-serif italic text-white mb-6 text-center">Who We Are</h2>
-            <div className="bg-[#111] border border-white/5 rounded-2xl p-8 md:p-12 max-w-3xl mx-auto">
+            <div className="bg-surface border border-white/5 rounded-2xl p-8 md:p-12 max-w-3xl mx-auto">
               <p className="text-neutral-400 leading-relaxed text-lg mb-6">
                 The founders of First Principle Labs have designed and delivered courses which are appreciated by
                 thousands of industry professionals. They run a popular YouTube channel called{' '}
@@ -196,7 +165,7 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.15, duration: 0.5 }}
-                className="bg-[#111] border border-white/5 rounded-2xl p-8 text-center hover:border-[#7c5ce0]/20 transition-all duration-300"
+                className="bg-surface border border-white/5 rounded-2xl p-8 text-center hover:border-[#7c5ce0]/20 transition-all duration-300"
               >
                 <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 border-2 border-white/10">
                   <Image
@@ -259,7 +228,7 @@ export default function AboutPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.12, duration: 0.5 }}
-                className="bg-[#111] border border-white/5 rounded-2xl p-8"
+                className="bg-surface border border-white/5 rounded-2xl p-8"
               >
                 <h3 className="text-base font-semibold text-white mb-3">{belief.title}</h3>
                 <p className="text-neutral-500 text-sm leading-relaxed">{belief.desc}</p>

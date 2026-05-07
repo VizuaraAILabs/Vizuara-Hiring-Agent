@@ -42,7 +42,7 @@ export default function RadarChart({ scores }: RadarChartProps) {
   }));
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-4">Skill Dimensions</h3>
       <ResponsiveContainer width="100%" height={400}>
         <RechartsRadarChart data={data} cx="50%" cy="50%" outerRadius="75%">

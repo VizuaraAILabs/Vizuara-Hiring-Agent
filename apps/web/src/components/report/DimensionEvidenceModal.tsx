@@ -47,7 +47,7 @@ export default function DimensionEvidenceModal({
       style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-2xl">
+      <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col shadow-2xl">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
@@ -125,8 +125,8 @@ export default function DimensionEvidenceModal({
           {detail.expected_standard && (
             <div className="rounded-xl border border-white/5 bg-white/[0.03] p-4 space-y-1.5">
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 size={14} className="text-[#00a854]" />
-                <span className="text-xs font-semibold text-[#00a854] uppercase tracking-wide">
+                <CheckCircle2 size={14} className="text-primary" />
+                <span className="text-xs font-semibold text-primary uppercase tracking-wide">
                   Expected Standard
                 </span>
               </div>

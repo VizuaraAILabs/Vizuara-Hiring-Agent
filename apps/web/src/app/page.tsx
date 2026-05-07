@@ -361,7 +361,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative pt-36 pb-20 px-6">
         <div className="absolute inset-0 bg-grid opacity-50" />
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-150 h-150 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
         <motion.div
           className="max-w-4xl mx-auto text-center relative"
@@ -382,7 +382,7 @@ export default function LandingPage() {
             className="text-5xl sm:text-6xl md:text-7xl font-serif italic leading-[1.1] mb-6 tracking-tight"
           >
             Hire engineers who{' '}
-            <span className="gradient-text glow-text">think with AI</span>
+            <span className="gradient-text glow-text inline-block pr-2 -mr-2">think with AI</span>
           </motion.h1>
 
           <motion.p
@@ -496,7 +496,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-[#111] border border-red-500/10 rounded-2xl p-8"
+              className="bg-surface border border-red-500/10 rounded-2xl p-8"
             >
               <div className="text-red-400/60 text-sm font-mono mb-4">LEGACY APPROACH</div>
               <ul className="space-y-3 text-neutral-400 text-sm">
@@ -524,7 +524,7 @@ export default function LandingPage() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className="bg-[#111] border border-primary/20 rounded-2xl p-8"
+              className="bg-surface border border-primary/20 rounded-2xl p-8"
             >
               <div className="text-primary text-sm font-mono mb-4">ARCEVAL APPROACH</div>
               <ul className="space-y-3 text-neutral-400 text-sm">
@@ -577,7 +577,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}
                 transition={{ delay: i * 0.15, duration: 0.5 }}
-                className="group relative bg-[#111] border border-white/5 rounded-2xl p-8 hover:border-primary/20 transition-all duration-300"
+                className="group relative bg-surface border border-white/5 rounded-2xl p-8 hover:border-primary/20 transition-all duration-300"
               >
                 <div className="absolute inset-0 rounded-2xl bg-primary/0 group-hover:bg-primary/2 transition-colors duration-300" />
                 <div className="relative">
@@ -615,7 +615,7 @@ export default function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.7 }}
-            className="relative rounded-2xl border border-white/5 bg-[#111] p-1 glow-green"
+            className="relative rounded-2xl border border-white/5 bg-surface p-1 glow-green"
           >
             <div className="rounded-xl bg-[#0a0a0a] overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
@@ -684,9 +684,9 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.06, duration: 0.4 }}
-                className="group relative bg-[#111] border border-white/5 rounded-xl p-5 hover:border-primary/30 transition-all duration-300 cursor-default"
+                className="group relative bg-surface border border-white/5 rounded-xl p-5 hover:border-primary/30 transition-all duration-300 cursor-default"
               >
-                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-b from-primary/3 to-transparent" />
+                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-linear-to-b from-primary/3 to-transparent" />
                 <div className="relative">
                   <div className="text-xs font-mono text-primary/50 mb-3">{dim.icon}</div>
                   <h3 className="text-sm font-semibold text-white mb-1">{dim.name}</h3>
@@ -726,7 +726,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08, duration: 0.4 }}
-                className="bg-[#111] border border-white/5 rounded-xl p-6 text-center hover:border-primary/30 transition-all duration-300"
+                className="bg-surface border border-white/5 rounded-xl p-6 text-center hover:border-primary/30 transition-all duration-300"
               >
                 <h3 className="text-base font-semibold text-white mb-2">{role.name}</h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">{role.description}</p>
@@ -767,7 +767,7 @@ export default function LandingPage() {
                 className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   activeRole === role.id
                     ? 'bg-primary text-black'
-                    : 'bg-[#111] border border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
+                    : 'bg-surface border border-white/10 text-neutral-400 hover:border-white/20 hover:text-white'
                 }`}
               >
                 {role.name}
@@ -785,7 +785,7 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.08, duration: 0.4 }}
-                  className="bg-[#111] border border-white/5 rounded-2xl p-6 hover:border-primary/20 transition-all duration-300 flex flex-col"
+                  className="bg-surface border border-white/5 rounded-2xl p-6 hover:border-primary/20 transition-all duration-300 flex flex-col"
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
@@ -799,7 +799,7 @@ export default function LandingPage() {
                   </div>
 
                   <h3 className="text-base font-semibold text-white mb-2 leading-snug">{challenge.title}</h3>
-                  <p className="text-xs text-neutral-500 leading-relaxed mb-4 flex-grow">{challenge.description}</p>
+                  <p className="text-xs text-neutral-500 leading-relaxed mb-4 grow">{challenge.description}</p>
 
                   <div className="flex flex-wrap gap-1.5">
                     {challenge.tags.map((tag) => (
@@ -863,7 +863,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.12, duration: 0.5 }}
-                className={`relative bg-[#111] rounded-2xl p-8 flex flex-col ${
+                className={`relative bg-surface rounded-2xl p-8 flex flex-col ${
                   plan.popular
                     ? 'border-2 border-primary/40 ring-1 ring-primary/20'
                     : 'border border-white/5'
@@ -894,10 +894,10 @@ export default function LandingPage() {
                   <div className="text-primary text-sm font-medium mt-2">{plan.assessments}</div>
                 </div>
 
-                <ul className="space-y-3 mb-8 flex-grow">
+                <ul className="space-y-3 mb-8 grow">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-3 text-sm">
-                      <span className="text-primary mt-0.5 flex-shrink-0">+</span>
+                      <span className="text-primary mt-0.5 shrink-0">+</span>
                       <span className="text-neutral-400">{feature}</span>
                     </li>
                   ))}
@@ -975,7 +975,7 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.12, duration: 0.5 }}
-                className="bg-[#111] border border-white/5 rounded-2xl p-8"
+                className="bg-surface border border-white/5 rounded-2xl p-8"
               >
                 <h3 className="text-lg font-semibold text-white mb-3">{item.title}</h3>
                 <p className="text-neutral-500 text-sm leading-relaxed">{item.desc}</p>
@@ -1009,14 +1009,14 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.06, duration: 0.4 }}
-                className="bg-[#111] border border-white/5 rounded-xl overflow-hidden"
+                className="bg-surface border border-white/5 rounded-xl overflow-hidden"
               >
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between p-5 text-left"
                 >
                   <span className="text-sm font-medium text-white pr-4">{faq.q}</span>
-                  <span className={`text-neutral-500 text-lg flex-shrink-0 transition-transform duration-200 ${openFaq === i ? 'rotate-45' : ''}`}>
+                  <span className={`text-neutral-500 text-lg shrink-0 transition-transform duration-200 ${openFaq === i ? 'rotate-45' : ''}`}>
                     +
                   </span>
                 </button>
@@ -1034,7 +1034,7 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="relative px-6 py-24">
         <div className="absolute inset-0 bg-grid opacity-30" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

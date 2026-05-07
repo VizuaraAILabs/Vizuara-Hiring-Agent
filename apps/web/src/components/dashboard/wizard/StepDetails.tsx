@@ -124,7 +124,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
                 key={tech}
                 type="button"
                 onClick={() => addTech(tech)}
-                className="px-3 py-1.5 bg-[#111] border border-white/10 text-neutral-400 rounded-full text-sm hover:border-primary/30 hover:text-white transition-all"
+                className="px-3 py-1.5 bg-surface border border-white/10 text-neutral-400 rounded-full text-sm hover:border-primary/30 hover:text-white transition-all"
               >
                 + {tech}
               </button>
@@ -137,7 +137,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
           value={customTech}
           onChange={(e) => setCustomTech(e.target.value)}
           onKeyDown={handleCustomTechKeyDown}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all text-sm"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
           placeholder="Type a technology and press Enter..."
         />
       </div>
@@ -148,7 +148,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
         <select
           value={seniority}
           onChange={(e) => setSeniority(e.target.value as SeniorityLevel)}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
         >
           {seniorityOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -174,8 +174,8 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
                 onClick={() => toggleFocus(opt.value)}
                 className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                   selected
-                    ? 'bg-primary/10 border-[#00a854]/50 text-primary'
-                    : 'bg-[#111] border-white/10 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+                    ? 'bg-primary/10 border-primary/50 text-primary'
+                    : 'bg-surface border-white/10 text-neutral-400 hover:border-white/20 hover:text-neutral-300'
                 } ${!selected && focusAreas.length >= 4 ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {opt.label}
@@ -226,7 +226,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
         <button
           type="submit"
           disabled={!canSubmit}
-          className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-xl transition-all btn-glow"
+          className="bg-primary hover:bg-primary-light disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-xl transition-all btn-glow"
         >
           Generate Challenges
         </button>

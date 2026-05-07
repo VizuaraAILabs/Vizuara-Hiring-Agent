@@ -174,7 +174,7 @@ export default function ChallengeDetailPage() {
     completed: 'bg-neutral-800 text-neutral-400',
     queued: 'bg-amber-500/10 text-amber-300',
     analyzing: 'bg-violet-500/10 text-violet-300',
-    analyzed: 'bg-[#00a854]/10 text-[#00a854]',
+    analyzed: 'bg-primary/10 text-primary',
   };
 
   if (loading) {
@@ -197,7 +197,7 @@ export default function ChallengeDetailPage() {
 
       {/* Description Accordion */}
       {challenge.description && (
-        <div className="bg-[#111] border border-white/5 rounded-2xl mb-8 overflow-hidden">
+        <div className="bg-surface border border-white/5 rounded-2xl mb-8 overflow-hidden">
           <button
             onClick={() => setDescriptionOpen((o) => !o)}
             className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/2 transition-colors"
@@ -224,18 +224,18 @@ export default function ChallengeDetailPage() {
       )}
 
       {/* Shareable Link */}
-      <div className="bg-[#111] border border-[#00a854]/20 rounded-2xl p-5 mb-8">
+      <div className="bg-surface border border-primary/20 rounded-2xl p-5 mb-8">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="text-sm font-medium text-white mb-1">Shareable Assessment Link</p>
             <p className="text-xs text-neutral-500">Share this single link with all candidates. They enter their own details before starting.</p>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <input
               type="text"
               value={typeof window !== 'undefined' ? `${window.location.origin}/apply/${params.id}` : `/apply/${params.id}`}
               readOnly
-              className="bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-[#00a854] text-xs font-mono w-64"
+              className="bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-primary text-xs font-mono w-64"
             />
             <button
               onClick={() => {
@@ -243,7 +243,7 @@ export default function ChallengeDetailPage() {
                 setCopiedShareable(true);
                 setTimeout(() => setCopiedShareable(false), 2000);
               }}
-              className="bg-[#00a854] hover:bg-[#00c96b] text-black px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap"
+              className="bg-primary hover:bg-primary-light text-black px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap"
             >
               {copiedShareable ? 'Copied!' : 'Copy Link'}
             </button>
@@ -252,7 +252,7 @@ export default function ChallengeDetailPage() {
       </div>
 
       {/* Starter Files */}
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-5 mb-8 flex items-center justify-between">
+      <div className="bg-surface border border-white/5 rounded-2xl p-5 mb-8 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">Starter Files</p>
           <p className="text-xs text-neutral-500 mt-0.5">
@@ -270,7 +270,7 @@ export default function ChallengeDetailPage() {
       </div>
 
       {/* Participant Restrictions */}
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-5 mb-8">
+      <div className="bg-surface border border-white/5 rounded-2xl p-5 mb-8">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div>
             <p className="text-sm font-medium text-white">Participant Restrictions</p>
@@ -357,7 +357,7 @@ export default function ChallengeDetailPage() {
           </h2>
 
           {challenge.sessions.length === 0 ? (
-            <div className="bg-[#111] border border-white/5 rounded-2xl p-8 text-center">
+            <div className="bg-surface border border-white/5 rounded-2xl p-8 text-center">
               <p className="text-neutral-600">No candidates invited yet</p>
             </div>
           ) : (
@@ -365,7 +365,7 @@ export default function ChallengeDetailPage() {
               {challenge.sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="bg-[#111] border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:border-white/10 transition-colors"
+                  className="bg-surface border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:border-white/10 transition-colors"
                 >
                   <div>
                     <p className="text-white font-medium">{session.candidate_name}</p>
@@ -383,7 +383,7 @@ export default function ChallengeDetailPage() {
                     {session.status === 'analyzed' && (
                       <Link
                         href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`}
-                        className="text-[#00a854] hover:text-[#00c96b] text-sm font-medium transition-colors"
+                        className="text-primary hover:text-primary-light text-sm font-medium transition-colors"
                       >
                         View Report
                       </Link>
@@ -450,7 +450,7 @@ export default function ChallengeDetailPage() {
           <h2 className="text-lg font-semibold text-white mb-4">Invite Candidate</h2>
           <form
             onSubmit={handleInvite}
-            className="bg-[#111] border border-white/5 rounded-2xl p-6 space-y-4"
+            className="bg-surface border border-white/5 rounded-2xl p-6 space-y-4"
           >
             <div>
               <label className="block text-sm text-neutral-500 mb-1">Name</label>
@@ -458,7 +458,7 @@ export default function ChallengeDetailPage() {
                 type="text"
                 value={inviteForm.name}
                 onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 required
               />
             </div>
@@ -468,28 +468,28 @@ export default function ChallengeDetailPage() {
                 type="email"
                 value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={inviteLoading}
-              className="w-full bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
+              className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 text-black py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
             >
               {inviteLoading ? 'Sending...' : 'Generate Invite Link'}
             </button>
           </form>
 
           {inviteLink && (
-            <div className="mt-4 bg-[#111] border border-[#00a854]/20 rounded-2xl p-4 glow-green">
+            <div className="mt-4 bg-surface border border-primary/20 rounded-2xl p-4 glow-green">
               <p className="text-xs text-neutral-500 mb-2">Share this link with the candidate:</p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={inviteLink}
                   readOnly
-                  className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-[#00a854] text-xs font-mono"
+                  className="flex-1 bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2 text-primary text-xs font-mono"
                 />
                 <button
                   onClick={() => navigator.clipboard.writeText(inviteLink)}

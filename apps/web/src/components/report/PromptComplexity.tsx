@@ -17,7 +17,7 @@ interface PromptComplexityProps {
 
 export default function PromptComplexity({ data }: PromptComplexityProps) {
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-2">Prompt Complexity Over Time</h3>
       <p className="text-xs text-neutral-600 mb-4">
         How the candidate&apos;s prompting sophistication evolved during the session

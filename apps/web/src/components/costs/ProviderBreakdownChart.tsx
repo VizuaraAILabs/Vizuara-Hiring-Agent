@@ -25,7 +25,7 @@ export default function ProviderBreakdownChart({ data }: ProviderBreakdownChartP
 
   if (chartData.length === 0) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+      <div className="bg-surface border border-white/5 rounded-2xl p-6">
         <h3 className="text-lg font-serif italic text-white mb-1">Provider Breakdown</h3>
         <p className="text-xs text-neutral-600 mb-4">Cost share per provider</p>
         <p className="text-neutral-600 text-sm text-center py-12">No cost data yet</p>
@@ -34,7 +34,7 @@ export default function ProviderBreakdownChart({ data }: ProviderBreakdownChartP
   }
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-serif italic text-white mb-1">Provider Breakdown</h3>
       <p className="text-xs text-neutral-600 mb-4">Cost share per provider</p>
 

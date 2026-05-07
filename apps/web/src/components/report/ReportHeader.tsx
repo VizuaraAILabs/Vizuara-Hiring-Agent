@@ -10,7 +10,7 @@ interface ReportHeaderProps {
 
 export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-8">
+    <div className="bg-surface border border-white/5 rounded-2xl p-8">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-serif italic text-white mb-1">{session.candidate_name}</h1>
@@ -47,11 +47,11 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
       <div className="mt-6 grid grid-cols-2 gap-6">
         {analysis.strengths.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-[#00a854] mb-2">Strengths</h4>
+            <h4 className="text-sm font-medium text-primary mb-2">Strengths</h4>
             <ul className="space-y-1">
               {analysis.strengths.map((s, i) => (
                 <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                  <span className="text-[#00a854] mt-0.5">+</span>
+                  <span className="text-primary mt-0.5">+</span>
                   {s}
                 </li>
               ))}

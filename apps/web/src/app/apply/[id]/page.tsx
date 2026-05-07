@@ -69,7 +69,7 @@ export default function ApplyPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-[#00a854] border-t-transparent rounded-full" />
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -82,7 +82,7 @@ export default function ApplyPage() {
           <div className="inline-flex items-center gap-2.5 mb-6">
             <FPLLogo size={26} />
             <span className="text-sm font-semibold text-white">
-              Arc<span className="text-[#00a854]">Eval</span>
+              Arc<span className="text-primary">Eval</span>
             </span>
           </div>
           <h1 className="text-2xl font-serif italic text-white mb-2">Challenge Not Found</h1>
@@ -95,14 +95,14 @@ export default function ApplyPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 relative">
       <div className="absolute inset-0 bg-grid opacity-20" />
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#00a854]/5 blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
       <div className="max-w-lg w-full relative">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2.5 mb-4">
             <FPLLogo size={26} />
             <span className="text-sm font-semibold text-white">
-              Arc<span className="text-[#00a854]">Eval</span>
+              Arc<span className="text-primary">Eval</span>
             </span>
           </div>
           <p className="text-neutral-600 text-sm mb-2">{challenge.company_name}</p>
@@ -112,7 +112,7 @@ export default function ApplyPage() {
           </p>
         </div>
 
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-8 mb-6">
+        <div className="bg-surface border border-white/5 rounded-2xl p-8 mb-6">
           <h2 className="text-lg font-semibold text-white mb-4">Enter Your Details</h2>
           <p className="text-neutral-500 text-sm mb-6">
             Please provide your information to begin the assessment. You&apos;ll see the full challenge description on the next screen.
@@ -126,7 +126,7 @@ export default function ApplyPage() {
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Jane Smith"
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all placeholder:text-neutral-700"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
                 required
               />
             </div>
@@ -137,7 +137,7 @@ export default function ApplyPage() {
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 placeholder="jane@example.com"
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 transition-all placeholder:text-neutral-700"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
                 required
               />
             </div>
@@ -149,7 +149,7 @@ export default function ApplyPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 text-black py-3.5 rounded-xl text-sm font-semibold transition-all btn-glow mt-2"
+              className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 text-black py-3.5 rounded-xl text-sm font-semibold transition-all btn-glow mt-2"
             >
               {submitting ? 'Starting...' : 'Continue to Assessment'}
             </button>

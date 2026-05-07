@@ -32,7 +32,7 @@ export default function CostSummaryCards(props: CostSummaryCardsProps) {
       {cards.map((card) => (
         <div
           key={card.key}
-          className="bg-[#111] border border-white/5 rounded-2xl p-6"
+          className="bg-surface border border-white/5 rounded-2xl p-6"
         >
           <p className="text-xs text-neutral-500 mb-1">{card.label}</p>
           <p className="text-2xl font-semibold text-white">

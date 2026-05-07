@@ -88,7 +88,7 @@ export default function TemplateGallery() {
           return (
             <div
               key={template.slug}
-              className="bg-[#111] border border-white/10 rounded-xl p-5 hover:border-white/15 transition-all flex flex-col"
+              className="bg-surface border border-white/10 rounded-xl p-5 hover:border-white/15 transition-all flex flex-col"
             >
               <div className="flex items-start gap-2 mb-3">
                 <h3 className="text-base font-semibold text-white flex-1 leading-tight">

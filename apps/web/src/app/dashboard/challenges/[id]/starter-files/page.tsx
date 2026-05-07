@@ -173,7 +173,7 @@ export default function StarterFilesPage() {
       {/* Unsaved changes modal */}
       {showLeaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#111] border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+          <div className="bg-surface border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h3 className="text-white font-semibold text-lg mb-2">Unsaved Changes</h3>
             <p className="text-neutral-400 text-sm mb-6">
               You have unsaved changes. Would you like to save before leaving?

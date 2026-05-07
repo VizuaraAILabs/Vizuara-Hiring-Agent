@@ -69,7 +69,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
 
   if (loading) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         <p className="text-neutral-500 text-sm">Loading workspace files…</p>
       </div>
@@ -78,7 +78,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
 
   if (error) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
         <p className="text-neutral-500 text-sm">{error}</p>
       </div>
     );
@@ -86,7 +86,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
 
   if (!snapshot) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
         <p className="text-neutral-500 text-sm">No workspace files available for this session.</p>
       </div>
     );
@@ -100,7 +100,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
     : undefined;
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+    <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
         <div>
@@ -114,7 +114,7 @@ export default function WorkspaceViewer({ snapshot, loading, error }: WorkspaceV
       </div>
 
       {/* Two-panel layout */}
-      <div className="flex h-[600px]">
+      <div className="flex h-150">
         {/* File tree sidebar */}
         <div className="w-56 shrink-0 border-r border-white/5 overflow-y-auto p-2">
           {tree.length === 0 ? (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { useTerminal } from '@/hooks/useTerminal';
 
@@ -10,7 +10,6 @@ interface TerminalProps {
 }
 
 export default function TerminalComponent({ token, onExit }: TerminalProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const { initTerminal, connected } = useTerminal({ token, onExit });
   const initializedRef = useRef(false);
 
@@ -29,7 +28,7 @@ export default function TerminalComponent({ token, onExit }: TerminalProps) {
       {!connected && (
         <div className="absolute inset-0 bg-[#0a0a0a]/80 flex items-center justify-center z-10">
           <div className="text-center">
-            <div className="animate-spin h-8 w-8 border-2 border-[#00a854] border-t-transparent rounded-full mx-auto mb-3" />
+            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3" />
             <p className="text-neutral-500 text-sm">Connecting to terminal...</p>
           </div>
         </div>

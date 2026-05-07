@@ -31,15 +31,15 @@ export function generateToken(): string {
 }
 
 export function getScoreColor(score: number): string {
-  if (score >= 80) return 'text-[#00a854]';
-  if (score >= 60) return 'text-[#0099b8]';
+  if (score >= 80) return 'text-primary';
+  if (score >= 60) return 'text-accent';
   if (score >= 40) return 'text-amber-400';
   return 'text-red-400';
 }
 
 export function getScoreBgColor(score: number): string {
-  if (score >= 80) return 'bg-[#00a854]';
-  if (score >= 60) return 'bg-[#0099b8]';
+  if (score >= 80) return 'bg-primary';
+  if (score >= 60) return 'bg-accent';
   if (score >= 40) return 'bg-amber-400';
   return 'bg-red-400';
 }
@@ -57,8 +57,8 @@ export function getRecommendationLabel(rec: string): string {
 
 export function getRecommendationColor(rec: string): string {
   const colors: Record<string, string> = {
-    strong_yes: 'bg-[#00a854] text-black',
-    yes: 'bg-[#00a854]/80 text-black',
+    strong_yes: 'bg-primary text-black',
+    yes: 'bg-primary/80 text-black',
     neutral: 'bg-amber-400 text-black',
     no: 'bg-red-400 text-white',
     strong_no: 'bg-red-600 text-white',

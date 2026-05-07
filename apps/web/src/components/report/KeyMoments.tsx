@@ -8,7 +8,7 @@ interface KeyMomentsProps {
 }
 
 const typeConfig: Record<string, { color: string; bg: string; label: string }> = {
-  strength: { color: 'text-[#00a854]', bg: 'bg-[#00a854]/5 border-[#00a854]/20', label: 'Strength' },
+  strength: { color: 'text-primary', bg: 'bg-primary/5 border-primary/20', label: 'Strength' },
   weakness: { color: 'text-red-400', bg: 'bg-red-500/5 border-red-500/20', label: 'Weakness' },
   pivot: { color: 'text-amber-400', bg: 'bg-amber-500/5 border-amber-500/20', label: 'Pivot' },
   insight: { color: 'text-violet-400', bg: 'bg-violet-500/5 border-violet-500/20', label: 'Insight' },
@@ -16,7 +16,7 @@ const typeConfig: Record<string, { color: string; bg: string; label: string }> =
 
 export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsProps) {
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-6">Key Moments</h3>
 
       <div className="relative">
@@ -46,7 +46,7 @@ export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsPr
                     {moment.interaction_index !== undefined && onViewInTranscript && (
                       <button
                         onClick={() => onViewInTranscript(moment.interaction_index!)}
-                        className="text-xs text-[#00a854] hover:text-[#00c96b]"
+                        className="text-xs text-primary hover:text-primary-light"
                       >
                         View in transcript
                       </button>

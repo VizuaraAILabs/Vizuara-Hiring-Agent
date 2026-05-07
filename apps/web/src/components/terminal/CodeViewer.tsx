@@ -27,36 +27,33 @@ function getLanguage(filename: string): string {
 }
 
 export default function CodeViewer({ selectedFile, fileContent, fileLoading, fileError }: CodeViewerProps) {
-  const [highlighted, setHighlighted] = useState<string | null>(null);
-  const [hlLoading, setHlLoading] = useState(false);
+  const [highlighted, setHighlighted] = useState<{ key: string; html: string | null } | null>(null);
+  const highlightKey = selectedFile && fileContent
+    ? `${selectedFile}:${fileContent.content.length}:${fileContent.content.slice(0, 64)}`
+    : null;
 
   useEffect(() => {
-    if (!fileContent || !selectedFile) {
-      setHighlighted(null);
-      return;
-    }
+    if (!fileContent || !selectedFile || !highlightKey) return;
 
     let cancelled = false;
-    setHlLoading(true);
-
     const lang = getLanguage(selectedFile);
+
     codeToHtml(fileContent.content, {
       lang,
       theme: 'vitesse-dark',
     })
-      .then((html) => { if (!cancelled) setHighlighted(html); })
-      .catch(() => { if (!cancelled) setHighlighted(null); })
-      .finally(() => { if (!cancelled) setHlLoading(false); });
+      .then((html) => { if (!cancelled) setHighlighted({ key: highlightKey, html }); })
+      .catch(() => { if (!cancelled) setHighlighted({ key: highlightKey, html: null }); });
 
     return () => { cancelled = true; };
-  }, [selectedFile, fileContent]);
+  }, [selectedFile, fileContent, highlightKey]);
 
   if (!selectedFile) return null;
 
-  if (fileLoading || hlLoading) {
+  if (fileLoading || (highlightKey && highlighted?.key !== highlightKey)) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-5 w-5 border-2 border-[#00a854] border-t-transparent rounded-full" />
+        <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -81,10 +78,10 @@ export default function CodeViewer({ selectedFile, fileContent, fileLoading, fil
         </div>
       )}
       <div className="code-viewer-scroll flex-1 overflow-auto">
-        {highlighted ? (
+        {highlighted?.html ? (
           <div
             className="text-xs leading-relaxed [&>pre]:bg-transparent! [&>pre]:p-2 [&>pre]:m-0"
-            dangerouslySetInnerHTML={{ __html: highlighted }}
+            dangerouslySetInnerHTML={{ __html: highlighted.html }}
           />
         ) : (
           <pre className="text-xs leading-relaxed font-mono py-2">

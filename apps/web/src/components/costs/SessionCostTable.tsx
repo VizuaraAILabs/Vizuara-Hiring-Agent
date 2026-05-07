@@ -14,7 +14,7 @@ function formatCost(value: number): string {
 export default function SessionCostTable({ data }: SessionCostTableProps) {
   if (data.length === 0) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+      <div className="bg-surface border border-white/5 rounded-2xl p-6">
         <h3 className="text-lg font-serif italic text-white mb-1">Session Costs</h3>
         <p className="text-xs text-neutral-600 mb-4">Per-session cost breakdown</p>
         <p className="text-neutral-600 text-sm text-center py-8">No sessions tracked yet</p>
@@ -23,7 +23,7 @@ export default function SessionCostTable({ data }: SessionCostTableProps) {
   }
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-serif italic text-white mb-1">Session Costs</h3>
       <p className="text-xs text-neutral-600 mb-4">Per-session cost breakdown</p>
 

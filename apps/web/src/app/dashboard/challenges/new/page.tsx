@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import CreateChallengeForm from '@/components/dashboard/CreateChallengeForm';
 import WizardContainer from '@/components/dashboard/wizard/WizardContainer';
@@ -10,13 +10,9 @@ type Tab = 'ai' | 'manual' | 'template';
 
 export default function NewChallengePage() {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<Tab>('ai');
-
-  useEffect(() => {
-    if (searchParams.get('tab') === 'manual') {
-      setActiveTab('manual');
-    }
-  }, [searchParams]);
+  const [activeTab, setActiveTab] = useState<Tab>(
+    searchParams.get('tab') === 'manual' ? 'manual' : 'ai'
+  );
 
   return (
     <div>
@@ -26,12 +22,12 @@ export default function NewChallengePage() {
       </div>
 
       {/* Tab toggle */}
-      <div className="inline-flex bg-[#111] border border-white/10 rounded-xl p-1 mb-8">
+      <div className="inline-flex bg-surface border border-white/10 rounded-xl p-1 mb-8">
         <button
           onClick={() => setActiveTab('ai')}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'ai'
-              ? 'bg-[#00a854] text-black'
+              ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'
           }`}
         >
@@ -41,7 +37,7 @@ export default function NewChallengePage() {
           onClick={() => setActiveTab('template')}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'template'
-              ? 'bg-[#00a854] text-black'
+              ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'
           }`}
         >
@@ -51,7 +47,7 @@ export default function NewChallengePage() {
           onClick={() => setActiveTab('manual')}
           className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'manual'
-              ? 'bg-[#00a854] text-black'
+              ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'
           }`}
         >

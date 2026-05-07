@@ -33,7 +33,7 @@ export default function TimelineChart({ data }: TimelineChartProps) {
   }));
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-2">Session Timeline</h3>
       <p className="text-xs text-neutral-600 mb-4">Activity progression over time (minutes)</p>
 

@@ -50,8 +50,6 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
     [handleSend]
   );
 
-  const lastInterviewerSeq = messages.filter((m) => m.role === 'interviewer').at(-1)?.sequence_num;
-
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {/* ── Expanded chat panel ── */}
@@ -61,7 +59,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
           style={{ width: 340, height: 480 }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-light flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-light shrink-0">
             <div className="flex items-center gap-2.5">
               <InterviewerAvatar />
               <div>
@@ -88,7 +86,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
                   <InterviewerIcon className="text-primary" size={20} />
                 </div>
                 <p className="text-sm text-neutral-400 leading-relaxed">
-                  Your interviewer is watching. They'll ask questions as you work — or you can ask
+                  Your interviewer is watching. They&apos;ll ask questions as you work — or you can ask
                   them about the problem.
                 </p>
               </div>
@@ -99,7 +97,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
           </div>
 
           {/* Input */}
-          <div className="flex-shrink-0 px-3 pb-3 pt-2 border-t border-border">
+          <div className="shrink-0 px-3 pb-3 pt-2 border-t border-border">
             <div className="flex gap-2 items-end">
               <textarea
                 ref={textareaRef}
@@ -131,7 +129,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
                 onClick={handleSend}
                 disabled={!input.trim() || sending}
                 aria-label="Send message"
-                className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary hover:bg-primary-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center cursor-pointer"
+                className="shrink-0 w-9 h-9 rounded-xl bg-primary hover:bg-primary-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center cursor-pointer"
               >
                 {sending ? (
                   <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -156,7 +154,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
           className="flex items-center gap-2 px-4 py-2.5 bg-surface border border-border rounded-full shadow-lg hover:border-border-light hover:bg-surface-light transition-all cursor-pointer select-none"
           aria-label="Open interviewer"
         >
-          <div className="relative flex-shrink-0">
+          <div className="relative shrink-0">
             <InterviewerAvatar size="sm" />
             {hasUnread && (
               <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full border-2 border-surface animate-pulse" />
@@ -216,7 +214,7 @@ function InterviewerAvatar({ size = 'md' }: { size?: 'xs' | 'sm' | 'md' }) {
   const iconSize = size === 'xs' ? 8 : size === 'sm' ? 11 : 14;
   return (
     <div
-      className="rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center flex-shrink-0"
+      className="rounded-full bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0"
       style={{ width: dim, height: dim }}
     >
       <InterviewerIcon className="text-primary" size={iconSize} />

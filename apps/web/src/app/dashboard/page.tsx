@@ -19,6 +19,7 @@ interface ChallengeWithCount {
 function TrialBanner() {
   const { planStatus } = useSubscription();
   const { user } = useAuth();
+  const [now] = useState(() => Date.now());
 
   if (!planStatus || user?.isAdmin) return null;
 
@@ -26,7 +27,7 @@ function TrialBanner() {
   if (planStatus.plan === 'trial' && planStatus.canCreateSession && planStatus.trialEndsAt) {
     const daysLeft = Math.max(
       0,
-      Math.ceil((new Date(planStatus.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      Math.ceil((new Date(planStatus.trialEndsAt).getTime() - now) / (1000 * 60 * 60 * 24))
     );
     const isUrgent = daysLeft <= 3;
 
@@ -161,7 +162,7 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-6 animate-pulse">
+            <div key={i} className="bg-surface border border-white/5 rounded-2xl p-6 animate-pulse">
               <div className="h-5 bg-white/5 rounded w-2/3 mb-3" />
               <div className="h-4 bg-white/5 rounded w-full mb-2" />
               <div className="h-4 bg-white/5 rounded w-1/2" />

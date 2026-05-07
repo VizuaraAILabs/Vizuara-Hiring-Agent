@@ -29,7 +29,7 @@ export default function DailyCostChart({ data }: DailyCostChartProps) {
   }));
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-serif italic text-white mb-1">Daily Costs</h3>
       <p className="text-xs text-neutral-600 mb-4">Stacked cost by provider per day</p>
 

@@ -87,7 +87,7 @@ export default function AdminChallengeViewPage() {
 
       {/* Description */}
       {challenge.description && (
-        <div className="bg-[#111] border border-white/5 rounded-2xl mb-8 overflow-hidden">
+        <div className="bg-surface border border-white/5 rounded-2xl mb-8 overflow-hidden">
           <button
             onClick={() => setDescriptionOpen((o) => !o)}
             className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/2 transition-colors cursor-pointer"
@@ -110,7 +110,7 @@ export default function AdminChallengeViewPage() {
       )}
 
       {/* Starter Files */}
-      <div className="bg-[#111] border border-white/5 rounded-2xl mb-8 overflow-hidden">
+      <div className="bg-surface border border-white/5 rounded-2xl mb-8 overflow-hidden">
         <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-white">Starter Files</p>
@@ -163,7 +163,7 @@ export default function AdminChallengeViewPage() {
         </h2>
 
         {challenge.sessions.length === 0 ? (
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-8 text-center">
+          <div className="bg-surface border border-white/5 rounded-2xl p-8 text-center">
             <p className="text-neutral-600">No candidates yet</p>
           </div>
         ) : (
@@ -171,7 +171,7 @@ export default function AdminChallengeViewPage() {
             {challenge.sessions.map((session) => (
               <div
                 key={session.id}
-                className="bg-[#111] border border-white/5 rounded-2xl p-5 flex items-center justify-between"
+                className="bg-surface border border-white/5 rounded-2xl p-5 flex items-center justify-between"
               >
                 <div>
                   <p className="text-white font-medium">{session.candidate_name}</p>

@@ -44,15 +44,15 @@ export default function ChallengeCard({
   return (
     <Link
       href={`/dashboard/challenges/${id}`}
-      className="group block bg-[#111] border border-white/5 rounded-2xl p-6 hover:border-[#00a854]/20 transition-all duration-300"
+      className="group block bg-surface border border-white/5 rounded-2xl p-6 hover:border-primary/20 transition-all duration-300"
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-lg font-semibold text-white group-hover:text-[#00a854] transition-colors">
+        <h3 className="text-lg font-semibold text-white group-hover:text-primary transition-colors">
           {title}
         </h3>
         <span
           className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-            is_active ? 'bg-[#00a854]/10 text-[#00a854]' : 'bg-neutral-800 text-neutral-500'
+            is_active ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
           }`}
         >
           {is_active ? 'Active' : 'Inactive'}

@@ -34,7 +34,7 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
   }
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl">
+    <div className="bg-surface border border-white/5 rounded-2xl">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-6 text-left"

@@ -146,10 +146,10 @@ export default function ReportPage() {
   if (loading) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-40 bg-[#111] rounded-2xl" />
+        <div className="h-40 bg-surface rounded-2xl" />
         <div className="grid grid-cols-2 gap-4">
-          <div className="h-80 bg-[#111] rounded-2xl" />
-          <div className="h-80 bg-[#111] rounded-2xl" />
+          <div className="h-80 bg-surface rounded-2xl" />
+          <div className="h-80 bg-surface rounded-2xl" />
         </div>
       </div>
     );
@@ -205,7 +205,7 @@ export default function ReportPage() {
       <ReportHeader session={session} analysis={analysis} />
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-6 mb-6 bg-[#111] rounded-2xl p-1 border border-white/5">
+      <div className="flex gap-1 mt-6 mb-6 bg-surface rounded-2xl p-1 border border-white/5">
         {tabs.map((tab) => (
           <button
             key={tab.key}

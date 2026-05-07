@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import CostSummaryCards from '@/components/costs/CostSummaryCards';
@@ -43,7 +43,7 @@ export default function CostsPage() {
     }
   }, [user, authLoading, router]);
 
-  async function fetchData(d: number) {
+  const fetchData = useCallback(async (d: number) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/costs?days=${d}`);
@@ -58,13 +58,13 @@ export default function CostsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
   useEffect(() => {
     if (user?.isAdmin) {
       fetchData(days);
     }
-  }, [days, user]);
+  }, [days, user, fetchData]);
 
   async function handleSaveSettings(settings: Partial<CostSettings>) {
     const res = await fetch('/api/costs/settings', {
@@ -93,7 +93,7 @@ export default function CostsPage() {
           <h1 className="text-2xl font-serif italic text-white">Cost Monitoring</h1>
           <p className="text-neutral-500 mt-1">Track API and infrastructure spend</p>
         </div>
-        <div className="flex gap-1 bg-[#111] border border-white/5 rounded-xl p-1">
+        <div className="flex gap-1 bg-surface border border-white/5 rounded-xl p-1">
           {timeRanges.map((range) => (
             <button
               key={range.days}
@@ -114,13 +114,13 @@ export default function CostsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-6 animate-pulse">
+              <div key={i} className="bg-surface border border-white/5 rounded-2xl p-6 animate-pulse">
                 <div className="h-3 bg-white/5 rounded w-1/2 mb-3" />
                 <div className="h-7 bg-white/5 rounded w-2/3" />
               </div>
             ))}
           </div>
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-6 animate-pulse h-80" />
+          <div className="bg-surface border border-white/5 rounded-2xl p-6 animate-pulse h-80" />
         </div>
       ) : (
         <div className="space-y-6">

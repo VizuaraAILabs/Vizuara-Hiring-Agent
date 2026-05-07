@@ -92,7 +92,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-5">
+    <div className="bg-surface border border-white/5 rounded-2xl p-5">
       <p className="text-xs text-neutral-500 mb-1">{label}</p>
       <p className="text-2xl font-semibold text-white">{value}</p>
       {sub && <p className="text-xs text-neutral-600 mt-1">{sub}</p>}
@@ -222,7 +222,7 @@ function CompaniesTab({
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-5 animate-pulse h-16" />
+          <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-16" />
         ))}
       </div>
     );
@@ -267,7 +267,7 @@ function CompaniesTab({
         <SummaryCard label="Total challenges" value={String(companies.reduce((a, c) => a + c.challenge_count, 0))} />
       </div>
 
-      <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+      <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
         {/* Selection action bar */}
         {selected.size > 0 && (
           <div className="flex items-center justify-between px-5 py-3 bg-primary/5 border-b border-primary/10">
@@ -407,7 +407,11 @@ function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
+
     let url = '/api/admin/challenges';
     if (filterOwner === 'admin') url += '?owner=admin';
     else if (filterOwner !== 'all') url += `?company_id=${filterOwner}`;
@@ -415,11 +419,18 @@ function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
     fetch(url)
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;
         setChallenges(d.challenges ?? []);
         setAdminCompanyId(d.adminCompanyId ?? '');
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [filterOwner]);
 
   return (
@@ -443,7 +454,7 @@ function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
           <select
             value={filterOwner !== 'all' && filterOwner !== 'admin' ? filterOwner : ''}
             onChange={(e) => setFilterOwner(e.target.value || 'all')}
-            className="px-3 py-1.5 rounded-lg text-xs text-neutral-300 bg-[#111] border-2 border-white/10 focus:border-primary/50 outline-none cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs text-neutral-300 bg-surface border-2 border-white/10 focus:border-primary/50 outline-none cursor-pointer"
           >
             <option value="">Filter by company…</option>
             {companies.map((c) => (
@@ -463,11 +474,11 @@ function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-5 animate-pulse h-16" />
+            <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-16" />
           ))}
         </div>
       ) : (
-        <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+        <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-left">
@@ -544,10 +555,10 @@ function CostsTab() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-5 animate-pulse h-20" />
+            <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-20" />
           ))}
         </div>
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-5 animate-pulse h-48" />
+        <div className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-48" />
       </div>
     );
   }
@@ -584,7 +595,7 @@ function CostsTab() {
               { key: 'vps_cost', label: 'VPS' },
             ] as { key: keyof AdminCostTotals; label: string }[]
           ).map(({ key, label }) => (
-            <div key={key} className="bg-[#111] border border-white/5 rounded-2xl p-4">
+            <div key={key} className="bg-surface border border-white/5 rounded-2xl p-4">
               <p className="text-xs text-neutral-500 mb-1">{label}</p>
               <p className="text-lg font-semibold text-white">{fmt(Number(totals[key]))}</p>
             </div>
@@ -593,7 +604,7 @@ function CostsTab() {
       )}
 
       {/* Per-company table */}
-      <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden">
+      <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-white/5">
           <h3 className="text-sm font-medium text-white">Per-company breakdown</h3>
           <p className="text-xs text-neutral-500 mt-0.5">Sorted by total spend. Includes all-time usage.</p>
@@ -688,7 +699,7 @@ export default function AdminPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-[#111] border border-white/5 rounded-xl p-1 mb-6 w-fit">
+      <div className="flex gap-1 bg-surface border border-white/5 rounded-xl p-1 mb-6 w-fit">
         {tabs.map((tab) => (
           <button
             key={tab.key}

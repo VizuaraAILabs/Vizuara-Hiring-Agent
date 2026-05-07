@@ -109,8 +109,6 @@ function handleDownloadPDF(narrative: string, candidateName: string) {
 }
 
 export default function TranscriptViewer({
-  interactions: _interactions,
-  highlightIndex: _highlightIndex,
   narrative,
   narrativeLoading,
   candidateName = 'Candidate',
@@ -125,7 +123,7 @@ export default function TranscriptViewer({
 
   if (narrativeLoading) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         <p className="text-neutral-500 text-sm">Generating session narrative…</p>
         <p className="text-neutral-700 text-xs">This may take up to 30 seconds</p>
@@ -135,14 +133,14 @@ export default function TranscriptViewer({
 
   if (!narrative) {
     return (
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
         <p className="text-neutral-500 text-sm">No narrative available for this session.</p>
       </div>
     );
   }
 
   return (
-    <div ref={topRef} className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div ref={topRef} className="bg-surface border border-white/5 rounded-2xl p-6">
       {/* Header row */}
       <div className="flex items-start justify-between mb-6">
         <div>

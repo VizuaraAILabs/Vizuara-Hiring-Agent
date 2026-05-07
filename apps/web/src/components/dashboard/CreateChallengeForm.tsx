@@ -118,7 +118,7 @@ export default function CreateChallengeForm() {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
           placeholder="e.g., Build a REST API with Claude"
           required
         />
@@ -133,7 +133,7 @@ export default function CreateChallengeForm() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={10}
-          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 font-mono text-sm transition-all"
+          className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 font-mono text-sm transition-all"
           placeholder={"## Objective\nBuild a...\n\n## Requirements\n- ...\n- ...\n\n## Evaluation Criteria\n- How you break down the problem\n- How you collaborate with the AI assistant"}
           required
         />
@@ -147,7 +147,7 @@ export default function CreateChallengeForm() {
           onChange={(e) => setTimeLimit(Math.max(10, Math.min(45, parseInt(e.target.value) || 30)))}
           min={10}
           max={45}
-          className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00a854]/50 focus:border-[#00a854]/50 transition-all"
+          className="w-32 bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
         />
       </div>
 
@@ -237,7 +237,7 @@ export default function CreateChallengeForm() {
       <button
         type="submit"
         disabled={loading}
-        className="bg-[#00a854] hover:bg-[#00c96b] disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-xl transition-all btn-glow"
+        className="bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-xl transition-all btn-glow"
       >
         {loading ? 'Creating...' : 'Create Challenge'}
       </button>

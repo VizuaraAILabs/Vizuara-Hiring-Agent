@@ -196,7 +196,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       )}
 
       {/* Participant Restrictions */}
-      <div className="bg-[#111] border border-white/10 rounded-xl p-5 mb-6">
+      <div className="bg-surface border border-white/10 rounded-xl p-5 mb-6">
         <p className="text-sm font-medium text-white mb-1">Participant Restrictions</p>
         <p className="text-xs text-neutral-500 mb-3">
           {allowedEmails.length === 0
@@ -252,7 +252,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
           return (
             <div
               key={i}
-              className="bg-[#111] border border-white/10 rounded-xl p-6 hover:border-white/15 transition-all"
+              className="bg-surface border border-white/10 rounded-xl p-6 hover:border-white/15 transition-all"
             >
               {/* Header */}
               <div className="flex flex-wrap items-start gap-3 mb-3">
@@ -355,7 +355,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       <div className="flex items-center gap-4">
         <button
           onClick={onRegenerate}
-          className="px-5 py-3 bg-[#111] border border-white/10 text-neutral-400 rounded-xl hover:text-white hover:border-white/20 transition-all"
+          className="px-5 py-3 bg-surface border border-white/10 text-neutral-400 rounded-xl hover:text-white hover:border-white/20 transition-all"
         >
           Regenerate
         </button>
@@ -370,7 +370,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       {/* Progress modal */}
       {progressMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-[#111] border border-white/10 rounded-2xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl">
+          <div className="bg-surface border border-white/10 rounded-2xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl">
             <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
             <p className="text-sm text-neutral-300">{progressMessage}</p>
           </div>

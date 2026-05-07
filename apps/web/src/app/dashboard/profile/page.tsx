@@ -83,7 +83,7 @@ export default function ProfilePage() {
     return (
       <div className="max-w-lg mx-auto space-y-4 mt-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-[#111] border border-white/5 rounded-2xl p-5 animate-pulse h-20" />
+          <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-20" />
         ))}
       </div>
     );
@@ -96,7 +96,7 @@ export default function ProfilePage() {
         <p className="text-neutral-500 mt-1">Manage your company and account details</p>
       </div>
 
-      <div className="bg-[#111] border border-white/5 rounded-2xl p-6 space-y-6">
+      <div className="bg-surface border border-white/5 rounded-2xl p-6 space-y-6">
 
         {/* Company name */}
         <div className="space-y-1.5">

@@ -23,7 +23,7 @@ export default function CategoryBreakdown({ data }: CategoryBreakdownProps) {
   }));
 
   return (
-    <div className="bg-[#111] border border-white/5 rounded-2xl p-6">
+    <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-2">Activity Distribution</h3>
       <p className="text-xs text-neutral-600 mb-4">Time spent across activity categories</p>
 

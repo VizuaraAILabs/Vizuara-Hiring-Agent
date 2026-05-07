@@ -55,8 +55,8 @@ export default function FileExplorer({ token }: FileExplorerProps) {
         await createNewDirectory(fullPath);
       }
       setCreating(null);
-    } catch (err: any) {
-      setCreateError(err.message);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create item');
     }
   }
 
@@ -83,7 +83,7 @@ export default function FileExplorer({ token }: FileExplorerProps) {
   return (
     <>
       {/* Sidebar: file tree */}
-      <div className="w-56 flex-shrink-0 flex flex-col border-r border-white/5 bg-[#0a0a0a]">
+      <div className="w-56 shrink-0 flex flex-col border-r border-white/5 bg-[#0a0a0a]">
         {/* Header with actions */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
           <span className="text-xs font-medium text-neutral-400">Files</span>
@@ -114,7 +114,7 @@ export default function FileExplorer({ token }: FileExplorerProps) {
 
         {/* Inline create input */}
         {creating && (
-          <div className="px-2 py-1.5 border-b border-white/5 bg-white/[0.02]">
+          <div className="px-2 py-1.5 border-b border-white/5 bg-white/2">
             <div className="text-[10px] text-neutral-500 mb-1">
               New {creating.type}{creating.parentDir ? ` in ${creating.parentDir}` : ''}
             </div>
@@ -125,7 +125,7 @@ export default function FileExplorer({ token }: FileExplorerProps) {
               onKeyDown={handleCreateKeyDown}
               onBlur={() => setCreating(null)}
               placeholder={creating.type === 'file' ? 'filename.ext' : 'folder-name'}
-              className="w-full bg-[#111] border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-primary/50"
+              className="w-full bg-surface border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-primary/50"
             />
             {createError && <div className="text-[10px] text-red-400 mt-0.5">{createError}</div>}
           </div>
@@ -149,9 +149,9 @@ export default function FileExplorer({ token }: FileExplorerProps) {
 
       {/* Slide-over code viewer panel */}
       {selectedFile && (
-        <div className="w-[45%] max-w-2xl flex-shrink-0 flex flex-col border-r border-white/5 bg-[#0d0d0d]">
+        <div className="w-[45%] max-w-2xl shrink-0 flex flex-col border-r border-white/5 bg-[#0d0d0d]">
           {/* Panel header with close button */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#111]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-surface">
             <span className="text-xs text-neutral-400 truncate font-mono">
               {fileContent?.path || selectedFile}
             </span>
