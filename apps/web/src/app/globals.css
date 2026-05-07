@@ -96,6 +96,26 @@ body {
   box-shadow: 0 0 25px rgba(0, 168, 84, 0.4), 0 0 50px rgba(0, 168, 84, 0.15);
 }
 
+.login-ambient {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(0, 168, 84, 0.22), transparent 30%),
+    radial-gradient(circle at 75% 65%, rgba(255, 255, 255, 0.08), transparent 32%);
+  background-size: 150% 150%, 140% 140%;
+  animation: loginAmbientDrift 18s ease-in-out infinite alternate;
+}
+
+@keyframes loginAmbientDrift {
+  0% {
+    background-position: 0% 0%, 100% 70%;
+  }
+  45% {
+    background-position: 34% 22%, 58% 48%;
+  }
+  100% {
+    background-position: 18% 72%, 20% 18%;
+  }
+}
+
 /* xterm.js styles */
 .xterm {
   padding: 0;

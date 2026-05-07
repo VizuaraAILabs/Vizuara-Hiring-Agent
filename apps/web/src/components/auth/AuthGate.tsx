@@ -14,7 +14,7 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   useEffect(() => {
     if (!loading && !user) {
-      window.location.href = `/api/auth/redirect?returnTo=${encodeURIComponent(pathname)}`;
+      window.location.href = `/login?returnTo=${encodeURIComponent(pathname)}`;
     }
   }, [user, loading, pathname]);
 

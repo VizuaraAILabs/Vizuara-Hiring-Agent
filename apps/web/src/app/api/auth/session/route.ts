@@ -25,17 +25,34 @@ function getExternalOrigin(request: NextRequest): string {
   return request.nextUrl.origin;
 }
 
-export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token');
-  const origin = getExternalOrigin(request);
-
+async function createSessionResponse({
+  request,
+  token,
+  redirect,
+  returnTo,
+}: {
+  request: NextRequest;
+  token: string | null;
+  redirect: boolean;
+  returnTo?: string | null;
+}) {
   if (!token) {
-    return NextResponse.redirect(new URL('/auth/login', origin));
+    if (redirect) {
+      return NextResponse.redirect(new URL('/login', getExternalOrigin(request)));
+    }
+    return NextResponse.json({ error: 'Missing token' }, { status: 400 });
   }
 
   try {
     const adminAuth = getAdminAuth();
     const decoded = await adminAuth.verifyIdToken(token);
+
+    if (decoded.email_verified === false) {
+      if (redirect) {
+        return NextResponse.redirect(new URL('/login?error=email-not-verified', getExternalOrigin(request)));
+      }
+      return NextResponse.json({ error: 'Email verification is required' }, { status: 403 });
+    }
 
     const sessionCookie = await createSessionCookie(token);
 
@@ -65,10 +82,14 @@ export async function GET(request: NextRequest) {
       `;
     }
 
-    const returnTo = request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
-    const redirectPath = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
+    const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
+    const redirectPath = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//')
+      ? requestedReturnTo
+      : '/dashboard';
 
-    const response = NextResponse.redirect(new URL(redirectPath, origin));
+    const response = redirect
+      ? NextResponse.redirect(new URL(redirectPath, getExternalOrigin(request)))
+      : NextResponse.json({ ok: true, redirectTo: redirectPath });
 
     const cookieDomain = getCookieDomain();
     response.cookies.set(COOKIE_NAME, sessionCookie, {
@@ -85,6 +106,31 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('Auth callback error:', error);
-    return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+    if (redirect) {
+      return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+    }
+    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }
+}
+
+export async function GET(request: NextRequest) {
+  return createSessionResponse({
+    request,
+    token: request.nextUrl.searchParams.get('token'),
+    redirect: true,
+  });
+}
+
+export async function POST(request: NextRequest) {
+  let token: string | null = null;
+  let returnTo: string | null = null;
+  try {
+    const body = await request.json();
+    token = typeof body.token === 'string' ? body.token : null;
+    returnTo = typeof body.returnTo === 'string' ? body.returnTo : null;
+  } catch {
+    token = null;
+  }
+
+  return createSessionResponse({ request, token, redirect: false, returnTo });
 }

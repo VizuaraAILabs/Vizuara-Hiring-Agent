@@ -21,7 +21,7 @@ export default function SubscriptionGate({ children }: SubscriptionGateProps) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      window.location.href = `/api/auth/redirect?returnTo=${encodeURIComponent(pathname)}`;
+      window.location.href = `/login?returnTo=${encodeURIComponent(pathname)}`;
     } else if (!enrolled) {
       window.location.href = `${VIZUARA_URL}/pricing`;
     }

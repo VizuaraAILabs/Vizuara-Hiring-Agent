@@ -25,6 +25,19 @@ All variables go in `.env.production` at the project root. The deploy script (`s
 | `FIREBASE_CLIENT_EMAIL` | *(fill in)* | Firebase console > Project Settings > Service Accounts > Generate key |
 | `FIREBASE_PRIVATE_KEY` | *(fill in)* | From the same service account JSON key file. Wrap in double quotes to preserve newlines |
 
+## Firebase Client Auth
+
+Required for local email/password login in the web app.
+
+| Variable | Value | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | *(fill in)* | Firebase web app config |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | *(fill in)* | Firebase web app config |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | *(fill in)* | Must match the server-side Firebase project |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | *(fill in)* | Firebase web app config |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | *(fill in)* | Firebase web app config |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | *(fill in)* | Firebase web app config |
+
 ## Auth & Session
 
 | Variable | Default | Notes |
