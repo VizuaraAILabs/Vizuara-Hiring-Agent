@@ -171,6 +171,7 @@ export interface UsageEvent {
   model: string | null;
   duration_seconds: number | null;
   cost_usd: number;
+  company_deleted: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
 }

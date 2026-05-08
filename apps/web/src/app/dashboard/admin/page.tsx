@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ interface AdminChallenge {
 }
 
 interface AdminCompanyCost {
-  company_id: string;
+  company_id: string | null;
   company_name: string;
   plan: string;
   total_spend: number;
@@ -79,7 +81,11 @@ const PLAN_COLORS: Record<string, string> = {
   starter: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
   growth: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
   enterprise: 'text-primary bg-primary/10 border-primary/20',
+  deleted: 'text-red-300 bg-red-500/10 border-red-500/20',
 };
+
+const PLAN_FILTERS = ['trial', 'starter', 'growth', 'enterprise'] as const;
+const COMPANY_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 function PlanBadge({ plan }: { plan: string }) {
   const cls = PLAN_COLORS[plan] ?? PLAN_COLORS.trial;
@@ -209,6 +215,14 @@ function CompaniesTab({
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [companyNameFilter, setCompanyNameFilter] = useState('');
+  const [emailFilter, setEmailFilter] = useState('');
+  const [planFilter, setPlanFilter] = useState('all');
+  const [pageSize, setPageSize] = useState<(typeof COMPANY_PAGE_SIZE_OPTIONS)[number]>(25);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [companyToDelete, setCompanyToDelete] = useState<AdminCompany | null>(null);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/companies')
@@ -217,6 +231,26 @@ function CompaniesTab({
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const filteredCompanies = useMemo(() => {
+    const nameQuery = companyNameFilter.trim().toLowerCase();
+    const emailQuery = emailFilter.trim().toLowerCase();
+
+    return companies.filter((company) => {
+      const matchesName = !nameQuery || company.name.toLowerCase().includes(nameQuery);
+      const matchesEmail = !emailQuery || company.email.toLowerCase().includes(emailQuery);
+      const matchesPlan = planFilter === 'all' || company.plan === planFilter;
+      return matchesName && matchesEmail && matchesPlan;
+    });
+  }, [companies, companyNameFilter, emailFilter, planFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const paginatedCompanies = filteredCompanies.slice(pageStart, pageStart + pageSize);
+  const pageCompanyIds = paginatedCompanies.map((company) => company.id);
+  const pageStartLabel = filteredCompanies.length === 0 ? 0 : pageStart + 1;
+  const pageEndLabel = Math.min(pageStart + pageSize, filteredCompanies.length);
 
   if (loading) {
     return (
@@ -228,17 +262,35 @@ function CompaniesTab({
     );
   }
 
-  const totalPending = companies.reduce((a, c) => a + c.pending_sessions, 0);
-  const allIds = companies.map((c) => c.id);
-  const selectableCount = Math.min(companies.length, MAX_BULK_RECIPIENTS);
-  const allSelected = selected.size === selectableCount && selectableCount > 0;
+  const totalPending = filteredCompanies.reduce((a, c) => a + c.pending_sessions, 0);
+  const allSelected = pageCompanyIds.length > 0 && pageCompanyIds.every((id) => selected.has(id));
+  const hasActiveFilters = Boolean(companyNameFilter || emailFilter || planFilter !== 'all');
 
   function toggleAll() {
     if (allSelected) {
-      setSelected(new Set());
+      setSelected((prev) => {
+        const next = new Set(prev);
+        pageCompanyIds.forEach((id) => next.delete(id));
+        return next;
+      });
     } else {
-      setSelected(new Set(allIds.slice(0, MAX_BULK_RECIPIENTS)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of pageCompanyIds) {
+          if (next.size >= MAX_BULK_RECIPIENTS) break;
+          next.add(id);
+        }
+        return next;
+      });
     }
+  }
+
+  function clearFilters() {
+    setCompanyNameFilter('');
+    setEmailFilter('');
+    setPlanFilter('all');
+    setCurrentPage(1);
+    setSelected(new Set());
   }
 
   function toggleOne(id: string) {
@@ -254,17 +306,116 @@ function CompaniesTab({
     });
   }
 
-  const selectedRecipients = companies
+  async function handleDeleteCompany() {
+    if (!companyToDelete) return;
+
+    setDeletingCompanyId(companyToDelete.id);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/admin/companies/${companyToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Failed to delete company');
+      }
+
+      setCompanies((prev) => prev.filter((company) => company.id !== companyToDelete.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(companyToDelete.id);
+        return next;
+      });
+      setCompanyToDelete(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete company');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  }
+
+  const selectedRecipients = filteredCompanies
     .filter((c) => selected.has(c.id))
     .map((c) => ({ email: c.email, name: c.name }));
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <SummaryCard label="Companies" value={String(companies.length)} />
+        <SummaryCard label="Companies" value={String(filteredCompanies.length)} sub={hasActiveFilters ? `${companies.length} total` : undefined} />
         <SummaryCard label="Pending assessments" value={String(totalPending)} sub="pending + active" />
-        <SummaryCard label="Total sessions" value={String(companies.reduce((a, c) => a + c.total_sessions, 0))} />
-        <SummaryCard label="Total challenges" value={String(companies.reduce((a, c) => a + c.challenge_count, 0))} />
+        <SummaryCard label="Total sessions" value={String(filteredCompanies.reduce((a, c) => a + c.total_sessions, 0))} />
+        <SummaryCard label="Total challenges" value={String(filteredCompanies.reduce((a, c) => a + c.challenge_count, 0))} />
+      </div>
+
+      <div className="bg-surface border border-white/5 rounded-2xl p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_180px_auto]">
+          <div>
+            <label htmlFor="companyNameFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Company name
+            </label>
+            <input
+              id="companyNameFilter"
+              type="search"
+              value={companyNameFilter}
+              onChange={(e) => {
+                setCompanyNameFilter(e.target.value);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              placeholder="Filter by company..."
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="emailFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Email
+            </label>
+            <input
+              id="emailFilter"
+              type="search"
+              value={emailFilter}
+              onChange={(e) => {
+                setEmailFilter(e.target.value);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              placeholder="Filter by email..."
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="planFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Plan
+            </label>
+            <select
+              id="planFilter"
+              value={planFilter}
+              onChange={(e) => {
+                setPlanFilter(e.target.value);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors focus:border-primary cursor-pointer"
+            >
+              <option value="all">All plans</option>
+              {PLAN_FILTERS.map((plan) => (
+                <option key={plan} value={plan}>
+                  {plan.charAt(0).toUpperCase() + plan.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              className="h-10 rounded-lg border border-white/10 px-4 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
@@ -291,8 +442,50 @@ function CompaniesTab({
           </div>
         )}
 
+        <div className="flex items-center justify-between gap-4 border-b border-white/5 px-5 py-3">
+          <p className="text-xs text-neutral-500">
+            Showing {pageStartLabel}-{pageEndLabel} of {filteredCompanies.length} companies
+          </p>
+          <div className="flex items-center gap-2">
+            <label htmlFor="companiesPageSize" className="text-xs text-neutral-500">
+              Rows
+            </label>
+            <select
+              id="companiesPageSize"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) as typeof pageSize);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-xs text-neutral-300 outline-none transition-colors focus:border-primary cursor-pointer"
+            >
+              {COMPANY_PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {filteredCompanies.length === 0 ? (
+          <div className="flex h-screen items-center justify-center px-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-neutral-300">
+                {companies.length === 0 ? 'No companies found' : 'No companies match these filters'}
+              </p>
+              {companies.length > 0 && (
+                <p className="mt-1 text-xs text-neutral-600">
+                  Adjust the company name, email, or plan filters to broaden the results.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+        <div className="h-screen overflow-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-surface">
             <tr className="border-b border-white/5 text-left">
               <th className="px-5 py-3 w-10">
                 <input
@@ -309,11 +502,11 @@ function CompaniesTab({
               <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Total sessions</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Pending</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Joined</th>
-              <th className="px-5 py-3 text-xs font-medium text-neutral-500"></th>
+                  <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {companies.map((company) => {
+            {paginatedCompanies.map((company) => {
               const isSelected = selected.has(company.id);
               const atLimit = selected.size >= MAX_BULK_RECIPIENTS && !isSelected;
               return (
@@ -360,20 +553,59 @@ function CompaniesTab({
                   </td>
                   <td className="px-5 py-3.5 text-neutral-500">{fmtDate(company.created_at)}</td>
                   <td className="px-5 py-3.5">
+                    <div className="flex items-center justify-end gap-3">
                     <button
                       onClick={() => onSelectCompany(company.id)}
                       className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
                     >
                       View challenges
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCompanyToDelete(company);
+                        setDeleteError(null);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-300 cursor-pointer"
+                      aria-label={`Delete ${company.name}`}
+                      title="Delete company"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {companies.length === 0 && (
-          <p className="text-center text-neutral-600 py-12">No companies found</p>
+        </div>
+        )}
+
+        {filteredCompanies.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-white/5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-neutral-500">
+              Page {safeCurrentPage} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safeCurrentPage === 1}
+                className="h-8 rounded-lg border border-white/10 px-3 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="h-8 rounded-lg border border-white/10 px-3 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -383,6 +615,27 @@ function CompaniesTab({
           onClose={() => setShowEmailModal(false)}
         />
       )}
+
+      <ConfirmationModal
+        open={companyToDelete !== null}
+        title="Delete company?"
+        description={
+          companyToDelete
+            ? `This will permanently delete ${companyToDelete.name}'s company profile, challenges, candidate sessions, interaction logs, analysis reports, annotations, feedback, and cost settings. Historical usage cost events will be preserved for admin reporting and shown under Deleted companies. This action cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete company"
+        variant="danger"
+        confirmationValue={companyToDelete?.name}
+        confirmationLabel={companyToDelete ? `Type "${companyToDelete.name}" to confirm` : undefined}
+        isLoading={deletingCompanyId !== null}
+        error={deleteError}
+        onConfirm={handleDeleteCompany}
+        onClose={() => {
+          setCompanyToDelete(null);
+          setDeleteError(null);
+        }}
+      />
     </div>
   );
 }
