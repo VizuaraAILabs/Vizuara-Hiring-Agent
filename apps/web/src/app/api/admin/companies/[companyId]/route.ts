@@ -34,22 +34,38 @@ export async function DELETE(
         SET
           company_deleted = TRUE,
           metadata = COALESCE(ue.metadata, '{}'::jsonb) || jsonb_build_object(
-            'deleted_company_id', ${companyId},
+            'deleted_company_id', ${companyId}::text,
             'deleted_company_name', ${company.name},
             'deleted_session_id', ue.session_id
           ),
           company_id = NULL,
           session_id = NULL
-        WHERE ue.company_id = ${companyId}
+        WHERE ue.company_id = ${companyId}::uuid
           OR ue.session_id IN (
             SELECT s.id
             FROM sessions s
             JOIN challenges ch ON ch.id = s.challenge_id
-            WHERE ch.company_id = ${companyId}
+            WHERE ch.company_id = ${companyId}::uuid
           )
       `;
 
-      await trx`DELETE FROM cost_settings WHERE company_id = ${companyId}`;
+      await trx`DELETE FROM cost_settings WHERE company_id = ${companyId}::uuid`;
+
+      await trx`
+        DELETE FROM feedback_tags
+        WHERE feedback_id IN (
+          SELECT id FROM feedback WHERE company_id = ${companyId}::uuid
+        )
+      `;
+
+      await trx`
+        DELETE FROM feedback_replies
+        WHERE feedback_id IN (
+          SELECT id FROM feedback WHERE company_id = ${companyId}::uuid
+        )
+      `;
+
+      await trx`DELETE FROM feedback WHERE company_id = ${companyId}::uuid`;
 
       await trx`
         DELETE FROM interaction_annotations
@@ -58,14 +74,14 @@ export async function DELETE(
           FROM analysis_results ar
           JOIN sessions s ON s.id = ar.session_id
           JOIN challenges ch ON ch.id = s.challenge_id
-          WHERE ch.company_id = ${companyId}
+          WHERE ch.company_id = ${companyId}::uuid
         )
         OR interaction_id IN (
           SELECT i.id
           FROM interactions i
           JOIN sessions s ON s.id = i.session_id
           JOIN challenges ch ON ch.id = s.challenge_id
-          WHERE ch.company_id = ${companyId}
+          WHERE ch.company_id = ${companyId}::uuid
         )
       `;
 
@@ -75,7 +91,7 @@ export async function DELETE(
           SELECT s.id
           FROM sessions s
           JOIN challenges ch ON ch.id = s.challenge_id
-          WHERE ch.company_id = ${companyId}
+          WHERE ch.company_id = ${companyId}::uuid
         )
       `;
 
@@ -85,19 +101,19 @@ export async function DELETE(
           SELECT s.id
           FROM sessions s
           JOIN challenges ch ON ch.id = s.challenge_id
-          WHERE ch.company_id = ${companyId}
+          WHERE ch.company_id = ${companyId}::uuid
         )
       `;
 
       await trx`
         DELETE FROM sessions
         WHERE challenge_id IN (
-          SELECT id FROM challenges WHERE company_id = ${companyId}
+          SELECT id FROM challenges WHERE company_id = ${companyId}::uuid
         )
       `;
 
-      await trx`DELETE FROM challenges WHERE company_id = ${companyId}`;
-      await trx`DELETE FROM companies WHERE id = ${companyId}`;
+      await trx`DELETE FROM challenges WHERE company_id = ${companyId}::uuid`;
+      await trx`DELETE FROM companies WHERE id = ${companyId}::uuid`;
     });
 
     return NextResponse.json({ ok: true, deletedCompany: company });
