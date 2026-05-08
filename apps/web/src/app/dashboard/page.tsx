@@ -1,6 +1,7 @@
 'use client';
 
 import ChallengeCard from '@/components/dashboard/ChallengeCard';
+import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
@@ -169,15 +170,7 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-surface border border-white/5 rounded-2xl p-6 animate-pulse">
-              <div className="h-5 bg-white/5 rounded w-2/3 mb-3" />
-              <div className="h-4 bg-white/5 rounded w-full mb-2" />
-              <div className="h-4 bg-white/5 rounded w-1/2" />
-            </div>
-          ))}
-        </div>
+        <ConcentricArcLoader />
       ) : challenges.length === 0 ? (
         <div className="text-center py-20">
           <p className="text-neutral-600 text-lg mb-4">No challenges yet</p>

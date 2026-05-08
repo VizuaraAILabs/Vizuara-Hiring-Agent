@@ -12,7 +12,10 @@ const navItems = [
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true },
   { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
-  { label: 'Admin', href: '/dashboard/admin', icon: '⚙', adminOnly: true },
+  { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
+  { label: 'All Challenges', href: '/dashboard/admin/challenges', icon: '{}', adminOnly: true },
+  { label: 'Usage & Costs', href: '/dashboard/admin/costs', icon: '$', adminOnly: true },
+  { label: 'Feedback', href: '/dashboard/admin/feedback', icon: '!', adminOnly: true },
 ];
 
 const PLAN_LABELS: Record<string, string> = {
@@ -42,7 +45,7 @@ export default function Sidebar() {
   return (
     <aside className="w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-white/5">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <FPLLogo size={26} />
           <span className="text-lg font-semibold text-white">
             Arc<span className="text-primary">Eval</span>
@@ -56,8 +59,8 @@ export default function Sidebar() {
           .filter((item) => !item.adminOnly || user?.isAdmin)
           .filter((item) => !item.companyOnly || Boolean(user?.companyId))
           .map((item) => {
-            const isActive = item.href === '/dashboard'
-              ? pathname === '/dashboard'
+            const isActive = item.href === '/dashboard' || item.href === '/dashboard/admin'
+              ? pathname === item.href
               : pathname.startsWith(item.href);
             return (
               <Link

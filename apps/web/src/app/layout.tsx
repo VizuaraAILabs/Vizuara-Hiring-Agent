@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${figtree.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
+        className={`${figtree.className} ${figtree.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
       >
         <AuthProvider>
           <SubscriptionProvider>

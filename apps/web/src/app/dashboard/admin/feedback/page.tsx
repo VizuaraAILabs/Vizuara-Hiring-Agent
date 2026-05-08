@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Dropdown from '@/components/Dropdown';
 import { useAuth } from '@/context/AuthContext';
 import type { FeedbackRecord, FeedbackReply, FeedbackStats, FeedbackType } from '@/types/feedback';
 
@@ -12,6 +13,14 @@ const TYPE_BADGE: Record<string, string> = {
   survey: 'bg-purple-500/20 text-purple-400',
   general: 'bg-neutral-500/20 text-neutral-400',
 };
+
+const FEEDBACK_TYPE_OPTIONS = [
+  { value: '', label: 'All' },
+  ...(['emoji', 'nps', 'thumbs', 'survey', 'general'] as FeedbackType[]).map((type) => ({
+    value: type,
+    label: type,
+  })),
+];
 
 function StatCard({ label, value }: { label: string; value: string | number | null }) {
   return (
@@ -105,7 +114,7 @@ export default function AdminFeedbackDashboard() {
   useEffect(() => {
     if (!user) return;
     if (!user.isAdmin) { router.push('/dashboard'); return; }
-    fetchData(page);
+    queueMicrotask(() => fetchData(page));
   }, [user, router, page, fetchData]);
 
   const handleExport = () => {
@@ -179,16 +188,13 @@ export default function AdminFeedbackDashboard() {
       <div className="bg-surface-light border border-border rounded-xl p-4 mb-5 flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-neutral-400">Type</label>
-          <select
+          <Dropdown
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-primary cursor-pointer"
-          >
-            <option value="">All</option>
-            {(['emoji', 'nps', 'thumbs', 'survey', 'general'] as FeedbackType[]).map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+            options={FEEDBACK_TYPE_OPTIONS}
+            onValueChange={setTypeFilter}
+            className="w-40"
+            triggerClassName="h-10 border-border bg-surface text-neutral-200"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-neutral-400">Course slug</label>
