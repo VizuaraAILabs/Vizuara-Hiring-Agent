@@ -17,10 +17,9 @@ psql "$DATABASE_URL" -f "$ROOT_DIR/database/migrations/001_pg_schema.sql"
 
 echo "Inserting seed data..."
 
-# Use Node.js to generate proper bcrypt hash and seed data
+# Use Node.js to seed data
 node -e "
 const postgres = require('postgres');
-const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const sql = postgres('$DATABASE_URL', { max: 1 });
@@ -44,10 +43,8 @@ async function seed() {
     const sessionId = uuidv4();
     const analysisId = uuidv4();
     const token = 'demo-' + Math.random().toString(36).substring(2, 15);
-    const passwordHash = bcrypt.hashSync('password123', 10);
-
     // Insert company
-    await sql\`INSERT INTO companies (id, name, email, password_hash) VALUES (\${companyId}, 'Acme Engineering', 'demo@acme.com', \${passwordHash})\`;
+    await sql\`INSERT INTO companies (id, name, email) VALUES (\${companyId}, 'Acme Engineering', 'demo@acme.com')\`;
 
     // Insert challenge
     await sql\`INSERT INTO challenges (id, company_id, title, description, time_limit_min)

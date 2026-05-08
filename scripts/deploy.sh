@@ -69,9 +69,8 @@ docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" <<'SQL'
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM companies WHERE email = 'demo@acme.com') THEN
-    INSERT INTO companies (id, name, email, password_hash)
-    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com',
-            '$2a$10$xJ8Kq5K5K5K5K5K5K5K5KuYgYgYgYgYgYgYgYgYgYgYgYgYgYgYgY');
+    INSERT INTO companies (id, name, email)
+    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com');
     RAISE NOTICE 'Demo company seeded (email: demo@acme.com)';
   ELSE
     RAISE NOTICE 'Demo company already exists, skipping.';

@@ -4,7 +4,6 @@ export interface Company {
   id: string;
   name: string;
   email: string;
-  password_hash: string;
   firebase_uid: string | null;
   plan: PlanTier;
   trial_ends_at: string | null;

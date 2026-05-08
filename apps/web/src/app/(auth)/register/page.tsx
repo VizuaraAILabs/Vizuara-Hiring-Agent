@@ -90,6 +90,23 @@ function RegisterPageContent() {
     router.replace(getSafeReturnTo(data.redirectTo || returnTo));
   };
 
+  const savePendingSignup = async (user: User, localCompanyName: string) => {
+    const token = await user.getIdToken(true);
+    const response = await fetch('/api/auth/pending-signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        companyName: localCompanyName.trim(),
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Unable to prepare your signup. Please try again.');
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
@@ -111,6 +128,7 @@ function RegisterPageContent() {
       const clientAuth = getClientAuth();
       const credential = await createUserWithEmailAndPassword(clientAuth, email.trim(), password);
       await updateProfile(credential.user, { displayName: trimmedCompanyName });
+      await savePendingSignup(credential.user, trimmedCompanyName);
       await sendEmailVerification(credential.user, {
         url: getVerificationContinueUrl(),
         handleCodeInApp: false,

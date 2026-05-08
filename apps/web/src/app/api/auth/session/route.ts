@@ -30,25 +30,18 @@ function getSafeReturnTo(returnTo?: string | null): string {
   return returnTo;
 }
 
-function getSignupRedirectPath(returnTo?: string | null): string {
-  const params = new URLSearchParams({ returnTo: getSafeReturnTo(returnTo) });
-  return `/register?${params.toString()}`;
-}
-
 async function createSessionResponse({
   request,
   token,
   redirect,
   returnTo,
   companyName,
-  requireCompanyNameForGoogleCreate = false,
 }: {
   request: NextRequest;
   token: string | null;
   redirect: boolean;
   returnTo?: string | null;
   companyName?: string | null;
-  requireCompanyNameForGoogleCreate?: boolean;
 }) {
   if (!token) {
     if (redirect) {
@@ -70,55 +63,61 @@ async function createSessionResponse({
 
     const firebaseUid = decoded.uid;
     const trimmedCompanyName = companyName?.trim() || '';
-    const name = trimmedCompanyName || decoded.name || decoded.email?.split('@')[0] || 'Unknown';
     const email = decoded.email || '';
-    const provider = decoded.firebase?.sign_in_provider;
     const role = typeof decoded.role === 'string' ? decoded.role : null;
     const userIsAdmin = isAdmin(email, role);
     const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
 
     if (!userIsAdmin) {
-      // Upsert company record keyed by Firebase UID or email.
       const [existing] = await sql<{ id: string }[]>`
         SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
         LIMIT 1
       `;
 
       if (!existing) {
-        if (provider === 'google.com' && !trimmedCompanyName) {
-          const redirectPath = getSignupRedirectPath(requestedReturnTo);
-          if (redirect) {
-            return NextResponse.redirect(new URL(redirectPath, getExternalOrigin(request)));
-          }
-          return NextResponse.json(
-            {
-              error: 'No ArcEval account exists for this Google user. Please sign up first.',
-              code: 'signup_required',
-              redirectTo: redirectPath,
-            },
-            { status: 409 }
-          );
-        }
+        const [pendingSignup] = await sql<{ company_name: string }[]>`
+          SELECT company_name FROM pending_signups
+          WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          LIMIT 1
+        `;
 
-        if (requireCompanyNameForGoogleCreate && !trimmedCompanyName) {
-          return NextResponse.json(
-            { error: 'Company name is required to create an account. Please sign up first.' },
-            { status: 409 }
-          );
-        }
+        const companyNameForCreate =
+          trimmedCompanyName ||
+          pendingSignup?.company_name ||
+          decoded.name ||
+          email.split('@')[0] ||
+          'Unknown company';
 
         const id = uuidv4();
         const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-        await sql`
-          INSERT INTO companies (id, name, email, password_hash, firebase_uid, plan, trial_ends_at)
-          VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
-        `;
+        await sql.begin(async (tx) => {
+          const trx = tx as unknown as typeof sql;
+
+          await trx`
+            INSERT INTO companies (id, name, email, firebase_uid, plan, trial_ends_at)
+            VALUES (${id}, ${companyNameForCreate}, ${email}, ${firebaseUid}, 'trial', ${trialEndsAt})
+          `;
+
+          await trx`
+            DELETE FROM pending_signups
+            WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          `;
+        });
       } else {
         // Keep the local company name as the source of truth after account creation.
-        await sql`
-          UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
-          WHERE id = ${existing.id}
-        `;
+        await sql.begin(async (tx) => {
+          const trx = tx as unknown as typeof sql;
+
+          await trx`
+            UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
+            WHERE id = ${existing.id}
+          `;
+
+          await trx`
+            DELETE FROM pending_signups
+            WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          `;
+        });
       }
     }
 
@@ -181,6 +180,5 @@ export async function POST(request: NextRequest) {
     redirect: false,
     returnTo,
     companyName,
-    requireCompanyNameForGoogleCreate: true,
   });
 }

@@ -10,8 +10,6 @@ import FPLLogo from '@/components/FPLLogo';
 import { getClientAuth, hasFirebaseClientConfig } from '@/lib/firebase-client';
 import { useAuth } from '@/context/AuthContext';
 
-const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
-
 function getSafeReturnTo(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
   return value;
@@ -52,7 +50,6 @@ function LoginPageContent() {
     () => getSafeReturnTo(searchParams.get('returnTo')),
     [searchParams]
   );
-  const forgotPasswordUrl = `${VIZUARA_URL}/auth/forgot-password`;
 
   useEffect(() => {
     const errorCode = searchParams.get('error');
@@ -251,12 +248,6 @@ function LoginPageContent() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <a href={forgotPasswordUrl} className="text-sm text-neutral-500 transition-colors hover:text-primary">
-                  Forgot password?
-                </a>
               </div>
 
               {error && (
