@@ -159,6 +159,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: Load balancers or monitoring may treat the engine as healthy even when the database is unreachable, workers failed to start, or provider calls are failing.
 - Suggested fix: Split liveness and readiness; readiness should check DB connectivity, worker count, queue depth, and provider configuration.
 
+### WEB-P2-001: Public challenge apply flow cannot identify role-claim admin challenge owners
+
+- Status: Open
+- Area: Web API / admin challenge quotas
+- Evidence: The candidate apply route determines whether a challenge is admin-created by loading the owner company email and calling `isAdmin(company.email)` without access to the owner's Firebase role claim (`apps/web/src/app/api/challenges/[id]/apply/route.ts:63`).
+- Impact: A challenge created by a role-claim admin can be treated as a regular company challenge during candidate application, so plan/trial quota checks may apply instead of the admin challenge `sessions_limit` behavior.
+- Suggested fix: Persist admin ownership on the company or challenge at creation time, then have the apply route check that stored ownership flag instead of trying to infer admin status from email.
+
 ## P3
 
 ### AE-P3-001: Analysis engine naming still says Claude while implementation uses Gemini

@@ -49,7 +49,7 @@ async function getSessionCookie(): Promise<string | null> {
  * Shape: { sub: companyId, email, name } — matches the old JWT payload
  * so all existing API routes continue working without changes.
  */
-export async function getAuthUser(): Promise<{ sub: string; email: string; name: string } | null> {
+export async function getAuthUser(): Promise<{ sub: string; email: string; name: string; role: string | null; isAdmin: boolean } | null> {
   const session = await getSessionCookie();
   if (!session) return null;
 
@@ -64,23 +64,25 @@ export async function getAuthUser(): Promise<{ sub: string; email: string; name:
 
     if (!company) return null;
 
+    const role = typeof decoded.role === 'string' ? decoded.role : null;
+
     return {
       sub: company.id,
       email: company.email,
       name: company.name,
+      role,
+      isAdmin: isAdmin(company.email, role),
     };
   } catch {
     return null;
   }
 }
 
-const ADMIN_EMAILS = [
-  'rajatdandekar@vizuara.com',
-  'crimsonsyrus000@gmail.com',
-];
-
-export function isAdmin(email: string): boolean {
-  return ADMIN_EMAILS.includes(email.toLowerCase());
+export function isAdmin(_email: string, role?: string | null): boolean {
+  const normalizedRole = role?.trim().toUpperCase();
+  return normalizedRole === 'ADMIN'
+    || normalizedRole === 'SUPER ADMIN'
+    || normalizedRole === 'SUPER_ADMIN';
 }
 
 const ENROLLMENT_ID = process.env.ARCEVAL_ENROLLMENT_ID || '';

@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.sub && !isAdmin(user.email)) {
+    if (challenge.company_id !== user.sub && !isAdmin(user.email, user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

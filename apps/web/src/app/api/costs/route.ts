@@ -9,7 +9,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!isAdmin(user.email)) {
+    if (!isAdmin(user.email, user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

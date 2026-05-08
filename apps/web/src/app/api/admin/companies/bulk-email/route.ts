@@ -6,7 +6,7 @@ const MAX_RECIPIENTS = 100;
 
 export async function POST(request: NextRequest) {
   const user = await getAuthUser();
-  if (!user || !isAdmin(user.email)) {
+  if (!user || !isAdmin(user.email, user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

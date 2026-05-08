@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       ? JSON.stringify(starter_files)
       : null;
     // Only admins can set a per-challenge session limit
-    const sessionsLimit = isAdmin(user.email) && sessions_limit != null
+    const sessionsLimit = isAdmin(user.email, user.role) && sessions_limit != null
       ? Math.max(1, parseInt(sessions_limit) || 1)
       : null;
 

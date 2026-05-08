@@ -1,4 +1,4 @@
-import { createSessionCookie } from '@/lib/auth';
+import { createSessionCookie, isAdmin } from '@/lib/auth';
 import sql from '@/lib/db';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { NextRequest, NextResponse } from 'next/server';
@@ -65,6 +65,8 @@ async function createSessionResponse({
     const name = trimmedCompanyName || decoded.name || decoded.email?.split('@')[0] || 'Unknown';
     const email = decoded.email || '';
     const provider = decoded.firebase?.sign_in_provider;
+    const role = typeof decoded.role === 'string' ? decoded.role : null;
+    const userIsAdmin = isAdmin(email, role);
 
     // Upsert company record keyed by Firebase UID or email
     const [existing] = await sql<{ id: string }[]>`
@@ -73,7 +75,7 @@ async function createSessionResponse({
     `;
 
     if (!existing) {
-      if (requireCompanyNameForGoogleCreate && provider === 'google.com' && !trimmedCompanyName) {
+      if (requireCompanyNameForGoogleCreate && provider === 'google.com' && !trimmedCompanyName && !userIsAdmin) {
         return NextResponse.json(
           { error: 'Company name is required to create an account with Google. Please sign up first.' },
           { status: 409 }
