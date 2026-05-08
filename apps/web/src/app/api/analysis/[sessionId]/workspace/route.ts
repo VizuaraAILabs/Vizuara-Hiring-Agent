@@ -20,9 +20,10 @@ export async function GET(
   try {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
 
     const { sessionId } = await params;
-    const session = await verifyAccess(sessionId, user.sub);
+    const session = await verifyAccess(sessionId, user.companyId);
     if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     if (session.status === 'pending' || session.status === 'active') {

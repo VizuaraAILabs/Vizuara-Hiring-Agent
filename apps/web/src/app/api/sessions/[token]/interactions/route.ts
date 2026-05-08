@@ -11,6 +11,9 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const { token } = await params;
 
@@ -18,7 +21,7 @@ export async function GET(
     const [session] = await sql<{ session_id: string }[]>`
       SELECT s.id as session_id FROM sessions s
       JOIN challenges c ON s.challenge_id = c.id
-      WHERE s.token = ${token} AND c.company_id = ${user.sub}
+      WHERE s.token = ${token} AND c.company_id = ${user.companyId}
     `;
 
     if (!session) {

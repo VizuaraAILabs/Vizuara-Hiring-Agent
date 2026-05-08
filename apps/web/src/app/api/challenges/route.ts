@@ -10,12 +10,15 @@ export async function GET() {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const challenges = await sql`
       SELECT c.*, COUNT(s.id)::int as candidate_count
       FROM challenges c
       LEFT JOIN sessions s ON s.challenge_id = c.id
-      WHERE c.company_id = ${user.sub}
+      WHERE c.company_id = ${user.companyId}
       GROUP BY c.id
       ORDER BY c.created_at DESC
     `;
@@ -32,6 +35,9 @@ export async function POST(request: Request) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
     }
 
     const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, role, tech_stack, seniority, focus_areas, context } = await request.json();
@@ -67,7 +73,7 @@ export async function POST(request: Request) {
 
     await sql`
       INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, role, tech_stack, seniority, focus_areas, context)
-      VALUES (${id}, ${user.sub}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
+      VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
     `;
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;

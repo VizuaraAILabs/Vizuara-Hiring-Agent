@@ -4,6 +4,7 @@ import ChallengeCard from '@/components/dashboard/ChallengeCard';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 interface ChallengeWithCount {
@@ -126,10 +127,18 @@ function TrialBanner() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [challenges, setChallenges] = useState<ChallengeWithCount[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (user?.isAdmin && !user.companyId) {
+      router.replace('/dashboard/admin');
+      return;
+    }
+
     fetch('/api/challenges')
       .then(async (res) => {
         const data = await res.json().catch(() => []);
@@ -140,7 +149,7 @@ export default function DashboardPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [authLoading, router, user]);
 
   return (
     <div>

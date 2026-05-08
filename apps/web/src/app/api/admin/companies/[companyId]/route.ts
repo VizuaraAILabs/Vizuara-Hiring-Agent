@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser, isAdmin } from '@/lib/auth';
-import { getAdminAuth } from '@/lib/firebase-admin';
 
 export async function DELETE(
   _request: Request,
@@ -14,30 +13,17 @@ export async function DELETE(
     }
 
     const { companyId } = await params;
-    if (companyId === user.sub) {
+    if (user.companyId && companyId === user.companyId) {
       return NextResponse.json({ error: 'You cannot delete your own company.' }, { status: 400 });
     }
 
-    const [company] = await sql<{ id: string; name: string; firebase_uid: string | null }[]>`
-      SELECT id, name, firebase_uid FROM companies WHERE id = ${companyId}
+    const [company] = await sql<{ id: string; name: string }[]>`
+      SELECT id, name FROM companies WHERE id = ${companyId}
       LIMIT 1
     `;
 
     if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-    }
-
-    if (company.firebase_uid) {
-      try {
-        await getAdminAuth().deleteUser(company.firebase_uid);
-      } catch (error) {
-        const code = typeof error === 'object' && error && 'code' in error
-          ? String((error as { code?: string }).code)
-          : '';
-        if (code !== 'auth/user-not-found') {
-          throw error;
-        }
-      }
     }
 
     await sql.begin(async (tx) => {
@@ -71,6 +57,13 @@ export async function DELETE(
           SELECT ar.id
           FROM analysis_results ar
           JOIN sessions s ON s.id = ar.session_id
+          JOIN challenges ch ON ch.id = s.challenge_id
+          WHERE ch.company_id = ${companyId}
+        )
+        OR interaction_id IN (
+          SELECT i.id
+          FROM interactions i
+          JOIN sessions s ON s.id = i.session_id
           JOIN challenges ch ON ch.id = s.challenge_id
           WHERE ch.company_id = ${companyId}
         )

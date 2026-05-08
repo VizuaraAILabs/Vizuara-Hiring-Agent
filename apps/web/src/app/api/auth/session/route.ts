@@ -25,6 +25,16 @@ function getExternalOrigin(request: NextRequest): string {
   return request.nextUrl.origin;
 }
 
+function getSafeReturnTo(returnTo?: string | null): string {
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return '/dashboard';
+  return returnTo;
+}
+
+function getSignupRedirectPath(returnTo?: string | null): string {
+  const params = new URLSearchParams({ returnTo: getSafeReturnTo(returnTo) });
+  return `/register?${params.toString()}`;
+}
+
 async function createSessionResponse({
   request,
   token,
@@ -58,8 +68,6 @@ async function createSessionResponse({
       return NextResponse.json({ error: 'Email verification is required' }, { status: 403 });
     }
 
-    const sessionCookie = await createSessionCookie(token);
-
     const firebaseUid = decoded.uid;
     const trimmedCompanyName = companyName?.trim() || '';
     const name = trimmedCompanyName || decoded.name || decoded.email?.split('@')[0] || 'Unknown';
@@ -67,39 +75,58 @@ async function createSessionResponse({
     const provider = decoded.firebase?.sign_in_provider;
     const role = typeof decoded.role === 'string' ? decoded.role : null;
     const userIsAdmin = isAdmin(email, role);
+    const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
 
-    // Upsert company record keyed by Firebase UID or email
-    const [existing] = await sql<{ id: string }[]>`
-      SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
-      LIMIT 1
-    `;
+    if (!userIsAdmin) {
+      // Upsert company record keyed by Firebase UID or email.
+      const [existing] = await sql<{ id: string }[]>`
+        SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+        LIMIT 1
+      `;
 
-    if (!existing) {
-      if (requireCompanyNameForGoogleCreate && provider === 'google.com' && !trimmedCompanyName && !userIsAdmin) {
-        return NextResponse.json(
-          { error: 'Company name is required to create an account with Google. Please sign up first.' },
-          { status: 409 }
-        );
+      if (!existing) {
+        if (provider === 'google.com' && !trimmedCompanyName) {
+          const redirectPath = getSignupRedirectPath(requestedReturnTo);
+          if (redirect) {
+            return NextResponse.redirect(new URL(redirectPath, getExternalOrigin(request)));
+          }
+          return NextResponse.json(
+            {
+              error: 'No ArcEval account exists for this Google user. Please sign up first.',
+              code: 'signup_required',
+              redirectTo: redirectPath,
+            },
+            { status: 409 }
+          );
+        }
+
+        if (requireCompanyNameForGoogleCreate && !trimmedCompanyName) {
+          return NextResponse.json(
+            { error: 'Company name is required to create an account. Please sign up first.' },
+            { status: 409 }
+          );
+        }
+
+        const id = uuidv4();
+        const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        await sql`
+          INSERT INTO companies (id, name, email, password_hash, firebase_uid, plan, trial_ends_at)
+          VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
+        `;
+      } else {
+        // Keep the local company name as the source of truth after account creation.
+        await sql`
+          UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
+          WHERE id = ${existing.id}
+        `;
       }
-
-      const id = uuidv4();
-      const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      await sql`
-        INSERT INTO companies (id, name, email, password_hash, firebase_uid, plan, trial_ends_at)
-        VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
-      `;
-    } else {
-      // Keep the local company name as the source of truth after account creation.
-      await sql`
-        UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
-        WHERE id = ${existing.id}
-      `;
     }
 
-    const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
-    const redirectPath = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//')
-      ? requestedReturnTo
-      : '/dashboard';
+    const sessionCookie = await createSessionCookie(token);
+    const safeReturnTo = getSafeReturnTo(requestedReturnTo);
+    const redirectPath = userIsAdmin && safeReturnTo === '/dashboard'
+      ? '/dashboard/admin'
+      : safeReturnTo;
 
     const response = redirect
       ? NextResponse.redirect(new URL(redirectPath, getExternalOrigin(request)))

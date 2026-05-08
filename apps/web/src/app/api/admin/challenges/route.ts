@@ -16,20 +16,22 @@ export async function GET(request: Request) {
     let challenges;
 
     if (filterOwner === 'admin') {
-      challenges = await sql`
-        SELECT
-          ch.id, ch.company_id, ch.title, ch.description,
-          ch.time_limit_min, ch.is_active, ch.created_at,
-          co.name AS company_name,
-          COUNT(s.id)::int AS candidate_count
-        FROM challenges ch
-        JOIN companies co ON co.id = ch.company_id
-        LEFT JOIN sessions s ON s.challenge_id = ch.id
-        WHERE ch.company_id = ${user.sub}
-        GROUP BY ch.id, ch.company_id, ch.title, ch.description,
-                 ch.time_limit_min, ch.is_active, ch.created_at, co.name
-        ORDER BY ch.created_at DESC
-      `;
+      challenges = user.companyId
+        ? await sql`
+          SELECT
+            ch.id, ch.company_id, ch.title, ch.description,
+            ch.time_limit_min, ch.is_active, ch.created_at,
+            co.name AS company_name,
+            COUNT(s.id)::int AS candidate_count
+          FROM challenges ch
+          JOIN companies co ON co.id = ch.company_id
+          LEFT JOIN sessions s ON s.challenge_id = ch.id
+          WHERE ch.company_id = ${user.companyId}
+          GROUP BY ch.id, ch.company_id, ch.title, ch.description,
+                   ch.time_limit_min, ch.is_active, ch.created_at, co.name
+          ORDER BY ch.created_at DESC
+        `
+        : [];
     } else if (filterCompany) {
       challenges = await sql`
         SELECT
@@ -61,7 +63,7 @@ export async function GET(request: Request) {
       `;
     }
 
-    return NextResponse.json({ challenges, adminCompanyId: user.sub });
+    return NextResponse.json({ challenges, adminCompanyId: user.companyId });
   } catch (error) {
     console.error('Admin challenges error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -13,7 +13,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const companyId = user.sub;
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+
+    const companyId = user.companyId;
     const url = new URL(request.url);
     const days = parseInt(url.searchParams.get('days') || '30');
 

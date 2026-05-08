@@ -11,6 +11,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const { id } = await params;
 
@@ -20,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.sub) {
+    if (challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

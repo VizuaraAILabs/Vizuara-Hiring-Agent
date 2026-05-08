@@ -7,6 +7,7 @@ import type { FeedbackSubmission } from '@/types/feedback';
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
 
   const body: FeedbackSubmission = await req.json();
   if (!body.type) return NextResponse.json({ error: 'Missing feedback type' }, { status: 400 });
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (['emoji', 'nps', 'thumbs'].includes(body.type)) {
     const [existing] = await sql`
       SELECT id FROM feedback
-      WHERE company_id = ${user.sub}
+      WHERE company_id = ${user.companyId}
         AND type = ${body.type}
         AND course_slug IS NOT DISTINCT FROM ${courseSlug}
         AND pod_slug IS NOT DISTINCT FROM ${podSlug}
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     INSERT INTO feedback (id, company_id, type, course_slug, pod_slug, content_type, notebook_order, rating, comment, survey_data, category, page_url)
     VALUES (
       ${feedbackId},
-      ${user.sub},
+      ${user.companyId},
       ${body.type},
       ${courseSlug},
       ${podSlug},
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
 
   const { searchParams } = req.nextUrl;
   const type = searchParams.get('type');
@@ -95,7 +97,7 @@ export async function GET(req: NextRequest) {
 
   const [row] = await sql`
     SELECT * FROM feedback
-    WHERE company_id = ${user.sub}
+    WHERE company_id = ${user.companyId}
       AND type = ${type}
       AND course_slug IS NOT DISTINCT FROM ${courseSlug}
       AND pod_slug IS NOT DISTINCT FROM ${podSlug}

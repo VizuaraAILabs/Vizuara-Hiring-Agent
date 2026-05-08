@@ -73,6 +73,11 @@ function LoginPageContent() {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (data.code === 'signup_required' && typeof data.redirectTo === 'string') {
+        await signOut(getClientAuth()).catch(() => undefined);
+        router.replace(data.redirectTo);
+        return;
+      }
       throw new Error(data.error || 'Unable to create your session.');
     }
 

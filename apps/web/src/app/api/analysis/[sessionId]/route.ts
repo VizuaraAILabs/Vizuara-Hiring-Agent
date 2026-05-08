@@ -9,6 +9,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const { sessionId } = await params;
 
@@ -18,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
     }
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${session.challenge_id}`;
-    if (!challenge || challenge.company_id !== user.sub) {
+    if (!challenge || challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -41,6 +44,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const { sessionId } = await params;
 
@@ -50,7 +56,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     }
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${session.challenge_id}`;
-    if (!challenge || challenge.company_id !== user.sub) {
+    if (!challenge || challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

@@ -621,7 +621,7 @@ function CompaniesTab({
         title="Delete company?"
         description={
           companyToDelete
-            ? `This will permanently delete ${companyToDelete.name}'s company profile, challenges, candidate sessions, interaction logs, analysis reports, annotations, feedback, and cost settings. Historical usage cost events will be preserved for admin reporting and shown under Deleted companies. This action cannot be undone.`
+            ? `This will permanently delete ${companyToDelete.name}'s ArcEval company profile, challenges, candidate sessions, interaction logs, analysis reports, annotations, feedback, and cost settings. Historical usage cost events will be preserved for admin reporting and shown under Deleted companies. The shared Vizuara/Firebase auth user will not be deleted. This action cannot be undone.`
             : ''
         }
         confirmLabel="Delete company"

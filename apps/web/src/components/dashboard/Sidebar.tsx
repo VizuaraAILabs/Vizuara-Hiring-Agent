@@ -8,10 +8,10 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const navItems = [
-  { label: 'Challenges', href: '/dashboard', icon: '{}' },
-  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
+  { label: 'Challenges', href: '/dashboard', icon: '{}', companyOnly: true },
+  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true },
   { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
-  { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true },
+  { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
   { label: 'Admin', href: '/dashboard/admin', icon: '⚙', adminOnly: true },
 ];
 
@@ -54,7 +54,7 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 space-y-1">
         {navItems
           .filter((item) => !item.adminOnly || user?.isAdmin)
-          .filter((item) => !item.companyOnly || !user?.isAdmin)
+          .filter((item) => !item.companyOnly || Boolean(user?.companyId))
           .map((item) => {
           const isActive = item.href === '/dashboard'
             ? pathname === '/dashboard'
