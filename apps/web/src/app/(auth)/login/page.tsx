@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, signOut, type User } from 'firebase/auth';
@@ -133,8 +134,8 @@ function LoginPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#090909] text-white">
-      <div className="min-h-screen grid lg:grid-cols-[1.05fr_0.95fr]">
+    <main className="min-h-screen bg-[#090909] pt-[65px] text-white">
+      <div className="min-h-[calc(100vh-65px)] grid lg:grid-cols-[1.05fr_0.95fr]">
         <section className="relative hidden lg:grid overflow-hidden border-r border-white/10 px-12 py-10">
           <div className="login-ambient absolute inset-0" />
           <div className="absolute inset-0 opacity-[0.08] bg-[linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] bg-size-[44px_44px]" />
@@ -173,13 +174,16 @@ function LoginPageContent() {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={loadingMethod !== null}
-                className="group flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-white/12 bg-white/[0.04] text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-white/25 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
+                className="group flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-black text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-white/20 hover:bg-neutral-950 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-white text-[13px] font-bold shadow-sm transition-transform group-hover:scale-105">
-                  <span aria-hidden="true">
-                    <span className="text-[#4285f4]">G</span>
-                  </span>
-                </span>
+                <Image
+                  src="/google-logo.svg"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="h-6 w-6 shrink-0 transition-transform group-hover:scale-105"
+                  aria-hidden="true"
+                />
                 <span>{loadingMethod === 'google' ? 'Signing in with Google...' : 'Continue with Google'}</span>
               </button>
 
@@ -204,7 +208,7 @@ function LoginPageContent() {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email"
                     required
-                    className="h-12 w-full rounded-lg border border-white/10 bg-white/[0.03] pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
+                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
                     placeholder="you@company.com"
                   />
                 </div>
@@ -223,7 +227,7 @@ function LoginPageContent() {
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="current-password"
                     required
-                    className="h-12 w-full rounded-lg border border-white/10 bg-white/[0.03] pl-10 pr-12 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
+                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-12 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
                     placeholder="Enter your password"
                   />
                   <button

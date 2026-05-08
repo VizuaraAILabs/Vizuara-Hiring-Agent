@@ -123,7 +123,7 @@ export default function DimensionEvidenceModal({
 
           {/* Expected Standard */}
           {detail.expected_standard && (
-            <div className="rounded-xl border border-white/5 bg-white/[0.03] p-4 space-y-1.5">
+            <div className="rounded-xl border border-white/5 bg-white/3 p-4 space-y-1.5">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 size={14} className="text-primary" />
                 <span className="text-xs font-semibold text-primary uppercase tracking-wide">
@@ -141,7 +141,7 @@ export default function DimensionEvidenceModal({
             </h4>
 
             {!hasPoints ? (
-              <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5 text-center">
+              <div className="rounded-xl border border-white/5 bg-white/2 p-5 text-center">
                 <p className="text-sm text-neutral-600">
                   Detailed evidence is not available for this analysis.
                   Re-run analysis to generate transcript-grounded evidence.
@@ -150,7 +150,7 @@ export default function DimensionEvidenceModal({
             ) : (
               <div className="rounded-xl border border-white/5 overflow-hidden">
                 {/* Column headers */}
-                <div className="grid grid-cols-2 border-b border-white/5 bg-white/[0.03]">
+                <div className="grid grid-cols-2 border-b border-white/5 bg-white/3">
                   <div className="px-4 py-2.5 text-xs font-semibold text-neutral-400 uppercase tracking-wide border-r border-white/5">
                     Observed
                   </div>
@@ -170,7 +170,7 @@ export default function DimensionEvidenceModal({
                       {/* Transcript quote */}
                       <div className="flex items-start gap-2">
                         <Quote size={12} className="text-neutral-600 mt-0.5 shrink-0" />
-                        <span className="text-xs font-mono text-neutral-300 leading-relaxed bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/5 block w-full">
+                        <span className="text-xs font-mono text-neutral-300 leading-relaxed bg-white/4 px-2.5 py-1.5 rounded-lg border border-white/5 block w-full">
                           {point.transcript_quote}
                         </span>
                       </div>
