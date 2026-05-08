@@ -35,7 +35,7 @@ export async function DELETE(
           company_deleted = TRUE,
           metadata = COALESCE(ue.metadata, '{}'::jsonb) || jsonb_build_object(
             'deleted_company_id', ${companyId}::text,
-            'deleted_company_name', ${company.name},
+            'deleted_company_name', ${company.name}::text,
             'deleted_session_id', ue.session_id
           ),
           company_id = NULL,
