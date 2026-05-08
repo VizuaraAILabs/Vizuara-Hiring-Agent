@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import MarkdownViewer from '@/components/MarkdownViewer';
 import { useAuth } from '@/context/AuthContext';
 import type { GeneratedChallenge } from './types';
 
@@ -261,7 +262,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
                   {challenge.difficulty}
                 </span>
                 <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 text-neutral-400 border border-white/10">
-                  {challenge.duration_minutes} min
+                  {timeLimitMin} min
                 </span>
               </div>
 
@@ -279,9 +280,10 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
 
               {/* Description */}
               <div className="mb-4">
-                <pre className="text-neutral-400 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {isExpanded ? challenge.description : getDescriptionPreview(challenge.description)}
-                </pre>
+                <MarkdownViewer
+                  content={isExpanded ? challenge.description : getDescriptionPreview(challenge.description)}
+                  className="max-w-none"
+                />
                 <button
                   type="button"
                   onClick={() => setExpandedIndex(isExpanded ? null : i)}

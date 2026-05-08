@@ -12,6 +12,18 @@ web:
 web-local:
     scripts\web-local-env.cmd
 
+# Start the terminal server used by local assessment sessions.
+terminal:
+    cd apps\terminal-server && npm run dev
+
+# Build the Docker image used for candidate sandbox containers.
+sandbox-build:
+    docker build -t hiring-sandbox -f docker/Dockerfile.sandbox .
+
+# Confirm the candidate sandbox image exists locally.
+sandbox-check:
+    docker images hiring-sandbox
+
 # Run every Postgres migration against the DATABASE_URL in .env.local.
 migrate-local-all:
     scripts\migrate-local.cmd all

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { codeToHtml } from 'shiki';
 import type { StarterFile } from '@/types';
 
 interface StarterFilesEditorProps {
@@ -81,6 +82,42 @@ function getExtLabel(name: string): string | null {
   const idx = name.lastIndexOf('.');
   if (idx === -1) return null;
   return EXTENSION_LABELS[name.slice(idx).toLowerCase()] || null;
+}
+
+function getLanguage(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    rb: 'ruby',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    cs: 'csharp',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    md: 'markdown',
+    sql: 'sql',
+    xml: 'xml',
+  };
+  if (filename.toLowerCase().endsWith('dockerfile')) return 'dockerfile';
+  return map[ext] ?? 'text';
 }
 
 // --- Context Menu ---
@@ -356,6 +393,8 @@ export default function StarterFilesEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  const highlightedEditorRef = useRef<HTMLDivElement>(null);
+  const [highlightedCode, setHighlightedCode] = useState<{ key: string; html: string | null } | null>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -388,6 +427,32 @@ export default function StarterFilesEditor({
   // Derive the file being edited (only files, not directories)
   const selectedFileData = files.find((f) => f.path === selectedPath);
   const isFull = mode === 'full';
+  const highlightKey = selectedFileData
+    ? `${selectedFileData.path}:${selectedFileData.content.length}:${selectedFileData.content.slice(0, 64)}`
+    : null;
+
+  useEffect(() => {
+    if (!selectedFileData || !highlightKey) {
+      setHighlightedCode(null);
+      return;
+    }
+
+    let cancelled = false;
+    codeToHtml(selectedFileData.content || ' ', {
+      lang: getLanguage(selectedFileData.path),
+      theme: 'vitesse-dark',
+    })
+      .then((html) => {
+        if (!cancelled) setHighlightedCode({ key: highlightKey, html });
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightedCode({ key: highlightKey, html: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [highlightKey, selectedFileData]);
 
   // Get target directory for new file/folder based on selection
   function getCreationTarget(): string {
@@ -716,6 +781,12 @@ export default function StarterFilesEditor({
     }
   }
 
+  function handleEditorScroll(e: React.UIEvent<HTMLTextAreaElement>) {
+    if (!highlightedEditorRef.current) return;
+    highlightedEditorRef.current.scrollTop = e.currentTarget.scrollTop;
+    highlightedEditorRef.current.scrollLeft = e.currentTarget.scrollLeft;
+  }
+
   // --- Breadcrumb for selected file ---
 
   function renderBreadcrumb(filePath: string) {
@@ -898,13 +969,27 @@ export default function StarterFilesEditor({
           {selectedFileData ? (
             <>
               {renderBreadcrumb(selectedFileData.path)}
-              <textarea
-                value={selectedFileData.content}
-                onChange={(e) => handleContentChange(e.target.value)}
-                onKeyDown={handleTextareaKeyDown}
-                className="flex-1 w-full bg-transparent text-white font-mono text-sm p-3 resize-none focus:outline-none leading-relaxed"
-                spellCheck={false}
-              />
+              <div className="relative flex-1 min-h-0">
+                <div
+                  ref={highlightedEditorRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-sm leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-sm [&_pre]:!leading-relaxed"
+                >
+                  {highlightedCode?.key === highlightKey && highlightedCode.html ? (
+                    <div dangerouslySetInnerHTML={{ __html: highlightedCode.html }} />
+                  ) : (
+                    <pre className="whitespace-pre text-neutral-300">{selectedFileData.content}</pre>
+                  )}
+                </div>
+                <textarea
+                  value={selectedFileData.content}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  onKeyDown={handleTextareaKeyDown}
+                  onScroll={handleEditorScroll}
+                  className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-3 font-mono text-sm leading-relaxed text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  spellCheck={false}
+                />
+              </div>
             </>
           ) : (
             <div className="flex items-center justify-center h-full">
