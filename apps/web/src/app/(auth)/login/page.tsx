@@ -31,7 +31,7 @@ function getAuthErrorMessage(code: string | undefined): string {
     case 'auth/popup-closed-by-user':
       return 'Google sign-in was closed before it finished.';
     case 'email-not-verified':
-      return 'Please verify your email through the link sent by Vizuara before signing in.';
+      return 'Please verify your email through the link we sent before signing in.';
     default:
       return 'Unable to sign in. Please try again.';
   }
@@ -46,6 +46,7 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [loadingMethod, setLoadingMethod] = useState<'email' | 'google' | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const returnTo = useMemo(
     () => getSafeReturnTo(searchParams.get('returnTo')),
@@ -56,6 +57,10 @@ function LoginPageContent() {
   useEffect(() => {
     const errorCode = searchParams.get('error');
     if (errorCode) setError(getAuthErrorMessage(errorCode));
+
+    if (searchParams.get('verified') === '1') {
+      setNotice('Email verified. Sign in to continue to ArcEval.');
+    }
   }, [searchParams]);
 
   const createLocalSession = async (user: User) => {
@@ -78,6 +83,7 @@ function LoginPageContent() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    setNotice('');
 
     if (!hasFirebaseClientConfig()) {
       setError('Firebase login is not configured for this environment.');
@@ -109,6 +115,7 @@ function LoginPageContent() {
 
   const handleGoogleSignIn = async () => {
     setError('');
+    setNotice('');
 
     if (!hasFirebaseClientConfig()) {
       setError('Firebase login is not configured for this environment.');
@@ -134,7 +141,7 @@ function LoginPageContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#090909] pt-[65px] text-white">
+    <main className="min-h-screen bg-[#090909] pt-16.25 text-white">
       <div className="min-h-[calc(100vh-65px)] grid lg:grid-cols-[1.05fr_0.95fr]">
         <section className="relative hidden lg:grid overflow-hidden border-r border-white/10 px-12 py-10">
           <div className="login-ambient absolute inset-0" />
@@ -165,7 +172,7 @@ function LoginPageContent() {
               <p className="text-xs uppercase tracking-[0.28em] text-neutral-500 mb-3">Company Login</p>
               <h2 className="text-3xl font-semibold">Welcome back</h2>
               <p className="mt-2 text-sm text-neutral-500">
-                Use your Vizuara Firebase account to continue.
+                Use your verified ArcEval account to continue.
               </p>
             </div>
 
@@ -253,6 +260,12 @@ function LoginPageContent() {
                 </div>
               )}
 
+              {notice && (
+                <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+                  {notice}
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loadingMethod !== null}
@@ -269,7 +282,7 @@ function LoginPageContent() {
                 href="/register"
                 className="font-medium text-neutral-300 transition-colors hover:text-primary"
               >
-                Sign up on Vizuara
+                Create an ArcEval account
               </Link>
             </p>
           </div>

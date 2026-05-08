@@ -30,11 +30,15 @@ async function createSessionResponse({
   token,
   redirect,
   returnTo,
+  companyName,
+  requireCompanyNameForGoogleCreate = false,
 }: {
   request: NextRequest;
   token: string | null;
   redirect: boolean;
   returnTo?: string | null;
+  companyName?: string | null;
+  requireCompanyNameForGoogleCreate?: boolean;
 }) {
   if (!token) {
     if (redirect) {
@@ -56,10 +60,11 @@ async function createSessionResponse({
 
     const sessionCookie = await createSessionCookie(token);
 
-    // Vizuara sets decoded.name to the company name when redirecting to ArcEval
     const firebaseUid = decoded.uid;
-    const name = decoded.name || decoded.email?.split('@')[0] || 'Unknown';
+    const trimmedCompanyName = companyName?.trim() || '';
+    const name = trimmedCompanyName || decoded.name || decoded.email?.split('@')[0] || 'Unknown';
     const email = decoded.email || '';
+    const provider = decoded.firebase?.sign_in_provider;
 
     // Upsert company record keyed by Firebase UID or email
     const [existing] = await sql<{ id: string }[]>`
@@ -68,6 +73,13 @@ async function createSessionResponse({
     `;
 
     if (!existing) {
+      if (requireCompanyNameForGoogleCreate && provider === 'google.com' && !trimmedCompanyName) {
+        return NextResponse.json(
+          { error: 'Company name is required to create an account with Google. Please sign up first.' },
+          { status: 409 }
+        );
+      }
+
       const id = uuidv4();
       const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       await sql`
@@ -75,9 +87,9 @@ async function createSessionResponse({
         VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
       `;
     } else {
-      // Sync profile and firebase_uid from Vizuara on every login
+      // Keep the local company name as the source of truth after account creation.
       await sql`
-        UPDATE companies SET email = ${email}, name = ${name}, firebase_uid = ${firebaseUid}
+        UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
         WHERE id = ${existing.id}
       `;
     }
@@ -124,13 +136,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let token: string | null = null;
   let returnTo: string | null = null;
+  let companyName: string | null = null;
   try {
     const body = await request.json();
     token = typeof body.token === 'string' ? body.token : null;
     returnTo = typeof body.returnTo === 'string' ? body.returnTo : null;
+    companyName = typeof body.companyName === 'string' ? body.companyName : null;
   } catch {
     token = null;
   }
 
-  return createSessionResponse({ request, token, redirect: false, returnTo });
+  return createSessionResponse({
+    request,
+    token,
+    redirect: false,
+    returnTo,
+    companyName,
+    requireCompanyNameForGoogleCreate: true,
+  });
 }

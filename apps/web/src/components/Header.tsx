@@ -5,11 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import FPLLogo from '@/components/FPLLogo';
 
-const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
-const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
-
-const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
-
 export default function Header() {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
@@ -62,12 +57,12 @@ export default function Header() {
               >
                 Sign in
               </Link>
-              <a
-                href={SIGNUP_URL}
+              <Link
+                href="/register"
                 className="bg-primary hover:bg-primary-light text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
               >
                 Get Started
-              </a>
+              </Link>
             </>
           )}
         </div>
