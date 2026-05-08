@@ -30,6 +30,8 @@ function getAuthErrorMessage(code: string | undefined): string {
       return 'Google sign-in was closed before it finished.';
     case 'email-not-verified':
       return 'Please verify your email through the link we sent before signing in.';
+    case 'session-setup-failed':
+      return 'Unable to create your session. Please try again in a moment.';
     default:
       return 'Unable to sign in. Please try again.';
   }

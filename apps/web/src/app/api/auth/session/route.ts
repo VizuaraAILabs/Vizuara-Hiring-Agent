@@ -50,10 +50,20 @@ async function createSessionResponse({
     return NextResponse.json({ error: 'Missing token' }, { status: 400 });
   }
 
-  try {
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(token);
+  const adminAuth = getAdminAuth();
+  const decoded = await adminAuth.verifyIdToken(token).catch((error) => {
+    console.error('Auth token verification error:', error);
+    return null;
+  });
 
+  if (!decoded) {
+    if (redirect) {
+      return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+    }
+    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+  }
+
+  try {
     if (decoded.email_verified === false) {
       if (redirect) {
         return NextResponse.redirect(new URL('/login?error=email-not-verified', getExternalOrigin(request)));
@@ -145,11 +155,14 @@ async function createSessionResponse({
 
     return response;
   } catch (error) {
-    console.error('Auth callback error:', error);
+    console.error('Auth session setup error:', error);
     if (redirect) {
-      return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+      return NextResponse.redirect(new URL('/login?error=session-setup-failed', getExternalOrigin(request)));
     }
-    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Unable to create your session. Please try again in a moment.' },
+      { status: 500 }
+    );
   }
 }
 
