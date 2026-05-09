@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useFileExplorer } from '@/hooks/useFileExplorer';
 import FileTree from './FileTree';
 import CodeViewer from './CodeViewer';
 import type { FileTreeActions } from './FileTreeNode';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 interface FileExplorerProps {
   token: string;
+  onReadyChange?: (ready: boolean, error?: string | null) => void;
 }
 
-export default function FileExplorer({ token }: FileExplorerProps) {
+export default function FileExplorer({ token, onReadyChange }: FileExplorerProps) {
   const {
     tree,
     loading,
@@ -32,6 +34,13 @@ export default function FileExplorer({ token }: FileExplorerProps) {
   const [creating, setCreating] = useState<{ type: 'file' | 'folder'; parentDir: string } | null>(null);
   const [createName, setCreateName] = useState('');
   const [createError, setCreateError] = useState('');
+  const [deletePath, setDeletePath] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    onReadyChange?.(!loading && !error, error);
+  }, [loading, error, onReadyChange]);
 
   const handleCreateFile = useCallback((parentDir: string) => {
     setCreating({ type: 'file', parentDir });
@@ -66,10 +75,23 @@ export default function FileExplorer({ token }: FileExplorerProps) {
   }
 
   const handleDelete = useCallback(async (filePath: string) => {
-    const confirmed = window.confirm(`Delete "${filePath}"?`);
-    if (!confirmed) return;
-    await deleteItem(filePath);
-  }, [deleteItem]);
+    setDeletePath(filePath);
+    setDeleteError(null);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deletePath || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteItem(deletePath);
+      setDeletePath(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete item.');
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteItem, deletePath, deleting]);
 
   const actions: FileTreeActions = {
     onSelectFile: selectFile,
@@ -175,6 +197,22 @@ export default function FileExplorer({ token }: FileExplorerProps) {
           </div>
         </div>
       )}
+      <ConfirmationModal
+        open={Boolean(deletePath)}
+        title="Delete Item?"
+        description={`Delete "${deletePath ?? ''}" from this workspace? This cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={deleting}
+        error={deleteError}
+        onConfirm={confirmDelete}
+        onClose={() => {
+          if (deleting) return;
+          setDeletePath(null);
+          setDeleteError(null);
+        }}
+      />
     </>
   );
 }

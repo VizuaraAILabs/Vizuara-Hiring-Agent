@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MarkdownViewer from '@/components/MarkdownViewer';
+import ArcSpinner from '@/components/ArcSpinner';
 import { useAuth } from '@/context/AuthContext';
 import type { GeneratedChallenge } from './types';
 
@@ -373,7 +374,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       {progressMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-surface border border-white/10 rounded-2xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl">
-            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+            <ArcSpinner label={progressMessage} sizeClassName="h-12 w-12" />
             <p className="text-sm text-neutral-300">{progressMessage}</p>
           </div>
         </div>

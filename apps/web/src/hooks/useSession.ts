@@ -44,6 +44,20 @@ export function useSession(token: string) {
     }
   };
 
+  const markWorkspaceReady = async () => {
+    try {
+      const res = await fetch(`/api/sessions/${token}/ready`, { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        setSession((prev) => prev ? { ...prev, ...updated } : updated);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   const endSession = async () => {
     try {
       const res = await fetch(`/api/sessions/${token}/end`, { method: 'POST' });
@@ -58,5 +72,5 @@ export function useSession(token: string) {
     }
   };
 
-  return { session, loading, error, startSession, endSession };
+  return { session, loading, error, startSession, markWorkspaceReady, endSession };
 }

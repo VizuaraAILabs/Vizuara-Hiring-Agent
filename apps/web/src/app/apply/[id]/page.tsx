@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import FPLLogo from '@/components/FPLLogo';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface ChallengeInfo {
   id: string;
@@ -69,7 +69,7 @@ export default function ApplyPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+        <ArcSpinner label="Loading assessment" />
       </div>
     );
   }
@@ -80,7 +80,6 @@ export default function ApplyPage() {
         <div className="absolute inset-0 bg-grid opacity-20" />
         <div className="text-center relative">
           <div className="inline-flex items-center gap-2.5 mb-6">
-            <FPLLogo size={26} />
             <span className="text-sm font-semibold text-white">
               Arc<span className="text-primary">Eval</span>
             </span>
@@ -93,75 +92,96 @@ export default function ApplyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 relative">
+    <div className="min-h-screen bg-[#0a0a0a] px-5 py-8 md:px-8 md:py-10 relative">
       <div className="absolute inset-0 bg-grid opacity-20" />
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-125 h-125 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+      <div className="absolute left-1/2 top-0 h-80 w-[42rem] -translate-x-1/2 rounded-full bg-primary/8 blur-[140px] pointer-events-none" />
 
-      <div className="max-w-lg w-full relative">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2.5 mb-4">
-            <FPLLogo size={26} />
-            <span className="text-sm font-semibold text-white">
-              Arc<span className="text-primary">Eval</span>
-            </span>
+      <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center">
+        <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)] lg:items-stretch">
+          <section className="flex min-h-[520px] flex-col justify-between p-7 md:p-10">
+            <div>
+              <p className="mb-5 text-xs font-semibold uppercase tracking-[0.28em] text-primary">
+                Candidate Assessment
+              </p>
+              <p className="mb-4 text-xl font-semibold text-white md:text-2xl">
+                {challenge.company_name}
+              </p>
+              <h1 className="max-w-3xl text-4xl font-serif italic leading-tight text-white md:text-5xl">
+                {challenge.title}
+              </h1>
+              <p className="mt-5 max-w-2xl text-base leading-7 text-neutral-400">
+                Confirm your details to continue. The full challenge brief appears on the next screen before the timer starts.
+              </p>
+            </div>
+
+            <div className="grid gap-3 border-t border-white/8 pt-6 text-sm text-neutral-400 sm:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">Duration</p>
+                <p className="mt-2 text-lg font-semibold text-white">{challenge.time_limit_min} min</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">Format</p>
+                <p className="mt-2 text-lg font-semibold text-white">Live workspace</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">Focus</p>
+                <p className="mt-2 text-lg font-semibold text-white">AI collaboration</p>
+              </div>
+            </div>
+          </section>
+
+          <div className="flex flex-col justify-center p-6 md:p-8">
+            <div className="mb-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-600">Step 1 of 2</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Enter Your Details</h2>
+              <p className="mt-3 text-sm leading-6 text-neutral-500">
+                Use the same name and email you want associated with this assessment submission.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-sm text-neutral-400 mb-2">Full Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Jane Smith"
+                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-neutral-400 mb-2">Email Address</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="jane@example.com"
+                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
+                  required
+                />
+              </div>
+
+              {submitError && (
+                <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">{submitError}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-primary hover:bg-primary-light disabled:opacity-70 text-black py-4 rounded-xl text-sm font-semibold transition-all btn-glow mt-2 disabled:cursor-wait"
+              >
+                {submitting ? 'Creating your session...' : 'Continue to Assessment'}
+              </button>
+            </form>
+
+            <p className="mt-7 border-t border-white/8 pt-5 text-center text-xs text-neutral-700">
+              Powered by <span className="text-neutral-500">ArcEval</span> - AI Collaboration Assessment
+            </p>
           </div>
-          <p className="text-neutral-600 text-sm mb-2">{challenge.company_name}</p>
-          <h1 className="text-3xl font-serif italic text-white mb-2">{challenge.title}</h1>
-          <p className="text-neutral-500 text-sm">
-            {challenge.time_limit_min} minute timed assessment
-          </p>
         </div>
-
-        <div className="bg-surface border border-white/5 rounded-2xl p-8 mb-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Enter Your Details</h2>
-          <p className="text-neutral-500 text-sm mb-6">
-            Please provide your information to begin the assessment. You&apos;ll see the full challenge description on the next screen.
-          </p>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-neutral-500 mb-1">Full Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Jane Smith"
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-neutral-500 mb-1">Email Address</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="jane@example.com"
-                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
-                required
-              />
-            </div>
-
-            {submitError && (
-              <p className="text-red-400 text-sm">{submitError}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 text-black py-3.5 rounded-xl text-sm font-semibold transition-all btn-glow mt-2"
-            >
-              {submitting ? 'Starting...' : 'Continue to Assessment'}
-            </button>
-          </form>
-        </div>
-
-        <div className="text-center">
-          <p className="text-neutral-700 text-xs">
-            Powered by <span className="text-neutral-500">ArcEval</span> &mdash; AI Collaboration Assessment
-          </p>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
