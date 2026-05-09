@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { codeToHtml } from 'shiki';
 import type { StarterFile } from '@/types';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 interface StarterFilesEditorProps {
   files: StarterFile[];
@@ -390,6 +391,7 @@ export default function StarterFilesEditor({
   const [inlineInputValue, setInlineInputValue] = useState('');
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
@@ -725,15 +727,10 @@ export default function StarterFilesEditor({
 
   // --- Generate with AI ---
 
-  async function handleGenerate() {
+  async function runGenerate() {
     if (!challengeTitle || !challengeDescription) {
       setGenError('Title and description are required to generate files.');
       return;
-    }
-
-    if (files.length > 0) {
-      const confirmed = window.confirm('This will replace all existing starter files. Continue?');
-      if (!confirmed) return;
     }
 
     setGenerating(true);
@@ -761,6 +758,20 @@ export default function StarterFilesEditor({
     } finally {
       setGenerating(false);
     }
+  }
+
+  function handleGenerate() {
+    if (!challengeTitle || !challengeDescription) {
+      setGenError('Title and description are required to generate files.');
+      return;
+    }
+
+    if (files.length > 0) {
+      setReplaceConfirmOpen(true);
+      return;
+    }
+
+    runGenerate();
   }
 
   // --- Tab key inserts spaces ---
@@ -1014,6 +1025,21 @@ export default function StarterFilesEditor({
           onDelete={handleDelete}
         />
       )}
+      <ConfirmationModal
+        open={replaceConfirmOpen}
+        title="Replace Starter Files?"
+        description="Generating with AI will replace all existing starter files for this challenge."
+        confirmLabel="Replace Files"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={generating}
+        error={genError || null}
+        onConfirm={() => {
+          setReplaceConfirmOpen(false);
+          runGenerate();
+        }}
+        onClose={() => setReplaceConfirmOpen(false)}
+      />
     </div>
   );
 }

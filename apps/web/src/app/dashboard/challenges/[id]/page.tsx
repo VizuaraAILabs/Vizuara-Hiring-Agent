@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatDateTime } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
+import ConfirmationModal from '@/components/ConfirmationModal';
 import type { Challenge, Session } from '@/types';
 
 interface ChallengeDetail extends Challenge {
@@ -25,6 +26,7 @@ export default function ChallengeDetailPage() {
   const [emailDraft, setEmailDraft] = useState('');
   const [allowedEmailsSaving, setAllowedEmailsSaving] = useState(false);
   const [allowedEmailsSaved, setAllowedEmailsSaved] = useState(false);
+  const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${params.id}`);
@@ -361,86 +363,102 @@ export default function ChallengeDetailPage() {
               <p className="text-neutral-600">No candidates invited yet</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {challenge.sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="bg-surface border border-white/5 rounded-2xl p-5 flex items-center justify-between hover:border-white/10 transition-colors"
-                >
-                  <div>
-                    <p className="text-white font-medium">{session.candidate_name}</p>
-                    <p className="text-neutral-600 text-sm">{session.candidate_email}</p>
-                    {session.started_at && (
-                      <p className="text-neutral-700 text-xs mt-1">
-                        Started {formatDateTime(session.started_at)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[session.status]}`}>
-                      {session.status}
-                    </span>
-                    {session.status === 'analyzed' && (
-                      <Link
-                        href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`}
-                        className="text-primary hover:text-primary-light text-sm font-medium transition-colors"
-                      >
-                        View Report
-                      </Link>
-                    )}
-                    {session.status === 'queued' && (
-                      <span className="text-amber-300 text-sm font-medium">
-                        Queued
-                      </span>
-                    )}
-                    {session.status === 'analyzing' && (
-                      <span className="text-violet-300 text-sm font-medium flex items-center gap-2">
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Analyzing...
-                      </span>
-                    )}
-                    {session.status === 'completed' && (
-                      <button
-                        disabled={analyzingId === session.id}
-                        onClick={async () => {
-                          setAnalyzingId(session.id);
-                          try {
-                            const res = await fetch(`/api/analysis/${session.id}`, { method: 'POST' });
-                            if (!res.ok) {
-                              const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
-                              alert(err.error || 'Analysis failed. Check console for details.');
-                              return;
-                            }
-                            const refreshed = await fetchChallengeDetail();
-                            setChallenge(refreshed);
-                          } catch (err) {
-                            console.error('Analysis error:', err);
-                            alert('Failed to connect to analysis engine.');
-                          } finally {
-                            setAnalyzingId(null);
-                          }
-                        }}
-                        className="text-violet-400 hover:text-violet-300 disabled:text-violet-600 text-sm font-medium flex items-center gap-2"
-                      >
-                        {analyzingId === session.id ? (
-                          <>
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            Analyzing...
-                          </>
-                        ) : (
-                          'Analyze'
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
+              <table className="w-full min-w-[720px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
+                    <th className="px-5 py-3 font-medium">Candidate</th>
+                    <th className="px-5 py-3 font-medium">Email</th>
+                    <th className="px-5 py-3 font-medium">Started</th>
+                    <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 text-right font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {challenge.sessions.map((session) => (
+                    <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                      <td className="px-5 py-4 font-medium text-white">{session.candidate_name}</td>
+                      <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
+                      <td className="px-5 py-4 text-neutral-600">
+                        {session.started_at ? formatDateTime(session.started_at) : 'Not started'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusColors[session.status]}`}>
+                          {session.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end">
+                          {session.status === 'analyzed' && (
+                            <Link
+                              href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`}
+                              className="text-primary hover:text-primary-light text-sm font-medium transition-colors"
+                            >
+                              View Report
+                            </Link>
+                          )}
+                          {session.status === 'queued' && (
+                            <span className="text-amber-300 text-sm font-medium">
+                              Queued
+                            </span>
+                          )}
+                          {session.status === 'analyzing' && (
+                            <span className="text-violet-300 text-sm font-medium flex items-center gap-2">
+                              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                              Analyzing...
+                            </span>
+                          )}
+                          {session.status === 'completed' && (
+                            <button
+                              disabled={analyzingId === session.id}
+                              onClick={async () => {
+                                setAnalyzingId(session.id);
+                                try {
+                                  const res = await fetch(`/api/analysis/${session.id}`, { method: 'POST' });
+                                  if (!res.ok) {
+                                    const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
+                                    setModalMessage({
+                                      title: 'Analysis Failed',
+                                      description: err.error || 'Analysis failed. Check console for details.',
+                                    });
+                                    return;
+                                  }
+                                  const refreshed = await fetchChallengeDetail();
+                                  setChallenge(refreshed);
+                                } catch (err) {
+                                  console.error('Analysis error:', err);
+                                  setModalMessage({
+                                    title: 'Analysis Unavailable',
+                                    description: 'Failed to connect to analysis engine.',
+                                  });
+                                } finally {
+                                  setAnalyzingId(null);
+                                }
+                              }}
+                              className="text-violet-400 hover:text-violet-300 disabled:text-violet-600 text-sm font-medium flex items-center gap-2"
+                            >
+                              {analyzingId === session.id ? (
+                                <>
+                                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                  </svg>
+                                  Analyzing...
+                                </>
+                              ) : (
+                                'Analyze'
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -502,6 +520,15 @@ export default function ChallengeDetailPage() {
           )}
         </div>
       </div>
+      <ConfirmationModal
+        open={Boolean(modalMessage)}
+        title={modalMessage?.title ?? ''}
+        description={modalMessage?.description ?? ''}
+        confirmLabel="OK"
+        cancelLabel="Close"
+        onConfirm={() => setModalMessage(null)}
+        onClose={() => setModalMessage(null)}
+      />
     </div>
   );
 }
