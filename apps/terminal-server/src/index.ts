@@ -360,11 +360,17 @@ wss.on('connection', async (ws: WebSocket, req) => {
       dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
     } catch (err: any) {
       const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
+      const isDockerUnavailable = err?.code === 'ENOENT' || err?.code === 'ECONNREFUSED';
+      const isSandboxExited = typeof err?.message === 'string' && err.message.includes('Sandbox container stopped');
       console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
       ws.send(JSON.stringify({
         type: 'error',
         message: isQueueTimeout
           ? 'Server is busy, please try again in a few minutes'
+          : isDockerUnavailable
+            ? 'Docker is not reachable from the terminal server. Start Docker Desktop and confirm the sandbox image is built, then refresh this session.'
+          : isSandboxExited
+            ? 'The sandbox container exited during startup. Rebuild the sandbox image and check terminal-server logs for the container output.'
           : 'Failed to start terminal',
       }));
       ws.close();

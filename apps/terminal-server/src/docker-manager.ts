@@ -1,10 +1,18 @@
 import Docker from 'dockerode';
+import dotenv from 'dotenv';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { Readable, Writable, Duplex } from 'stream';
+import { Duplex } from 'stream';
+
+const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
+dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+
+const DOCKER_SOCKET_PATH = process.env.DOCKER_SOCKET_PATH
+  || (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock');
 // Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
 const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -45,7 +53,7 @@ export class DockerManager {
   private idleCleanupInterval: ReturnType<typeof setInterval>;
 
   constructor() {
-    this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+    this.docker = new Docker({ socketPath: DOCKER_SOCKET_PATH });
 
     // Periodically check for idle sandboxes
     this.idleCleanupInterval = setInterval(() => this.cleanupIdleSessions(), 60_000);
@@ -90,8 +98,10 @@ export class DockerManager {
   }
 
   private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
+    await this.removeStaleNamedContainer(sessionId);
+
     // Create a temporary host directory with starter files
-    const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
+    const hostWorkDir = path.join(os.tmpdir(), 'hiring-agent-sessions', sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
 
     // Seed workspace from JSONB starter files (takes priority over dir)
@@ -154,6 +164,7 @@ export class DockerManager {
     await container.start();
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
     console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
+    await this.assertContainerRunning(container, sessionId, 'after start');
 
     // Fix ownership: starter files were written by root on the host,
     // but the candidate user needs write access inside the container
@@ -165,10 +176,12 @@ export class DockerManager {
       await chownExec.start({ Detach: true });
     } catch (err: any) {
       console.warn(`[Docker] Failed to chown /workspace for ${sessionId}:`, err.message);
+      await this.assertContainerRunning(container, sessionId, 'after chown failure');
     }
 
     // Wait for entrypoint to write the API key file before attaching exec
     await new Promise(resolve => setTimeout(resolve, 1500));
+    await this.assertContainerRunning(container, sessionId, 'before shell attach');
 
     // Create an exec instance for interactive bash as the candidate user
     // (non-root required for --dangerously-skip-permissions)
@@ -249,8 +262,8 @@ export class DockerManager {
     if (session) {
       try {
         const container = this.docker.getContainer(session.containerId);
-        await container.stop({ t: 5 }).catch(() => {});
-        await container.remove({ force: true }).catch(() => {});
+        await container.stop({ t: 5 }).catch(() => { });
+        await container.remove({ force: true }).catch(() => { });
         console.log(`[Docker] Container removed for session ${sessionId}`);
       } catch (err: any) {
         console.warn(`[Docker] Failed to cleanup container for ${sessionId}:`, err.message);
@@ -313,6 +326,54 @@ export class DockerManager {
       } else {
         fs.copyFileSync(srcPath, destPath);
       }
+    }
+  }
+
+  private async assertContainerRunning(container: Docker.Container, sessionId: string, stage: string) {
+    const inspect = await container.inspect();
+    if (inspect.State?.Running) return;
+
+    let logs = '';
+    try {
+      const rawLogs = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail: 80,
+      });
+      logs = rawLogs.toString('utf-8').trim();
+    } catch (err: any) {
+      logs = `Could not fetch container logs: ${err.message}`;
+    }
+
+    await container.remove({ force: true }).catch(() => { });
+
+    const status = inspect.State?.Status || 'not running';
+    const exitCode = inspect.State?.ExitCode;
+    const message = [
+      `Sandbox container stopped ${stage} for session ${sessionId}`,
+      `status=${status}`,
+      `exitCode=${exitCode}`,
+      logs ? `logs:\n${logs}` : 'logs: <empty>',
+    ].join('\n');
+
+    throw new Error(message);
+  }
+
+  private async removeStaleNamedContainer(sessionId: string) {
+    const containerName = `session-${sessionId}`;
+    const existing = this.docker.getContainer(containerName);
+
+    try {
+      const inspect = await existing.inspect();
+      if (inspect.State?.Running) {
+        throw new Error(`Session container ${containerName} is already running`);
+      }
+
+      await existing.remove({ force: true });
+      console.log(`[Docker] Removed stale container ${containerName}`);
+    } catch (err: any) {
+      if (err?.statusCode === 404) return;
+      throw err;
     }
   }
 }

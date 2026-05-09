@@ -60,7 +60,7 @@ WORKDIR /workspace
 # prompt), then keep container alive. Terminal server attaches via docker exec.
 COPY docker/sandbox-entrypoint.sh /entrypoint.sh
 USER root
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 USER candidate
 
 CMD ["/entrypoint.sh"]
