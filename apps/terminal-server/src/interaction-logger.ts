@@ -18,6 +18,7 @@ const CLAUDE_PROMPT_MARKERS = [
 ];
 
 const SHELL_PROMPT_PATTERN = /^\$\s|^%\s|^#\s|^bash-|^zsh/;
+const MAX_FILE_EDIT_LOG_CHARS = 20_000;
 
 type FlushListener = (sessionId: string, content: string, contentType: string) => void;
 
@@ -119,6 +120,40 @@ export class InteractionLogger {
         metadata: '{}',
       });
     }, hasNewline ? 50 : 500);
+  }
+
+  logFileEdit(sessionId: string, filePath: string, content: string) {
+    const truncated = content.length > MAX_FILE_EDIT_LOG_CHARS;
+    const loggedContent = truncated
+      ? `${content.slice(0, MAX_FILE_EDIT_LOG_CHARS)}\n\n[... file edit log truncated at ${MAX_FILE_EDIT_LOG_CHARS} characters ...]`
+      : content;
+
+    this.buffer.push({
+      session_id: sessionId,
+      sequence_num: this.getSequence(sessionId),
+      direction: 'input',
+      content: [
+        `[FILE EDIT] Saved ${filePath}`,
+        `Size: ${Buffer.byteLength(content, 'utf8')} bytes`,
+        truncated ? `Logged: first ${MAX_FILE_EDIT_LOG_CHARS} characters` : 'Logged: full file content',
+        '',
+        '```',
+        loggedContent,
+        '```',
+      ].join('\n'),
+      content_type: 'command',
+      metadata: JSON.stringify({
+        action: 'file_edit',
+        path: filePath,
+        size_bytes: Buffer.byteLength(content, 'utf8'),
+        logged_chars: loggedContent.length,
+        truncated,
+      }),
+    });
+
+    if (this.buffer.length >= 50) {
+      this.flush();
+    }
   }
 
   logOutput(sessionId: string, data: string) {

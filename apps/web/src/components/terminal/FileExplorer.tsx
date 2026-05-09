@@ -25,6 +25,7 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     closeFile,
     refresh,
     createNewFile,
+    saveFileContent,
     createNewDirectory,
     renameItem,
     deleteItem,
@@ -193,6 +194,7 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
               fileContent={fileContent}
               fileLoading={fileLoading}
               fileError={fileError}
+              onSave={saveFileContent}
             />
           </div>
         </div>

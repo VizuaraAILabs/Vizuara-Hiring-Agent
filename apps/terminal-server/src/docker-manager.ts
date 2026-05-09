@@ -366,7 +366,8 @@ export class DockerManager {
     try {
       const inspect = await existing.inspect();
       if (inspect.State?.Running) {
-        throw new Error(`Session container ${containerName} is already running`);
+        console.warn(`[Docker] Found orphaned running container ${containerName}; replacing it`);
+        await existing.stop({ t: 5 }).catch(() => { });
       }
 
       await existing.remove({ force: true });

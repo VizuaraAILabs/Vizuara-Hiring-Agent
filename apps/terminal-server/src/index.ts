@@ -7,7 +7,7 @@ import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import * as fs from 'fs';
-import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
+import { buildFileTree, readFileContent, createFile, updateFileContent, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
 import { CostTracker } from './cost-tracker';
 import { ActivityMonitor } from './activity-monitor';
 
@@ -95,9 +95,10 @@ async function archiveWorkspace(sessionId: string, workDir: string): Promise<voi
     }
 
     const snapshot = { archived_at: new Date().toISOString(), tree, files };
+    const snapshotJson = snapshot as unknown as Parameters<typeof sql.json>[0];
     await sql`
       UPDATE sessions
-      SET workspace_snapshot = ${JSON.stringify(snapshot)}::jsonb
+      SET workspace_snapshot = ${sql.json(snapshotJson)}
       WHERE id = ${sessionId}
     `;
     console.log(`[Archive] Saved ${files.length} file(s) for session ${sessionId}`);
@@ -129,7 +130,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // File API endpoints
-  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read', '/api/files/create', '/api/files/mkdir', '/api/files/rename', '/api/files/delete', '/api/files/move'];
+  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read', '/api/files/create', '/api/files/update', '/api/files/mkdir', '/api/files/rename', '/api/files/delete', '/api/files/move'];
   if (FILE_API_ROUTES.includes(pathname)) {
     const token = url.searchParams.get('token');
     if (!token) {
@@ -211,6 +212,22 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ ok: true }));
       } catch (err: any) {
         const status = err.message === 'Path traversal detected' ? 403 : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/update' && req.method === 'POST') {
+      try {
+        const body = await readBody();
+        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
+        updateFileContent(workDir, body.path, body.content || '');
+        logger.logFileEdit(sessionInfo.sessionId, body.path, body.content || '');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err: any) {
+        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'File not found' ? 404 : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }

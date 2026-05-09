@@ -208,6 +208,18 @@ export function createFile(workDir: string, filePath: string, content = ''): voi
   fs.writeFileSync(resolved, content, 'utf-8');
 }
 
+export function updateFileContent(workDir: string, filePath: string, content = ''): void {
+  const resolved = safePath(workDir, filePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error('File not found');
+  }
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) {
+    throw new Error('Not a file');
+  }
+  fs.writeFileSync(resolved, content, 'utf-8');
+}
+
 export function createDirectory(workDir: string, dirPath: string): void {
   const resolved = safePath(workDir, dirPath);
   if (fs.existsSync(resolved)) {
