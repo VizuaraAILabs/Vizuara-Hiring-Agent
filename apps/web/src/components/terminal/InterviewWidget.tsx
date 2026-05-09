@@ -70,10 +70,10 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
             <button
               onClick={close}
               className="text-neutral-500 hover:text-neutral-300 transition-colors cursor-pointer p-1 rounded-lg hover:bg-border"
-              aria-label="Close interviewer"
+              aria-label="Collapse interviewer"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>
@@ -91,7 +91,10 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
                 </p>
               </div>
             ) : (
-              messages.map((msg) => <MessageBubble key={`${msg.id}-${msg.sequence_num}`} message={msg} />)
+              <>
+                {messages.map((msg) => <MessageBubble key={`${msg.id}-${msg.sequence_num}`} message={msg} />)}
+                {sending && <TypingBubble />}
+              </>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -205,6 +208,24 @@ function MessageBubble({ message }: { message: InterviewMessage }) {
         )}
       </div>
       <span className="text-[10px] text-neutral-600 mx-1">{time}</span>
+    </div>
+  );
+}
+
+function TypingBubble() {
+  return (
+    <div className="flex flex-col gap-1 items-start">
+      <div className="flex items-center gap-1.5 ml-1">
+        <InterviewerAvatar size="xs" />
+        <span className="text-[10px] text-neutral-500 font-medium">Interviewer</span>
+      </div>
+      <div className="rounded-2xl rounded-tl-sm border border-primary/20 bg-[#1a2a1f] px-3 py-2">
+        <div className="flex items-center gap-1.5 py-1">
+          <span className="h-2 w-2 rounded-full bg-primary/80 animate-bounce [animation-delay:-0.24s]" />
+          <span className="h-2 w-2 rounded-full bg-primary/80 animate-bounce [animation-delay:-0.12s]" />
+          <span className="h-2 w-2 rounded-full bg-primary/80 animate-bounce" />
+        </div>
+      </div>
     </div>
   );
 }

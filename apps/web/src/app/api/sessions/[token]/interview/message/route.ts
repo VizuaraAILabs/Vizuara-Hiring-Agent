@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
+import { isNoQuestionPlaceholder } from '@/lib/interview';
 
 const INTERVIEWER_SYSTEM_PROMPT = `You are a senior technical interviewer conducting a live software engineering assessment.
 Your role is to probe the candidate's thinking — ask about trade-offs, design decisions, scalability, and first principles.
@@ -99,6 +100,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       const result = await model.generateContent(conversationParts.join('\n'));
       return result.response.text().trim();
     });
+
+    if (!aiReply || isNoQuestionPlaceholder(aiReply)) {
+      return NextResponse.json({
+        reply: null,
+        sequence_num: null,
+        candidate_sequence_num: inserted.sequence_num,
+      });
+    }
 
     // Store AI reply as interview_question
     await sql`

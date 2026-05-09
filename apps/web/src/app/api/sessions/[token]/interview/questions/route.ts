@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { isNoQuestionPlaceholder } from '@/lib/interview';
 
 // GET /api/sessions/[token]/interview/questions?after=<sequence_num>
 // Returns interview_question and interview_response interactions after the given sequence_num.
@@ -33,7 +34,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       ORDER BY sequence_num ASC
     `;
 
-    return NextResponse.json({ interactions });
+    const filteredInteractions = interactions.filter((interaction) => (
+      interaction.content_type !== 'interview_question'
+      || !isNoQuestionPlaceholder(interaction.content)
+    ));
+
+    return NextResponse.json({
+      interactions: filteredInteractions,
+      latest_sequence_num: interactions.at(-1)?.sequence_num ?? after,
+    });
   } catch (error) {
     console.error('Error fetching interview questions:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
