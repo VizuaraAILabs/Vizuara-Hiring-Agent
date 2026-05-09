@@ -43,6 +43,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: Multiple analysis-engine processes can enqueue/process the same session concurrently. The database unique constraint on `analysis_results.session_id` prevents duplicate final rows, but the loser may waste Gemini calls and then reset session state through the generic failure path.
 - Suggested fix: Move queue leasing into the database or a real queue, using atomic job claims, leases, attempts, and heartbeat/expiry semantics.
 
+### TERM-P0-001: Live terminal/container session state is process-local
+
+- Status: Open
+- Area: Terminal server / production reliability
+- Evidence: `DockerManager` stores live `DockerSession` objects in an in-memory `sessions` map (`apps/terminal-server/src/docker-manager.ts:46`). Those objects include the container id, workspace directory, exec stream, output callbacks, and activity timestamps. On reconnect, the WebSocket handler only reattaches if `dockerManager.getSession(sessionId)` finds that in-memory entry (`apps/terminal-server/src/index.ts:320`). The database stores session status/token data, but not the live container ownership/attachment metadata needed to recover after a terminal-server restart.
+- Impact: Restarting or redeploying the terminal server loses all live session attachments even if Docker containers keep running. Candidates can be interrupted, reconnects can fail or replace orphaned containers, horizontal scaling requires sticky routing to one instance, and cleanup depends on best-effort sweeps rather than durable ownership state.
+- Suggested fix: Persist runtime metadata in Postgres or Redis, including `session_id`, `container_id`, `host_work_dir`, `assigned_terminal_server_id`, `last_seen_at`, runtime status, and lease/heartbeat timestamps. On reconnect, either reattach to the existing container or route the candidate to the owning terminal-server instance. Add graceful draining before deploys and orphan recovery based on expired leases.
+
 ## P1
 
 ### AE-P1-001: Recovery re-enqueues all queued/analyzing sessions without stale-job checks
