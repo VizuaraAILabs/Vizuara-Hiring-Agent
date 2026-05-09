@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from '@/hooks/useSession';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ArcSpinner from '@/components/ArcSpinner';
@@ -13,6 +13,12 @@ export default function SessionPage() {
   const { session, loading, error, startSession } = useSession(token);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
+
+  useEffect(() => {
+    if (session?.status === 'active') {
+      router.push(`/session/${token}/terminal`);
+    }
+  }, [router, session?.status, token]);
 
   if (loading) {
     return (
@@ -52,8 +58,11 @@ export default function SessionPage() {
   }
 
   if (session.status === 'active') {
-    router.push(`/session/${token}/terminal`);
-    return null;
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <ArcSpinner label="Opening workspace" />
+      </div>
+    );
   }
 
   async function handleStart() {

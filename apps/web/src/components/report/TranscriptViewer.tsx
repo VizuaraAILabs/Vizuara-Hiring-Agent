@@ -1,9 +1,11 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import { FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import ArcSpinner from '@/components/ArcSpinner';
 import type { Interaction } from '@/types';
 
 interface TranscriptViewerProps {
@@ -11,6 +13,7 @@ interface TranscriptViewerProps {
   highlightIndex?: number;
   narrative?: string | null;
   narrativeLoading?: boolean;
+  onGenerateNarrative?: () => void;
   candidateName?: string;
 }
 
@@ -111,6 +114,7 @@ function handleDownloadPDF(narrative: string, candidateName: string) {
 export default function TranscriptViewer({
   narrative,
   narrativeLoading,
+  onGenerateNarrative,
   candidateName = 'Candidate',
 }: TranscriptViewerProps) {
   const topRef = useRef<HTMLDivElement>(null);
@@ -124,7 +128,7 @@ export default function TranscriptViewer({
   if (narrativeLoading) {
     return (
       <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <ArcSpinner label="Generating session narrative" sizeClassName="h-10 w-10" />
         <p className="text-neutral-500 text-sm">Generating session narrative…</p>
         <p className="text-neutral-700 text-xs">This may take up to 30 seconds</p>
       </div>
@@ -133,8 +137,25 @@ export default function TranscriptViewer({
 
   if (!narrative) {
     return (
-      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-3">
-        <p className="text-neutral-500 text-sm">No narrative available for this session.</p>
+      <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4 text-center">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-primary">
+          <FileText size={20} />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-neutral-300">No narrative generated yet.</p>
+          <p className="mt-1 text-xs text-neutral-600">
+            Generate an AI-written session narrative when you need it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onGenerateNarrative}
+          className="mt-2 inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/15 hover:text-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!onGenerateNarrative}
+        >
+          <FileText size={16} />
+          Generate narrative
+        </button>
       </div>
     );
   }

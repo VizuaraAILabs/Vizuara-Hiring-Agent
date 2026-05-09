@@ -6,13 +6,14 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot, Challenge } from '@/types';
 import ReportHeader from '@/components/report/ReportHeader';
+import ReportSummary from '@/components/report/ReportSummary';
 import ScoreSummary from '@/components/report/ScoreSummary';
 import KeyMoments from '@/components/report/KeyMoments';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
 import WorkspaceViewer from '@/components/report/WorkspaceViewer';
-import InlineFeedback from '@/components/feedback/InlineFeedback';
-import NpsPrompt from '@/components/feedback/NpsPrompt';
-import CompletionSurvey from '@/components/feedback/CompletionSurvey';
+// import InlineFeedback from '@/components/feedback/InlineFeedback';
+// import NpsPrompt from '@/components/feedback/NpsPrompt';
+// import CompletionSurvey from '@/components/feedback/CompletionSurvey';
 
 // Dynamic imports for chart components (they use window)
 const RadarChart = dynamic(() => import('@/components/report/RadarChart'), { ssr: false });
@@ -20,7 +21,7 @@ const TimelineChart = dynamic(() => import('@/components/report/TimelineChart'),
 const PromptComplexity = dynamic(() => import('@/components/report/PromptComplexity'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('@/components/report/CategoryBreakdown'), { ssr: false });
 
-type Tab = 'overview' | 'timeline' | 'analysis' | 'transcript' | 'files';
+type Tab = 'summary' | 'overview' | 'timeline' | 'analysis' | 'transcript' | 'files';
 
 export default function ReportPage() {
   const params = useParams();
@@ -32,7 +33,7 @@ export default function ReportPage() {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [highlightIndex, setHighlightIndex] = useState<number | undefined>();
   const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
@@ -103,24 +104,27 @@ export default function ReportPage() {
     setActiveTab('transcript');
   };
 
+  const handleGenerateNarrative = async () => {
+    if (transcriptNarrative || narrativeLoading) return;
+
+    setNarrativeLoading(true);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTranscriptNarrative(data.transcript_narrative ?? null);
+      }
+    } catch (err) {
+      console.error('Failed to generate transcript narrative:', err);
+    } finally {
+      setNarrativeLoading(false);
+    }
+  };
+
   const handleTabChange = async (tab: Tab) => {
     setActiveTab(tab);
-    if (tab === 'transcript' && !transcriptNarrative && !narrativeLoading) {
-      setNarrativeLoading(true);
-      try {
-        const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
-          method: 'POST',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTranscriptNarrative(data.transcript_narrative ?? null);
-        }
-      } catch (err) {
-        console.error('Failed to generate transcript narrative:', err);
-      } finally {
-        setNarrativeLoading(false);
-      }
-    }
     if (tab === 'files' && !workspaceSnapshot && !workspaceLoading) {
       setWorkspaceLoading(true);
       setWorkspaceError(null);
@@ -184,6 +188,7 @@ export default function ReportPage() {
   };
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'summary', label: 'Summary' },
     { key: 'overview', label: 'Overview' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'analysis', label: 'Analysis' },
@@ -205,23 +210,27 @@ export default function ReportPage() {
       <ReportHeader session={session} analysis={analysis} />
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-6 mb-6 bg-surface rounded-2xl p-1 border border-white/5">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => handleTabChange(tab.key)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              activeTab === tab.key
-                ? 'bg-white/5 text-white'
-                : 'text-neutral-600 hover:text-neutral-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="sticky top-0 z-20 -mx-1 mb-6 bg-[#0a0a0a] px-1 py-3">
+        <div className="grid grid-cols-6 gap-1 bg-surface rounded-2xl p-1 border border-white/5">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => handleTabChange(tab.key)}
+              className={`min-w-0 truncate py-2.5 px-1 rounded-xl text-xs sm:text-sm font-medium transition-all ${
+                activeTab === tab.key
+                  ? 'bg-white/5 text-white'
+                  : 'text-neutral-600 hover:text-neutral-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'summary' && <ReportSummary analysis={analysis} />}
+
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <RadarChart scores={scores} />
@@ -270,6 +279,7 @@ export default function ReportPage() {
           highlightIndex={highlightIndex}
           narrative={transcriptNarrative}
           narrativeLoading={narrativeLoading}
+          onGenerateNarrative={handleGenerateNarrative}
           candidateName={session.candidate_name}
         />
       )}
@@ -279,27 +289,31 @@ export default function ReportPage() {
           snapshot={workspaceSnapshot}
           loading={workspaceLoading}
           error={workspaceError}
+          sessionId={sessionId}
         />
       )}
 
       {/* Feedback — shown below all tabs */}
-      <div className="mt-10 space-y-4">
-        <InlineFeedback
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="article"
-        />
-        <NpsPrompt
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="course"
-        />
-        <CompletionSurvey
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="course"
-        />
-      </div>
+      {/*
+        Feedback sections temporarily hidden.
+        <div className="mt-10 space-y-4">
+          <InlineFeedback
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="article"
+          />
+          <NpsPrompt
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="course"
+          />
+          <CompletionSurvey
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="course"
+          />
+        </div>
+      */}
     </div>
   );
 }

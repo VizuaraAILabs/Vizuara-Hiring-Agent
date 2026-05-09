@@ -37,42 +37,6 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
           </span>
         </div>
       </div>
-
-      {analysis.summary_narrative && (
-        <div className="mt-6 pt-6 border-t border-white/5">
-          <p className="text-neutral-400 text-sm leading-relaxed">{analysis.summary_narrative}</p>
-        </div>
-      )}
-
-      <div className="mt-6 grid grid-cols-2 gap-6">
-        {analysis.strengths.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-primary mb-2">Strengths</h4>
-            <ul className="space-y-1">
-              {analysis.strengths.map((s, i) => (
-                <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                  <span className="text-primary mt-0.5">+</span>
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {analysis.areas_for_growth.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-amber-400 mb-2">Areas for Growth</h4>
-            <ul className="space-y-1">
-              {analysis.areas_for_growth.map((a, i) => (
-                <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                  <span className="text-amber-500 mt-0.5">-</span>
-                  {a}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
