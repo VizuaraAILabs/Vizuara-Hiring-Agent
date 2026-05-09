@@ -16,6 +16,14 @@ web-local:
 terminal:
     cd apps\terminal-server && npm run dev
 
+# Create/activate the analysis engine .venv and install required Python modules.
+analysis-setup:
+    cd services\analysis-engine && if not exist .venv python -m venv .venv && call .venv\Scripts\activate.bat && python -m pip install -r requirements.txt
+
+# Start the FastAPI analysis engine.
+analysis:
+    cd services\analysis-engine && call .venv\Scripts\activate.bat && python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
 # Build the Docker image used for candidate sandbox containers.
 sandbox-build:
     docker build -t hiring-sandbox -f docker/Dockerfile.sandbox .
