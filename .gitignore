@@ -9,3 +9,4 @@ __pycache__/
 dist/
 .claude/
 .vscode/
+services/analysis-engine/tests/fixtures/interactions/

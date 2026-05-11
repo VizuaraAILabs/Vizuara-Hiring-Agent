@@ -39,3 +39,19 @@ migrate-local-all:
 # Run only the latest Postgres migration against the DATABASE_URL in .env.local.
 migrate-local-latest:
     scripts\migrate-local.cmd latest
+
+# List recent sessions that have interaction rows, for choosing parser fixture session ids.
+fixture-sessions limit="20":
+    node scripts\list-interaction-sessions.js --limit {{limit}}
+
+# List recent sessions for a challenge that have interaction rows.
+fixture-sessions-for challenge_id limit="20":
+    node scripts\list-interaction-sessions.js --challenge-id {{challenge_id}} --limit {{limit}}
+
+# Export redacted parser interaction fixture for a session.
+fixture-export session_id limit="200":
+    node scripts\export-interaction-fixture.js --session-id {{session_id}} --limit {{limit}}
+
+# Export unredacted parser interaction fixture for local-only debugging.
+fixture-export-raw session_id limit="200":
+    node scripts\export-interaction-fixture.js --session-id {{session_id}} --limit {{limit}} --raw
