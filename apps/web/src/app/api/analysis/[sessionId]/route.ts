@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { recordAnalysisFailure } from '@/lib/analysis-failure-log';
 import type { AnalysisResult, Session, Challenge } from '@/types';
+
+const ANALYSIS_START_TIMEOUT_MS = 20_000;
 
 export async function GET(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -69,12 +72,35 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     }
 
     const engineUrl = process.env.ANALYSIS_ENGINE_URL || 'http://localhost:8000';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ANALYSIS_START_TIMEOUT_MS);
 
-    const analysisResponse = await fetch(`${engineUrl}/analyze/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
+    let analysisResponse: Response;
+    try {
+      analysisResponse = await fetch(`${engineUrl}/analyze/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        const [latestSession] = await sql<Session[]>`SELECT * FROM sessions WHERE id = ${sessionId}`;
+        if (latestSession?.status === 'queued' || latestSession?.status === 'analyzing') {
+          return NextResponse.json({ status: 'already_running', session_id: sessionId }, { status: 202 });
+        }
+        await recordAnalysisFailure(
+          sessionId,
+          'analysis_start_timeout',
+          'Analysis engine timed out while starting analysis',
+          { timeout_ms: ANALYSIS_START_TIMEOUT_MS },
+        );
+        return NextResponse.json({ error: 'Analysis engine timed out while starting analysis' }, { status: 504 });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!analysisResponse.ok) {
       const errorBody = await analysisResponse.text();

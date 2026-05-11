@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -37,10 +37,35 @@ export default function ReportPage() {
   const [highlightIndex, setHighlightIndex] = useState<number | undefined>();
   const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
   const [enrichingDimensions, setEnrichingDimensions] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+
+  const handleEnrichDimensions = useCallback(async () => {
+    setEnrichingDimensions(true);
+    setEnrichmentError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/enrich-dimensions`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Detailed evidence could not be generated.');
+      }
+      const enriched = await res.json();
+      if (enriched?.dimension_details) {
+        setAnalysis((prev) =>
+          prev ? { ...prev, dimension_details: enriched.dimension_details } : prev,
+        );
+      }
+    } catch (err) {
+      console.error('Failed to enrich dimension evidence:', err);
+      setEnrichmentError('Detailed evidence could not be generated. Scores remain available, but some supporting observations may be missing.');
+    } finally {
+      setEnrichingDimensions(false);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     async function loadData() {
@@ -60,18 +85,7 @@ export default function ReportPage() {
             (d) => !d?.observed_points?.length,
           );
           if (needsEnrichment) {
-            setEnrichingDimensions(true);
-            fetch(`/api/analysis/${sessionId}/enrich-dimensions`, { method: 'POST' })
-              .then((r) => (r.ok ? r.json() : null))
-              .then((enriched) => {
-                if (enriched?.dimension_details) {
-                  setAnalysis((prev) =>
-                    prev ? { ...prev, dimension_details: enriched.dimension_details } : prev,
-                  );
-                }
-              })
-              .catch((err) => console.error('Failed to enrich dimension evidence:', err))
-              .finally(() => setEnrichingDimensions(false));
+            void handleEnrichDimensions();
           }
         }
 
@@ -97,7 +111,7 @@ export default function ReportPage() {
     }
 
     loadData();
-  }, [sessionId, challengeId]);
+  }, [sessionId, challengeId, handleEnrichDimensions]);
 
   const handleViewInTranscript = (index: number) => {
     setHighlightIndex(index);
@@ -108,16 +122,20 @@ export default function ReportPage() {
     if (transcriptNarrative || narrativeLoading) return;
 
     setNarrativeLoading(true);
+    setNarrativeError(null);
     try {
       const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
         method: 'POST',
       });
-      if (res.ok) {
-        const data = await res.json();
-        setTranscriptNarrative(data.transcript_narrative ?? null);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to generate transcript narrative.');
       }
+      const data = await res.json();
+      setTranscriptNarrative(data.transcript_narrative ?? null);
     } catch (err) {
       console.error('Failed to generate transcript narrative:', err);
+      setNarrativeError('Transcript narrative could not be generated. Please try again.');
     } finally {
       setNarrativeLoading(false);
     }
@@ -238,6 +256,8 @@ export default function ReportPage() {
             dimensions={analysis.dimension_details}
             scores={scores}
             enriching={enrichingDimensions}
+            enrichmentError={enrichmentError}
+            onRetryEnrichment={handleEnrichDimensions}
             challengeTitle={challenge?.title ?? null}
             challengeRole={challenge?.role ?? null}
             challengeTechStack={challenge?.tech_stack ?? null}
@@ -279,6 +299,7 @@ export default function ReportPage() {
           highlightIndex={highlightIndex}
           narrative={transcriptNarrative}
           narrativeLoading={narrativeLoading}
+          narrativeError={narrativeError}
           onGenerateNarrative={handleGenerateNarrative}
           candidateName={session.candidate_name}
         />

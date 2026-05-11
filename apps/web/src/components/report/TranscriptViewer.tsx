@@ -13,6 +13,7 @@ interface TranscriptViewerProps {
   highlightIndex?: number;
   narrative?: string | null;
   narrativeLoading?: boolean;
+  narrativeError?: string | null;
   onGenerateNarrative?: () => void;
   candidateName?: string;
 }
@@ -114,6 +115,7 @@ function handleDownloadPDF(narrative: string, candidateName: string) {
 export default function TranscriptViewer({
   narrative,
   narrativeLoading,
+  narrativeError,
   onGenerateNarrative,
   candidateName = 'Candidate',
 }: TranscriptViewerProps) {
@@ -130,7 +132,7 @@ export default function TranscriptViewer({
       <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4">
         <ArcSpinner label="Generating session narrative" sizeClassName="h-10 w-10" />
         <p className="text-neutral-500 text-sm">Generating session narrative…</p>
-        <p className="text-neutral-700 text-xs">This may take up to 30 seconds</p>
+        <p className="text-neutral-700 text-xs">This may take up to 2 minutes</p>
       </div>
     );
   }
@@ -146,6 +148,9 @@ export default function TranscriptViewer({
           <p className="mt-1 text-xs text-neutral-600">
             Generate an AI-written session narrative when you need it.
           </p>
+          {narrativeError && (
+            <p className="mt-2 text-xs text-amber-300">{narrativeError}</p>
+          )}
         </div>
         <button
           type="button"

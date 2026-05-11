@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { recordAnalysisFailure } from '@/lib/analysis-failure-log';
 import type { Session, Challenge } from '@/types';
+
+const ENRICH_DIMENSIONS_TIMEOUT_MS = 90_000;
 
 async function verifyAccess(sessionId: string, userId: string) {
   const [session] = await sql<Session[]>`SELECT * FROM sessions WHERE id = ${sessionId}`;
@@ -27,12 +30,31 @@ export async function POST(
     if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const engineUrl = process.env.ANALYSIS_ENGINE_URL || 'http://localhost:8000';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ENRICH_DIMENSIONS_TIMEOUT_MS);
 
-    const res = await fetch(`${engineUrl}/analyze/enrich-dimensions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${engineUrl}/analyze/enrich-dimensions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        await recordAnalysisFailure(
+          sessionId,
+          'enrich_dimensions_timeout',
+          'Detailed evidence generation timed out',
+          { timeout_ms: ENRICH_DIMENSIONS_TIMEOUT_MS },
+        );
+        return NextResponse.json({ error: 'Detailed evidence generation timed out' }, { status: 504 });
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
       const errorBody = await res.text();
