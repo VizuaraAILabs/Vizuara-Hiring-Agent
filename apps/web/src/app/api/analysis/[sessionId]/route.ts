@@ -64,8 +64,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       return NextResponse.json({ status: 'already_running', session_id: sessionId }, { status: 202 });
     }
 
-    if (session.status !== 'completed') {
-      return NextResponse.json({ error: 'Session must be completed before analysis' }, { status: 400 });
+    if (session.status !== 'completed' && session.status !== 'analysis failed') {
+      return NextResponse.json({ error: 'Session must be completed or have a failed analysis before retrying' }, { status: 400 });
     }
 
     const engineUrl = process.env.ANALYSIS_ENGINE_URL || 'http://localhost:8000';

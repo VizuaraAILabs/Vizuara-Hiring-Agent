@@ -12,7 +12,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 const Terminal = dynamic(() => import('@/components/terminal/Terminal'), { ssr: false });
 const FileExplorer = dynamic(() => import('@/components/terminal/FileExplorer'), { ssr: false });
 const InterviewWidget = dynamic(() => import('@/components/terminal/InterviewWidget'), { ssr: false });
-const COMPLETION_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed']);
+const COMPLETION_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
 
 export default function TerminalPage() {
   const params = useParams();

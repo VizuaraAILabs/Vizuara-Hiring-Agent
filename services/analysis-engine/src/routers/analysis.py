@@ -425,12 +425,12 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
             "session_id": session_id,
         }
 
-    if session["status"] not in ("completed", "active"):
+    if session["status"] not in ("completed", "active", "analysis failed"):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Session '{session_id}' has status '{session['status']}'. "
-                "Only 'completed' or 'active' sessions can be analyzed."
+                "Only 'completed', 'active', or 'analysis failed' sessions can be analyzed."
             ),
         )
 
@@ -438,7 +438,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         """
         UPDATE sessions
         SET status = 'queued'
-        WHERE id = $1 AND status IN ('completed', 'active')
+        WHERE id = $1 AND status IN ('completed', 'active', 'analysis failed')
         RETURNING id
         """,
         session_id,
@@ -463,17 +463,53 @@ async def _run_analysis_in_background(session_id: str) -> None:
         )
         try:
             pool = await _get_pool()
-            await pool.execute(
-                "UPDATE sessions SET status = 'completed' WHERE id = $1 AND status IN ('queued', 'analyzing')",
-                session_id,
-            )
+            await _mark_analysis_failed(pool, session_id, exc)
         except Exception as status_exc:
             logger.error(
-                "Failed to restore completed status for session %s: %s",
+                "Failed to mark analysis failed for session %s: %s",
                 session_id,
                 status_exc,
                 exc_info=True,
             )
+
+
+async def _mark_analysis_failed(
+    pool: asyncpg.Pool,
+    session_id: str,
+    exc: Exception,
+) -> None:
+    error_code = "analysis_error"
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(exc, TimeoutError) or isinstance(exc, asyncio.TimeoutError):
+        error_code = "analysis_timeout"
+    elif status_code is not None:
+        error_code = f"http_{status_code}"
+
+    await pool.execute(
+        """
+        INSERT INTO analysis_failures (
+            session_id,
+            error_code,
+            error_message,
+            error_metadata
+        ) VALUES ($1, $2, $3, $4::jsonb)
+        """,
+        session_id,
+        error_code,
+        str(exc),
+        json.dumps({
+            "exception_type": exc.__class__.__name__,
+            "status_code": status_code,
+        }),
+    )
+    await pool.execute(
+        """
+        UPDATE sessions
+        SET status = 'analysis failed'
+        WHERE id = $1 AND status IN ('queued', 'analyzing')
+        """,
+        session_id,
+    )
 
 
 @router.post("")

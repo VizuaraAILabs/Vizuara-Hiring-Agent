@@ -52,7 +52,7 @@ setInterval(async () => {
       SELECT id, status FROM sessions WHERE id = ANY(${activeSessionIds})
     `;
     for (const row of rows) {
-      if (row.status === 'completed' || row.status === 'queued' || row.status === 'analyzing' || row.status === 'analyzed') {
+      if (row.status === 'completed' || row.status === 'queued' || row.status === 'analyzing' || row.status === 'analyzed' || row.status === 'analysis failed') {
         console.log(`[Terminal] Periodic check: killing container for completed session ${row.id}`);
         await costTracker.endSession(row.id);
         activityMonitors.get(row.id)?.destroy();
@@ -480,7 +480,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     let isCompleted = false;
     try {
       const [row] = await sql<{ status: string }[]>`SELECT status FROM sessions WHERE id = ${sessionId}`;
-      isCompleted = row?.status === 'completed' || row?.status === 'queued' || row?.status === 'analyzing' || row?.status === 'analyzed';
+      isCompleted = row?.status === 'completed' || row?.status === 'queued' || row?.status === 'analyzing' || row?.status === 'analyzed' || row?.status === 'analysis failed';
     } catch (err) {
       console.error(`[Terminal] Failed to check session status for ${sessionId}:`, err);
     }

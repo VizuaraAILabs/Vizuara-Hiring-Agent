@@ -119,6 +119,17 @@ export default function ChallengeDetailPage() {
     queued: 'bg-amber-500/10 text-amber-300',
     analyzing: 'bg-violet-500/10 text-violet-300',
     analyzed: 'bg-primary/10 text-primary',
+    'analysis failed': 'bg-red-500/10 text-red-300',
+  };
+
+  const statusLabels: Record<string, string> = {
+    pending: 'Pending',
+    active: 'Active',
+    completed: 'Completed',
+    queued: 'Queued',
+    analyzing: 'Analyzing',
+    analyzed: 'Analyzed',
+    'analysis failed': 'Analysis failed',
   };
 
   function commitEmailDraft() {
@@ -564,7 +575,9 @@ export default function ChallengeDetailPage() {
                         <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
                         <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>
                         <td className="px-5 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>{visibleStatus}</span>
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
+                            {statusLabels[visibleStatus] ?? visibleStatus}
+                          </span>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex justify-end">
@@ -592,6 +605,17 @@ export default function ChallengeDetailPage() {
                                 </svg>
                                 Analyzing...
                               </span>
+                            )}
+                            {visibleStatus === 'analysis failed' && (
+                              <button
+                                type="button"
+                                disabled={isStartingAnalysis}
+                                onClick={() => handleAnalyze(session.id)}
+                                title="The analysis could not finish. Candidate data is saved."
+                                className="flex items-center gap-2 text-sm font-medium text-red-300 hover:text-red-200 disabled:text-red-500"
+                              >
+                                Retry analysis
+                              </button>
                             )}
                             {visibleStatus === 'completed' && (
                               <button
