@@ -40,6 +40,23 @@ const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 
 // Per-session activity monitors for the AI interviewer
 const activityMonitors: Map<string, ActivityMonitor> = new Map();
+const finalizingSessions = new Set<string>();
+const SUBMITTED_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
+const ARCHIVE_RETRY_DELAYS_MS = [0, 500, 1500];
+
+type ArchiveFailureStage = 'missing_workdir' | 'read_workspace' | 'db_write';
+
+class WorkspaceArchiveError extends Error {
+  stage: ArchiveFailureStage;
+  originalError?: unknown;
+
+  constructor(stage: ArchiveFailureStage, message: string, originalError?: unknown) {
+    super(message);
+    this.name = 'WorkspaceArchiveError';
+    this.stage = stage;
+    this.originalError = originalError;
+  }
+}
 
 // Periodically kill containers for sessions that have been ended (by button or timer expiry)
 // but whose WebSocket was already disconnected so the close handler couldn't clean up.
@@ -52,14 +69,9 @@ setInterval(async () => {
       SELECT id, status FROM sessions WHERE id = ANY(${activeSessionIds})
     `;
     for (const row of rows) {
-      if (row.status === 'completed' || row.status === 'queued' || row.status === 'analyzing' || row.status === 'analyzed' || row.status === 'analysis failed') {
-        console.log(`[Terminal] Periodic check: killing container for completed session ${row.id}`);
-        await costTracker.endSession(row.id);
-        activityMonitors.get(row.id)?.destroy();
-        activityMonitors.delete(row.id);
-        const dyingSession = dockerManager.getSession(row.id);
-        if (dyingSession) await archiveWorkspace(row.id, dyingSession.workDir);
-        await dockerManager.kill(row.id);
+      if (SUBMITTED_STATUSES.has(row.status)) {
+        console.log(`[Terminal] Periodic check: finalizing submitted session ${row.id}`);
+        await cleanupSubmittedSession(row.id);
       }
     }
   } catch (err) {
@@ -67,43 +79,176 @@ setInterval(async () => {
   }
 }, 30_000);
 
-// Archive all workspace files to PostgreSQL when a session ends.
-// Non-fatal: errors are logged but never block session completion.
-async function archiveWorkspace(sessionId: string, workDir: string): Promise<void> {
-  if (!fs.existsSync(workDir)) {
-    console.log(`[Archive] No workspace dir for ${sessionId}, skipping`);
-    return;
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isDbArchiveFailure(err: unknown): boolean {
+  return err instanceof WorkspaceArchiveError && err.stage === 'db_write';
+}
+
+async function recordArtifactFailure(
+  sessionId: string,
+  errorCode: string,
+  err: unknown,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
   try {
-    const tree = buildFileTree(workDir);
-    const filePaths: string[] = [];
-    function collect(nodes: FileNode[]) {
-      for (const n of nodes) {
-        if (n.type === 'file') filePaths.push(n.path);
-        else if (n.children) collect(n.children);
-      }
-    }
-    collect(tree);
+    const archiveError = err instanceof WorkspaceArchiveError ? err : null;
+    const failureMetadata = {
+      ...metadata,
+      stage: archiveError?.stage ?? 'unknown',
+      exception_type: err instanceof Error ? err.constructor.name : typeof err,
+    };
+    await sql`
+      INSERT INTO session_artifact_failures (
+        session_id,
+        error_code,
+        error_message,
+        error_metadata
+      ) VALUES (
+        ${sessionId},
+        ${errorCode},
+        ${errorMessage(err)},
+        ${sql.json(failureMetadata as Parameters<typeof sql.json>[0])}
+      )
+    `;
+  } catch (recordErr) {
+    console.error(`[Artifacts] Failed to record artifact failure for ${sessionId}:`, recordErr);
+  }
+}
 
-    const files = [];
-    for (const p of filePaths) {
-      try {
-        files.push(readFileContent(workDir, p));
-      } catch {
-        // skip binary / unreadable files
-      }
-    }
+// Archive all workspace files to PostgreSQL when a session ends.
+async function archiveWorkspaceOnce(sessionId: string, workDir: string): Promise<number> {
+  if (!fs.existsSync(workDir)) {
+    throw new WorkspaceArchiveError('missing_workdir', `Workspace directory does not exist: ${workDir}`);
+  }
 
-    const snapshot = { archived_at: new Date().toISOString(), tree, files };
-    const snapshotJson = snapshot as unknown as Parameters<typeof sql.json>[0];
+  let tree: FileNode[];
+  try {
+    tree = buildFileTree(workDir);
+  } catch (err) {
+    throw new WorkspaceArchiveError('read_workspace', `Failed to read workspace tree: ${errorMessage(err)}`, err);
+  }
+
+  const filePaths: string[] = [];
+  function collect(nodes: FileNode[]) {
+    for (const n of nodes) {
+      if (n.type === 'file') filePaths.push(n.path);
+      else if (n.children) collect(n.children);
+    }
+  }
+  collect(tree);
+
+  const files = [];
+  for (const p of filePaths) {
+    try {
+      files.push(readFileContent(workDir, p));
+    } catch {
+      // skip binary / unreadable files
+    }
+  }
+
+  const snapshot = { archived_at: new Date().toISOString(), tree, files };
+  const snapshotJson = snapshot as unknown as Parameters<typeof sql.json>[0];
+  try {
     await sql`
       UPDATE sessions
       SET workspace_snapshot = ${sql.json(snapshotJson)}
       WHERE id = ${sessionId}
     `;
-    console.log(`[Archive] Saved ${files.length} file(s) for session ${sessionId}`);
   } catch (err) {
-    console.error(`[Archive] Failed for session ${sessionId}:`, err);
+    throw new WorkspaceArchiveError('db_write', `Failed to save workspace snapshot: ${errorMessage(err)}`, err);
+  }
+
+  return files.length;
+}
+
+async function archiveWorkspaceWithRetries(sessionId: string, workDir: string): Promise<boolean> {
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < ARCHIVE_RETRY_DELAYS_MS.length; attempt++) {
+    const delay = ARCHIVE_RETRY_DELAYS_MS[attempt];
+    if (delay > 0) await sleep(delay);
+
+    try {
+      const fileCount = await archiveWorkspaceOnce(sessionId, workDir);
+      console.log(`[Archive] Saved ${fileCount} file(s) for session ${sessionId}`);
+      return true;
+    } catch (err) {
+      lastError = err;
+      const finalAttempt = attempt === ARCHIVE_RETRY_DELAYS_MS.length - 1;
+      console.error(
+        `[Archive] Attempt ${attempt + 1}/${ARCHIVE_RETRY_DELAYS_MS.length} failed for session ${sessionId}:`,
+        err,
+      );
+
+      if (err instanceof WorkspaceArchiveError && err.stage === 'missing_workdir') {
+        break;
+      }
+
+      if (finalAttempt) break;
+    }
+  }
+
+  const errorCode = isDbArchiveFailure(lastError)
+    ? 'workspace_archive_db_failed'
+    : 'workspace_archive_failed';
+  await recordArtifactFailure(sessionId, errorCode, lastError ?? new Error('Unknown workspace archive failure'), {
+    attempts: ARCHIVE_RETRY_DELAYS_MS.length,
+  });
+
+  return !isDbArchiveFailure(lastError);
+}
+
+async function finalizeSessionArtifacts(sessionId: string, workDir?: string): Promise<boolean> {
+  await logger.flushSession(sessionId);
+
+  if (!workDir) {
+    await recordArtifactFailure(
+      sessionId,
+      'workspace_archive_failed',
+      new WorkspaceArchiveError('missing_workdir', 'No Docker session found during cleanup'),
+    );
+    return true;
+  }
+
+  return await archiveWorkspaceWithRetries(sessionId, workDir);
+}
+
+async function cleanupSubmittedSession(sessionId: string): Promise<void> {
+  if (finalizingSessions.has(sessionId)) {
+    console.log(`[Terminal] Session ${sessionId} cleanup already in progress`);
+    return;
+  }
+
+  finalizingSessions.add(sessionId);
+  try {
+    const dyingSession = dockerManager.getSession(sessionId);
+    const canKill = await finalizeSessionArtifacts(sessionId, dyingSession?.workDir);
+
+    if (!canKill) {
+      console.warn(`[Terminal] Deferring container cleanup for ${sessionId}; workspace archive DB write failed`);
+      return;
+    }
+
+    try {
+      await costTracker.endSession(sessionId);
+    } catch (err) {
+      console.error(`[Terminal] Failed to end cost tracking for ${sessionId}:`, err);
+    }
+
+    const monitor = activityMonitors.get(sessionId);
+    monitor?.destroy();
+    activityMonitors.delete(sessionId);
+
+    await dockerManager.kill(sessionId);
+  } finally {
+    finalizingSessions.delete(sessionId);
   }
 }
 
@@ -480,7 +625,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     let isCompleted = false;
     try {
       const [row] = await sql<{ status: string }[]>`SELECT status FROM sessions WHERE id = ${sessionId}`;
-      isCompleted = row?.status === 'completed' || row?.status === 'queued' || row?.status === 'analyzing' || row?.status === 'analyzed' || row?.status === 'analysis failed';
+      isCompleted = SUBMITTED_STATUSES.has(row?.status ?? '');
     } catch (err) {
       console.error(`[Terminal] Failed to check session status for ${sessionId}:`, err);
     }
@@ -492,18 +637,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
     console.log(`[Terminal] Session ${sessionId} is completed — terminating container`);
 
-    await costTracker.endSession(sessionId);
-    await logger.flush();
-
-    activityMonitors.get(sessionId)?.destroy();
-    activityMonitors.delete(sessionId);
-
-    const dyingSession = dockerManager.getSession(sessionId);
-    if (dyingSession) {
-      await archiveWorkspace(sessionId, dyingSession.workDir);
-    }
-
-    await dockerManager.kill(sessionId);
+    await cleanupSubmittedSession(sessionId);
   });
 
   ws.on('error', (err) => {
