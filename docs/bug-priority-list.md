@@ -63,11 +63,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-002: Direct `/analyze` and queued `/analyze/start` paths have inconsistent allowed statuses
 
-- Status: Open
+- Status: Fixed
 - Area: API contract
-- Evidence: `/analyze/start` accepts `completed` and `active` sessions inside the engine (`services/analysis-engine/src/routers/analysis.py:428`), while the web API only allows `completed` (`apps/web/src/app/api/analysis/[sessionId]/route.ts:62`). Direct `/analyze` accepts `completed` and `active` (`services/analysis-engine/src/routers/analysis.py:483`).
-- Impact: Behavior depends on which caller is used. Active sessions can be analyzed through engine endpoints but not through the web route, which risks partial transcripts and confusing status behavior.
-- Suggested fix: Decide one contract: completed-only for production analysis, or explicitly support active-session snapshot analysis with clear naming and UI.
+- Original evidence: `/analyze/start` accepted `completed` and `active` sessions inside the engine, while the web API only allowed completed sessions. Direct `/analyze` also accepted `active`.
+- Original impact: Behavior depended on which caller was used. Active sessions could be analyzed through engine endpoints but not through the web route, risking partial transcripts and confusing status behavior.
+- Resolution: Standardized production analysis start states to `completed` and `analysis failed` only. `queued`/`analyzing` remain idempotent states for `/analyze/start`, but `active` sessions are rejected by both direct and queued engine paths.
 
 ### AE-P1-003: Transcript parser contains mojibake patterns that likely do not match real terminal glyphs
 

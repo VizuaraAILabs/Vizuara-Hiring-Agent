@@ -635,12 +635,12 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
             "session_id": session_id,
         }
 
-    if session["status"] not in ("completed", "active", "analysis failed"):
+    if session["status"] not in ("completed", "analysis failed"):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Session '{session_id}' has status '{session['status']}'. "
-                "Only 'completed', 'active', or 'analysis failed' sessions can be analyzed."
+                "Only 'completed' or 'analysis failed' sessions can be analyzed."
             ),
         )
 
@@ -648,7 +648,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         """
         UPDATE sessions
         SET status = 'queued'
-        WHERE id = $1 AND status IN ('completed', 'active', 'analysis failed')
+        WHERE id = $1 AND status IN ('completed', 'analysis failed')
         RETURNING id
         """,
         session_id,
@@ -737,7 +737,7 @@ async def _mark_analysis_failed(
 async def analyze_session(request: AnalyzeRequest) -> dict:
     return await _analyze_session_impl(
         request.session_id,
-        allowed_statuses=("completed", "active"),
+        allowed_statuses=("completed", "analysis failed"),
     )
 
 
