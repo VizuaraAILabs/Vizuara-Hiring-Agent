@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import postgres from 'postgres';
 import path from 'path';
 import dotenv from 'dotenv';
+import os from 'os';
 import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
@@ -18,6 +19,9 @@ dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 const PORT = parseInt(process.env.TERMINAL_PORT || '3001');
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://hiring:hiring@localhost:5432/hiring_agent';
 const NEXT_APP_URL = process.env.NEXT_APP_URL || 'http://localhost:3000';
+const TERMINAL_SERVER_ID = process.env.TERMINAL_SERVER_ID || `${os.hostname()}:${PORT}`;
+const TERMINAL_RUNTIME_LEASE_SECONDS = parseInt(process.env.TERMINAL_RUNTIME_LEASE_SECONDS || '90');
+const TERMINAL_RUNTIME_HEARTBEAT_MS = Math.max(5_000, Math.floor((TERMINAL_RUNTIME_LEASE_SECONDS * 1000) / 3));
 
 // Initialize postgres connection
 const sql = postgres(DATABASE_URL, {
@@ -37,6 +41,7 @@ logger.onFlush((sessionId, content, contentType) => {
 });
 
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+const runtimeHeartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
 
 // Per-session activity monitors for the AI interviewer
 const activityMonitors: Map<string, ActivityMonitor> = new Map();
@@ -45,6 +50,15 @@ const SUBMITTED_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyze
 const ARCHIVE_RETRY_DELAYS_MS = [0, 500, 1500];
 
 type ArchiveFailureStage = 'missing_workdir' | 'read_workspace' | 'db_write';
+
+interface TerminalRuntimeRow {
+  session_id: string;
+  container_id: string;
+  host_work_dir: string;
+  assigned_terminal_server_id: string;
+  runtime_status: 'starting' | 'active' | 'terminating' | 'terminated' | 'orphaned';
+  lease_expires_at: Date | string;
+}
 
 class WorkspaceArchiveError extends Error {
   stage: ArchiveFailureStage;
@@ -89,6 +103,199 @@ function errorMessage(err: unknown): string {
 
 function isDbArchiveFailure(err: unknown): boolean {
   return err instanceof WorkspaceArchiveError && err.stage === 'db_write';
+}
+
+function runtimeLeaseMs(row: TerminalRuntimeRow): number {
+  const expiresAt = row.lease_expires_at instanceof Date
+    ? row.lease_expires_at.getTime()
+    : new Date(row.lease_expires_at).getTime();
+  return expiresAt - Date.now();
+}
+
+async function reserveRuntimeSession(sessionId: string): Promise<boolean> {
+  const [runtime] = await sql<{ session_id: string }[]>`
+    INSERT INTO terminal_runtime_sessions (
+      session_id,
+      container_id,
+      host_work_dir,
+      assigned_terminal_server_id,
+      runtime_status,
+      last_seen_at,
+      lease_expires_at
+    ) VALUES (
+      ${sessionId},
+      '',
+      '',
+      ${TERMINAL_SERVER_ID},
+      'starting',
+      NOW(),
+      NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second')
+    )
+    ON CONFLICT (session_id) DO UPDATE
+    SET assigned_terminal_server_id = EXCLUDED.assigned_terminal_server_id,
+        runtime_status = 'starting',
+        last_seen_at = NOW(),
+        lease_expires_at = NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second'),
+        updated_at = NOW()
+    WHERE terminal_runtime_sessions.runtime_status IN ('terminated', 'orphaned')
+       OR terminal_runtime_sessions.assigned_terminal_server_id = ${TERMINAL_SERVER_ID}
+       OR terminal_runtime_sessions.lease_expires_at <= NOW()
+    RETURNING session_id
+  `;
+  return Boolean(runtime);
+}
+
+async function upsertRuntimeSession(sessionId: string, containerId: string, workDir: string): Promise<boolean> {
+  const [runtime] = await sql<{ session_id: string }[]>`
+    INSERT INTO terminal_runtime_sessions (
+      session_id,
+      container_id,
+      host_work_dir,
+      assigned_terminal_server_id,
+      runtime_status,
+      last_seen_at,
+      lease_expires_at
+    ) VALUES (
+      ${sessionId},
+      ${containerId},
+      ${workDir},
+      ${TERMINAL_SERVER_ID},
+      'active',
+      NOW(),
+      NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second')
+    )
+    ON CONFLICT (session_id) DO UPDATE
+    SET container_id = EXCLUDED.container_id,
+        host_work_dir = EXCLUDED.host_work_dir,
+        assigned_terminal_server_id = EXCLUDED.assigned_terminal_server_id,
+        runtime_status = 'active',
+        last_seen_at = NOW(),
+        lease_expires_at = NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second'),
+        updated_at = NOW()
+    WHERE terminal_runtime_sessions.assigned_terminal_server_id = ${TERMINAL_SERVER_ID}
+       OR terminal_runtime_sessions.lease_expires_at <= NOW()
+    RETURNING session_id
+  `;
+  return Boolean(runtime);
+}
+
+async function heartbeatRuntimeSession(sessionId: string): Promise<void> {
+  await sql`
+    UPDATE terminal_runtime_sessions
+    SET last_seen_at = NOW(),
+        lease_expires_at = NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second'),
+        updated_at = NOW()
+    WHERE session_id = ${sessionId}
+      AND assigned_terminal_server_id = ${TERMINAL_SERVER_ID}
+      AND runtime_status = 'active'
+  `;
+}
+
+function startRuntimeHeartbeat(sessionId: string): void {
+  if (runtimeHeartbeatTimers.has(sessionId)) return;
+
+  const timer = setInterval(() => {
+    heartbeatRuntimeSession(sessionId).catch((err) => {
+      console.error(`[Terminal] Runtime heartbeat failed for ${sessionId}:`, err);
+    });
+  }, TERMINAL_RUNTIME_HEARTBEAT_MS);
+  runtimeHeartbeatTimers.set(sessionId, timer);
+}
+
+function stopRuntimeHeartbeat(sessionId: string): void {
+  const timer = runtimeHeartbeatTimers.get(sessionId);
+  if (!timer) return;
+  clearInterval(timer);
+  runtimeHeartbeatTimers.delete(sessionId);
+}
+
+async function markRuntimeTerminated(sessionId: string): Promise<void> {
+  stopRuntimeHeartbeat(sessionId);
+  await sql`
+    UPDATE terminal_runtime_sessions
+    SET runtime_status = 'terminated',
+        lease_expires_at = NOW(),
+        updated_at = NOW()
+    WHERE session_id = ${sessionId}
+  `;
+}
+
+async function markRuntimeOrphaned(sessionId: string): Promise<void> {
+  stopRuntimeHeartbeat(sessionId);
+  await sql`
+    UPDATE terminal_runtime_sessions
+    SET runtime_status = 'orphaned',
+        lease_expires_at = NOW(),
+        updated_at = NOW()
+    WHERE session_id = ${sessionId}
+  `;
+}
+
+async function findRuntimeSession(sessionId: string): Promise<TerminalRuntimeRow | null> {
+  const [runtime] = await sql<TerminalRuntimeRow[]>`
+    SELECT session_id, container_id, host_work_dir, assigned_terminal_server_id, runtime_status, lease_expires_at
+    FROM terminal_runtime_sessions
+    WHERE session_id = ${sessionId}
+      AND runtime_status = 'active'
+  `;
+  return runtime ?? null;
+}
+
+async function findAnyRuntimeSession(sessionId: string): Promise<TerminalRuntimeRow | null> {
+  const [runtime] = await sql<TerminalRuntimeRow[]>`
+    SELECT session_id, container_id, host_work_dir, assigned_terminal_server_id, runtime_status, lease_expires_at
+    FROM terminal_runtime_sessions
+    WHERE session_id = ${sessionId}
+      AND runtime_status IN ('active', 'orphaned')
+      AND container_id <> ''
+      AND host_work_dir <> ''
+  `;
+  return runtime ?? null;
+}
+
+async function claimRuntimeSession(sessionId: string): Promise<TerminalRuntimeRow | null> {
+  const [runtime] = await sql<TerminalRuntimeRow[]>`
+    UPDATE terminal_runtime_sessions
+    SET assigned_terminal_server_id = ${TERMINAL_SERVER_ID},
+        last_seen_at = NOW(),
+        lease_expires_at = NOW() + (${TERMINAL_RUNTIME_LEASE_SECONDS} * INTERVAL '1 second'),
+        updated_at = NOW()
+    WHERE session_id = ${sessionId}
+      AND runtime_status = 'active'
+      AND (
+        assigned_terminal_server_id = ${TERMINAL_SERVER_ID}
+        OR lease_expires_at <= NOW()
+      )
+    RETURNING session_id, container_id, host_work_dir, assigned_terminal_server_id, runtime_status, lease_expires_at
+  `;
+  return runtime ?? null;
+}
+
+async function tryRecoverRuntimeSession(sessionId: string): Promise<'recovered' | 'busy' | 'missing'> {
+  const runtime = await findRuntimeSession(sessionId);
+  if (!runtime) return 'missing';
+
+  if (runtime.assigned_terminal_server_id !== TERMINAL_SERVER_ID && runtimeLeaseMs(runtime) > 0) {
+    return 'busy';
+  }
+
+  const claimed = await claimRuntimeSession(sessionId);
+  if (!claimed) return 'busy';
+
+  let recovered = null;
+  try {
+    recovered = await dockerManager.recover(sessionId, claimed.container_id, claimed.host_work_dir);
+  } catch (err) {
+    console.warn(`[Terminal] Failed to recover runtime session ${sessionId}:`, err);
+  }
+
+  if (!recovered) {
+    await markRuntimeOrphaned(sessionId);
+    return 'missing';
+  }
+
+  startRuntimeHeartbeat(sessionId);
+  return 'recovered';
 }
 
 async function recordArtifactFailure(
@@ -229,7 +436,9 @@ async function cleanupSubmittedSession(sessionId: string): Promise<void> {
   finalizingSessions.add(sessionId);
   try {
     const dyingSession = dockerManager.getSession(sessionId);
-    const canKill = await finalizeSessionArtifacts(sessionId, dyingSession?.workDir);
+    const runtimeSession = dyingSession ? null : await findAnyRuntimeSession(sessionId);
+    const workDir = dyingSession?.workDir ?? runtimeSession?.host_work_dir;
+    const canKill = await finalizeSessionArtifacts(sessionId, workDir);
 
     if (!canKill) {
       console.warn(`[Terminal] Deferring container cleanup for ${sessionId}; workspace archive DB write failed`);
@@ -246,9 +455,35 @@ async function cleanupSubmittedSession(sessionId: string): Promise<void> {
     monitor?.destroy();
     activityMonitors.delete(sessionId);
 
-    await dockerManager.kill(sessionId);
+    if (dyingSession) {
+      await dockerManager.kill(sessionId);
+    } else if (runtimeSession) {
+      await dockerManager.killContainer(runtimeSession.container_id, sessionId);
+    }
+    await markRuntimeTerminated(sessionId);
   } finally {
     finalizingSessions.delete(sessionId);
+  }
+}
+
+async function startSessionRuntimeServices(sessionId: string, challengeId: string, token: string): Promise<void> {
+  try {
+    const [challengeRow] = await sql<{ company_id: string }[]>`
+      SELECT company_id FROM challenges WHERE id = ${challengeId}
+    `;
+    if (challengeRow) {
+      costTracker.startSession(sessionId, challengeRow.company_id);
+    }
+  } catch (err) {
+    console.warn(`[Terminal] Failed to start cost tracking for session ${sessionId}:`, err);
+  }
+
+  if (!activityMonitors.has(sessionId)) {
+    const monitor = new ActivityMonitor({
+      sessionToken: token,
+      nextAppUrl: NEXT_APP_URL,
+    });
+    activityMonitors.set(sessionId, monitor);
   }
 }
 
@@ -486,7 +721,45 @@ wss.on('connection', async (ws: WebSocket, req) => {
     ws.send(JSON.stringify({ type: 'connected', sessionId, reconnected: true }));
     console.log(`[Terminal] Reattached to existing container for session ${sessionId}`);
   } else {
+    const recoveryStatus = await tryRecoverRuntimeSession(sessionId);
+    if (recoveryStatus === 'recovered') {
+      dockerSession = dockerManager.getSession(sessionId);
+      ws.send(JSON.stringify({ type: 'connected', sessionId, reconnected: true }));
+      await startSessionRuntimeServices(sessionId, challengeId, token);
+      console.log(`[Terminal] Recovered container from runtime registry for session ${sessionId}`);
+    } else if (recoveryStatus === 'busy') {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'This terminal session is active on another terminal server. Please reconnect in a moment.',
+      }));
+      ws.close();
+      return;
+    }
+  }
+
+  if (!dockerSession) {
     // Fresh connection — spawn a new container
+    let reserved = false;
+    try {
+      reserved = await reserveRuntimeSession(sessionId);
+    } catch (err) {
+      console.error(`[Terminal] Failed to reserve runtime for session ${sessionId}:`, err);
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Failed to start terminal',
+      }));
+      ws.close();
+      return;
+    }
+
+    if (!reserved) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'This terminal session is starting on another terminal server. Please reconnect in a moment.',
+      }));
+      ws.close();
+      return;
+    }
 
     // Look up starter files for this challenge (JSONB column + legacy dir)
     let starterFilesDir: string | undefined;
@@ -520,11 +793,23 @@ wss.on('connection', async (ws: WebSocket, req) => {
         ws.send(JSON.stringify({ type: 'spawning' }));
       }
       dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
+      const runtimeRecorded = await upsertRuntimeSession(sessionId, dockerSession.containerId, dockerSession.workDir);
+      if (!runtimeRecorded) {
+        throw new Error('Failed to claim terminal runtime after spawning container');
+      }
+      startRuntimeHeartbeat(sessionId);
     } catch (err: any) {
       const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
       const isDockerUnavailable = err?.code === 'ENOENT' || err?.code === 'ECONNREFUSED';
       const isSandboxExited = typeof err?.message === 'string' && err.message.includes('Sandbox container stopped');
       console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
+      stopRuntimeHeartbeat(sessionId);
+      if (dockerSession) {
+        await dockerManager.kill(sessionId).catch((killErr) => {
+          console.error(`[Terminal] Failed to clean up partially started container for ${sessionId}:`, killErr);
+        });
+        await markRuntimeOrphaned(sessionId).catch(() => { });
+      }
       ws.send(JSON.stringify({
         type: 'error',
         message: isQueueTimeout
@@ -583,6 +868,11 @@ wss.on('connection', async (ws: WebSocket, req) => {
     console.log(`[Terminal] Container exited for session ${sessionId} with code ${exitCode}`);
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'exit', exitCode }));
+    }
+    if (!finalizingSessions.has(sessionId)) {
+      markRuntimeOrphaned(sessionId).catch((err) => {
+        console.error(`[Terminal] Failed to mark runtime orphaned for ${sessionId}:`, err);
+      });
     }
   };
 
@@ -656,11 +946,15 @@ async function shutdown() {
     clearTimeout(timer);
   }
   disconnectTimers.clear();
+  for (const [, timer] of runtimeHeartbeatTimers) {
+    clearInterval(timer);
+  }
+  runtimeHeartbeatTimers.clear();
   for (const monitor of activityMonitors.values()) monitor.destroy();
   activityMonitors.clear();
   await costTracker.destroy();
   await logger.destroy();
-  await dockerManager.killAll();
+  await dockerManager.killAll({ preserveActiveContainers: true });
   wss.close();
   server.close();
   await sql.end();

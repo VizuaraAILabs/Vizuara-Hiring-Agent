@@ -183,6 +183,28 @@ export class DockerManager {
     await new Promise(resolve => setTimeout(resolve, 1500));
     await this.assertContainerRunning(container, sessionId, 'before shell attach');
 
+    return this.attachShellToContainer(sessionId, container, hostWorkDir);
+  }
+
+  async recover(sessionId: string, containerId: string, workDir: string): Promise<DockerSession | undefined> {
+    const existingSession = this.sessions.get(sessionId);
+    if (existingSession) return existingSession;
+
+    const container = this.docker.getContainer(containerId);
+    try {
+      const inspect = await container.inspect();
+      if (!inspect.State?.Running) return undefined;
+      if (!fs.existsSync(workDir)) return undefined;
+
+      console.log(`[Docker] Recovering existing container for session ${sessionId}: ${containerId.substring(0, 12)}`);
+      return await this.attachShellToContainer(sessionId, container, workDir);
+    } catch (err: any) {
+      if (err?.statusCode === 404) return undefined;
+      throw err;
+    }
+  }
+
+  private async attachShellToContainer(sessionId: string, container: Docker.Container, hostWorkDir: string): Promise<DockerSession> {
     // Create an exec instance for interactive bash as the candidate user
     // (non-root required for --dangerously-skip-permissions)
     const exec = await container.exec({
@@ -261,10 +283,7 @@ export class DockerManager {
     const session = this.sessions.get(sessionId);
     if (session) {
       try {
-        const container = this.docker.getContainer(session.containerId);
-        await container.stop({ t: 5 }).catch(() => { });
-        await container.remove({ force: true }).catch(() => { });
-        console.log(`[Docker] Container removed for session ${sessionId}`);
+        await this.removeContainer(session.containerId, sessionId);
       } catch (err: any) {
         console.warn(`[Docker] Failed to cleanup container for ${sessionId}:`, err.message);
       }
@@ -276,7 +295,14 @@ export class DockerManager {
     }
   }
 
-  async killAll() {
+  async killContainer(containerId: string, sessionId: string) {
+    await this.removeContainer(containerId, sessionId);
+    this.sessions.delete(sessionId);
+    this.lastActivity.delete(sessionId);
+    this.drainQueue();
+  }
+
+  async killAll(options: { preserveActiveContainers?: boolean } = {}) {
     clearInterval(this.idleCleanupInterval);
 
     // Reject all queued requests
@@ -285,6 +311,11 @@ export class DockerManager {
       entry.reject(new Error('Server shutting down'));
     }
     this.queue = [];
+
+    if (options.preserveActiveContainers) {
+      console.log(`[Docker] Preserving ${this.sessions.size} active container(s) during shutdown`);
+      return;
+    }
 
     const promises = [];
     for (const [id] of this.sessions) {
@@ -357,6 +388,13 @@ export class DockerManager {
     ].join('\n');
 
     throw new Error(message);
+  }
+
+  private async removeContainer(containerId: string, sessionId: string) {
+    const container = this.docker.getContainer(containerId);
+    await container.stop({ t: 5 }).catch(() => { });
+    await container.remove({ force: true }).catch(() => { });
+    console.log(`[Docker] Container removed for session ${sessionId}`);
   }
 
   private async removeStaleNamedContainer(sessionId: string) {

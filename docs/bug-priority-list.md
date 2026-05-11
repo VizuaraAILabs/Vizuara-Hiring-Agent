@@ -21,19 +21,19 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P0-002: Web routes calling the analysis engine have no request timeout
 
-- Status: Open
+- Status: Fixed
 - Area: Web API / timeout handling
-- Evidence: The analysis trigger calls `fetch()` without `AbortController` (`apps/web/src/app/api/analysis/[sessionId]/route.ts:67`). Dimension enrichment and transcript narrative routes do the same (`apps/web/src/app/api/analysis/[sessionId]/enrich-dimensions/route.ts:30`, `apps/web/src/app/api/analysis/[sessionId]/transcript-narrative/route.ts:53`).
-- Impact: Requests can hang until platform/runtime defaults kick in. Users get no deterministic failure, and serverless/Node resources remain tied up.
-- Suggested fix: Use the same timeout pattern already present in challenge generation routes: `AbortController`, clear the timer, and return a useful timeout response.
+- Original evidence: The analysis trigger, dimension enrichment, and transcript narrative routes called `fetch()` without `AbortController`.
+- Original impact: Requests could hang until platform/runtime defaults kicked in. Users got no deterministic failure, and serverless/Node resources remained tied up.
+- Resolution: Added explicit `AbortController` timeouts to the analysis trigger, dimension enrichment, and transcript narrative routes. Timeout paths now return deterministic `504` responses and record backend-only failure rows where appropriate.
 
 ### AE-P0-003: Failed background analysis resets sessions to `completed`, losing the failure reason
 
-- Status: Open
+- Status: Fixed
 - Area: Analysis status lifecycle
-- Evidence: `_run_analysis_in_background()` catches every exception and updates queued/analyzing sessions back to `completed` (`services/analysis-engine/src/routers/analysis.py:453`, `services/analysis-engine/src/routers/analysis.py:467`).
-- Impact: A failed analysis becomes indistinguishable from a never-analyzed completed session. Users can repeatedly retry without seeing the root cause, and operators cannot query failed jobs.
-- Suggested fix: Add an `analysis_failed` or `failed` status plus an error table/column with timestamp, error category, retry count, and last message.
+- Original evidence: `_run_analysis_in_background()` caught every exception and moved queued/analyzing sessions back to `completed`.
+- Original impact: A failed analysis became indistinguishable from a never-analyzed completed session. Users could repeatedly retry without seeing the root cause, and operators could not query failed jobs.
+- Resolution: Added explicit `analysis failed` session status and backend-only `analysis_failures` diagnostics (`database/migrations/023_analysis_failed_status.sql`). Background analysis failures now record an error code/message/metadata and leave the session in `analysis failed`; retry paths accept that status.
 
 ### AE-P0-004: Queue state is process-local and not safe across multiple engine instances
 
@@ -45,21 +45,21 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### TERM-P0-001: Live terminal/container session state is process-local
 
-- Status: Open
+- Status: Fixed
 - Area: Terminal server / production reliability
-- Evidence: `DockerManager` stores live `DockerSession` objects in an in-memory `sessions` map (`apps/terminal-server/src/docker-manager.ts:46`). Those objects include the container id, workspace directory, exec stream, output callbacks, and activity timestamps. On reconnect, the WebSocket handler only reattaches if `dockerManager.getSession(sessionId)` finds that in-memory entry (`apps/terminal-server/src/index.ts:320`). The database stores session status/token data, but not the live container ownership/attachment metadata needed to recover after a terminal-server restart.
-- Impact: Restarting or redeploying the terminal server loses all live session attachments even if Docker containers keep running. Candidates can be interrupted, reconnects can fail or replace orphaned containers, horizontal scaling requires sticky routing to one instance, and cleanup depends on best-effort sweeps rather than durable ownership state.
-- Suggested fix: Persist runtime metadata in Postgres or Redis, including `session_id`, `container_id`, `host_work_dir`, `assigned_terminal_server_id`, `last_seen_at`, runtime status, and lease/heartbeat timestamps. On reconnect, either reattach to the existing container or route the candidate to the owning terminal-server instance. Add graceful draining before deploys and orphan recovery based on expired leases.
+- Original evidence: `DockerManager` stored live `DockerSession` objects only in an in-memory `sessions` map. On reconnect, the WebSocket handler only reattached if `dockerManager.getSession(sessionId)` found that in-memory entry.
+- Original impact: Restarting or redeploying the terminal server lost live session attachments even when Docker containers kept running. Candidates could be interrupted, reconnects could fail or replace orphaned containers, horizontal scaling required sticky routing, and cleanup depended on best-effort sweeps.
+- Resolution: Added a Postgres-backed `terminal_runtime_sessions` registry with `container_id`, `host_work_dir`, `assigned_terminal_server_id`, runtime status, heartbeat, and lease expiry (`database/migrations/026_terminal_runtime_sessions.sql`). The terminal server now records runtime ownership after spawning, heartbeats while active, preserves containers during graceful shutdown, and can recover same-host live containers from Postgres on reconnect instead of replacing them.
 
 ## P1
 
 ### AE-P1-001: Recovery re-enqueues all queued/analyzing sessions without stale-job checks
 
-- Status: Open
+- Status: Fixed
 - Area: Analysis queue recovery
-- Evidence: `_recover_pending_analysis_sessions()` selects every session in `queued` or `analyzing` with no analysis row (`services/analysis-engine/src/routers/analysis.py:83`, `services/analysis-engine/src/routers/analysis.py:91`).
-- Impact: On restart, a genuinely active job in another process can be duplicated. Old stuck sessions are also retried forever with no attempt cap or backoff.
-- Suggested fix: Track job ownership, heartbeat, attempt count, and `last_error`; only recover expired jobs.
+- Original evidence: `_recover_pending_analysis_sessions()` selected every session in `queued` or `analyzing` with no analysis row.
+- Original impact: On restart, a genuinely active job in another process could be duplicated. Old stuck sessions were retried forever with no attempt cap or backoff.
+- Resolution: Analysis recovery now creates or updates durable `analysis_jobs` rows and worker claiming is guarded by Postgres leases, ownership, heartbeat expiry, `attempt_count`, and `last_error`. Active jobs in other processes are not reclaimed until their lease expires.
 
 ### AE-P1-002: Direct `/analyze` and queued `/analyze/start` paths have inconsistent allowed statuses
 
