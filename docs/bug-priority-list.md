@@ -37,11 +37,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P0-004: Queue state is process-local and not safe across multiple engine instances
 
-- Status: Open
+- Status: Fixed
 - Area: Analysis queue / deployment scaling
-- Evidence: `_analysis_queue`, `_queued_session_ids`, and `_analysis_workers` are in-memory globals (`services/analysis-engine/src/routers/analysis.py:30`, `services/analysis-engine/src/routers/analysis.py:31`). Deduplication is only against the local set (`services/analysis-engine/src/routers/analysis.py:103`).
-- Impact: Multiple analysis-engine processes can enqueue/process the same session concurrently. The database unique constraint on `analysis_results.session_id` prevents duplicate final rows, but the loser may waste Gemini calls and then reset session state through the generic failure path.
-- Suggested fix: Move queue leasing into the database or a real queue, using atomic job claims, leases, attempts, and heartbeat/expiry semantics.
+- Original evidence: `_analysis_queue`, `_queued_session_ids`, and `_analysis_workers` were in-memory globals, and deduplication only happened against a process-local set.
+- Original impact: Multiple analysis-engine processes could enqueue/process the same session concurrently. The database unique constraint on `analysis_results.session_id` prevented duplicate final rows, but the loser could still waste Gemini calls and then reset session state through the generic failure path.
+- Resolution: Added a Postgres-backed `analysis_jobs` queue keyed by `session_id`, with worker ownership, leases, attempts, and failure metadata (`database/migrations/025_analysis_jobs.sql`). Analysis workers now claim jobs atomically with `FOR UPDATE SKIP LOCKED`, extend leases with a heartbeat while analysis runs, and use the database as the shared queue across engine instances.
 
 ### TERM-P0-001: Live terminal/container session state is process-local
 

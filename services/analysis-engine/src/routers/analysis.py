@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 import os
+import socket
+import uuid
 
 import asyncpg
 from fastapi import APIRouter, HTTPException
@@ -27,9 +29,8 @@ DATABASE_URL = os.environ.get(
 
 # Connection pool — initialized lazily
 _pool: asyncpg.Pool | None = None
-_analysis_queue: asyncio.Queue[str] = asyncio.Queue()
-_queued_session_ids: set[str] = set()
 _analysis_workers: list[asyncio.Task] = []
+_WORKER_INSTANCE_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
 
 def _analysis_max_concurrent() -> int:
@@ -44,6 +45,30 @@ def _analysis_max_concurrent() -> int:
         return 2
 
 
+def _analysis_poll_interval_seconds() -> float:
+    raw_value = os.environ.get("ANALYSIS_QUEUE_POLL_SECONDS", "2")
+    try:
+        return max(0.2, float(raw_value))
+    except ValueError:
+        logger.warning(
+            "Invalid ANALYSIS_QUEUE_POLL_SECONDS=%r; defaulting to 2",
+            raw_value,
+        )
+        return 2
+
+
+def _analysis_lease_seconds() -> int:
+    raw_value = os.environ.get("ANALYSIS_JOB_LEASE_SECONDS", "300")
+    try:
+        return max(30, int(raw_value))
+    except ValueError:
+        logger.warning(
+            "Invalid ANALYSIS_JOB_LEASE_SECONDS=%r; defaulting to 300",
+            raw_value,
+        )
+        return 300
+
+
 async def _get_pool() -> asyncpg.Pool:
     """Get or create the asyncpg connection pool."""
     global _pool
@@ -53,7 +78,7 @@ async def _get_pool() -> asyncpg.Pool:
 
 
 async def start_analysis_queue_workers() -> None:
-    """Start the bounded in-process analysis worker queue."""
+    """Start bounded workers for the Postgres-backed analysis queue."""
     if _analysis_workers:
         return
 
@@ -76,68 +101,244 @@ async def stop_analysis_queue_workers() -> None:
         await asyncio.gather(*_analysis_workers, return_exceptions=True)
 
     _analysis_workers.clear()
-    _queued_session_ids.clear()
     logger.info("Stopped analysis queue workers")
 
 
 async def _recover_pending_analysis_sessions() -> None:
-    """Re-enqueue sessions that were left queued/analyzing after a restart."""
+    """Ensure pending sessions have durable queue jobs after a restart."""
     pool = await _get_pool()
     rows = await pool.fetch(
         """
-        SELECT s.id
+        INSERT INTO analysis_jobs (session_id, status)
+        SELECT s.id, 'queued'
         FROM sessions s
         LEFT JOIN analysis_results ar ON ar.session_id = s.id
         WHERE s.status IN ('queued', 'analyzing') AND ar.id IS NULL
-        ORDER BY s.created_at ASC
+        ON CONFLICT (session_id) DO UPDATE
+        SET
+            status = CASE
+                WHEN analysis_jobs.status IN ('succeeded', 'failed') THEN 'queued'
+                ELSE analysis_jobs.status
+            END,
+            updated_at = NOW()
+        RETURNING session_id
         """
     )
 
-    for row in rows:
-        _enqueue_analysis(str(row["id"]))
-
     if rows:
-        logger.info("Recovered %d pending analysis session(s) into the queue", len(rows))
+        logger.info("Recovered %d pending analysis job(s)", len(rows))
 
 
-def _enqueue_analysis(session_id: str) -> bool:
-    if session_id in _queued_session_ids:
-        return False
-
-    _queued_session_ids.add(session_id)
-    _analysis_queue.put_nowait(session_id)
-    logger.info(
-        "Queued analysis for session %s (queue size: %d)",
+async def _enqueue_analysis(session_id: str) -> bool:
+    pool = await _get_pool()
+    row = await pool.fetchrow(
+        """
+        INSERT INTO analysis_jobs (
+            session_id,
+            status,
+            claimed_by,
+            claimed_at,
+            lease_expires_at,
+            last_error
+        )
+        VALUES ($1, 'queued', NULL, NULL, NULL, NULL)
+        ON CONFLICT (session_id) DO UPDATE
+        SET
+            status = 'queued',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            last_error = NULL,
+            updated_at = NOW()
+        WHERE analysis_jobs.status IN ('queued', 'failed', 'succeeded')
+           OR analysis_jobs.lease_expires_at <= NOW()
+        RETURNING status
+        """,
         session_id,
-        _analysis_queue.qsize(),
     )
-    return True
+    queued = row is not None
+    if queued:
+        logger.info("Queued analysis job for session %s", session_id)
+    return queued
+
+
+async def _claim_next_analysis_job(worker_id: int) -> asyncpg.Record | None:
+    pool = await _get_pool()
+    worker_name = f"{_WORKER_INSTANCE_ID}:worker-{worker_id}"
+    lease_seconds = _analysis_lease_seconds()
+    return await pool.fetchrow(
+        """
+        WITH next_job AS (
+            SELECT j.id
+            FROM analysis_jobs j
+            WHERE (
+                j.status = 'queued'
+                OR (j.status = 'running' AND j.lease_expires_at <= NOW())
+            )
+              AND NOT EXISTS (
+                  SELECT 1 FROM analysis_results ar WHERE ar.session_id = j.session_id
+              )
+            ORDER BY j.created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        UPDATE analysis_jobs j
+        SET
+            status = 'running',
+            claimed_by = $1,
+            claimed_at = NOW(),
+            lease_expires_at = NOW() + ($2 * INTERVAL '1 second'),
+            attempt_count = attempt_count + 1,
+            updated_at = NOW()
+        FROM next_job
+        WHERE j.id = next_job.id
+        RETURNING j.id, j.session_id, j.attempt_count, j.claimed_by
+        """,
+        worker_name,
+        lease_seconds,
+    )
+
+
+async def _heartbeat_analysis_job(job_id: str, claimed_by: str) -> None:
+    pool = await _get_pool()
+    lease_seconds = _analysis_lease_seconds()
+    interval_seconds = max(5, lease_seconds / 2)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            await pool.execute(
+                """
+                UPDATE analysis_jobs
+                SET lease_expires_at = NOW() + ($3 * INTERVAL '1 second'),
+                    updated_at = NOW()
+                WHERE id = $1 AND claimed_by = $2 AND status = 'running'
+                """,
+                job_id,
+                claimed_by,
+                lease_seconds,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning(
+                "Failed to heartbeat analysis job %s claimed by %s",
+                job_id,
+                claimed_by,
+                exc_info=True,
+            )
+
+
+async def _mark_analysis_job_succeeded(job_id: str, claimed_by: str) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'succeeded',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1 AND claimed_by = $2
+        """,
+        job_id,
+        claimed_by,
+    )
+
+
+async def _mark_analysis_job_succeeded_for_session(session_id: str) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'succeeded',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            updated_at = NOW()
+        WHERE session_id = $1
+        """,
+        session_id,
+    )
+
+
+async def _mark_analysis_job_failed(
+    job_id: str,
+    claimed_by: str,
+    error_message: str,
+) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'failed',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            last_error = $3,
+            updated_at = NOW()
+        WHERE id = $1 AND claimed_by = $2
+        """,
+        job_id,
+        claimed_by,
+        error_message,
+    )
 
 
 async def _analysis_worker_loop(worker_id: int) -> None:
     logger.info("Analysis queue worker %d started", worker_id)
     while True:
-        session_id = await _analysis_queue.get()
+        try:
+            job = await _claim_next_analysis_job(worker_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Analysis worker %d failed to claim a job", worker_id)
+            await asyncio.sleep(_analysis_poll_interval_seconds())
+            continue
+
+        if job is None:
+            await asyncio.sleep(_analysis_poll_interval_seconds())
+            continue
+
+        job_id = str(job["id"])
+        session_id = str(job["session_id"])
+        claimed_by = str(job["claimed_by"])
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_analysis_job(job_id, claimed_by)
+        )
         try:
             logger.info("Analysis worker %d processing session %s", worker_id, session_id)
             if not await _mark_analysis_running(session_id):
                 logger.info(
-                    "Analysis worker %d skipped session %s because it is no longer queued",
+                    "Analysis worker %d skipped session %s because it is no longer claimable",
                     worker_id,
                     session_id,
                 )
+                await _mark_analysis_job_succeeded(job_id, claimed_by)
                 continue
-            await _run_analysis_in_background(session_id)
+            succeeded = await _run_analysis_in_background(session_id)
+            if succeeded:
+                await _mark_analysis_job_succeeded(job_id, claimed_by)
+            else:
+                await _mark_analysis_job_failed(
+                    job_id,
+                    claimed_by,
+                    "Analysis failed; see analysis_failures for details.",
+                )
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Unexpected analysis worker error for session %s",
                 session_id,
             )
+            try:
+                await _mark_analysis_job_failed(job_id, claimed_by, str(exc))
+            except Exception:
+                logger.exception("Failed to mark analysis job %s as failed", job_id)
         finally:
-            _queued_session_ids.discard(session_id)
-            _analysis_queue.task_done()
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
 
 
 async def _mark_analysis_running(session_id: str) -> bool:
@@ -153,6 +354,14 @@ async def _mark_analysis_running(session_id: str) -> bool:
           )
         RETURNING id
         """,
+        session_id,
+    )
+    return row is not None
+
+
+async def _analysis_result_exists(pool: asyncpg.Pool, session_id: str) -> bool:
+    row = await pool.fetchrow(
+        "SELECT id FROM analysis_results WHERE session_id = $1",
         session_id,
     )
     return row is not None
@@ -412,6 +621,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
             "UPDATE sessions SET status = 'analyzed' WHERE id = $1",
             session_id,
         )
+        await _mark_analysis_job_succeeded_for_session(session_id)
         return {
             "status": "already_analyzed",
             "analysis_id": str(existing["id"]),
@@ -419,7 +629,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         }
 
     if session["status"] in ("queued", "analyzing"):
-        queued = _enqueue_analysis(session_id)
+        queued = await _enqueue_analysis(session_id)
         return {
             "status": "queued" if queued else "already_running",
             "session_id": session_id,
@@ -446,14 +656,18 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
     if not updated:
         return {"status": "already_running", "session_id": session_id}
 
-    _enqueue_analysis(session_id)
-    return {"status": "queued", "session_id": session_id}
+    queued = await _enqueue_analysis(session_id)
+    return {
+        "status": "queued" if queued else "already_running",
+        "session_id": session_id,
+    }
 
 
-async def _run_analysis_in_background(session_id: str) -> None:
+async def _run_analysis_in_background(session_id: str) -> bool:
     try:
         await _analyze_session_impl(session_id, allowed_statuses=("analyzing",))
         logger.info("Background analysis completed for session %s", session_id)
+        return True
     except Exception as exc:
         logger.error(
             "Background analysis failed for session %s: %s",
@@ -463,6 +677,12 @@ async def _run_analysis_in_background(session_id: str) -> None:
         )
         try:
             pool = await _get_pool()
+            if await _analysis_result_exists(pool, session_id):
+                logger.info(
+                    "Analysis result already exists for session %s after failure; treating job as complete",
+                    session_id,
+                )
+                return True
             await _mark_analysis_failed(pool, session_id, exc)
         except Exception as status_exc:
             logger.error(
@@ -471,6 +691,7 @@ async def _run_analysis_in_background(session_id: str) -> None:
                 status_exc,
                 exc_info=True,
             )
+        return False
 
 
 async def _mark_analysis_failed(
