@@ -258,13 +258,21 @@ export default function ChallengeDetailPage() {
     );
   }
 
+  async function refreshChallengeAfterAnalysisFailure() {
+    try {
+      setChallenge(await fetchChallengeDetail());
+    } catch {
+      // Keep the current UI state if the refresh fails.
+    }
+  }
+
   async function handleAnalyze(sessionId: string) {
     setAnalysisStartingIds((current) => new Set(current).add(sessionId));
     try {
       const res = await fetch(`/api/analysis/${sessionId}`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Analysis failed' }));
-        updateSessionStatus(sessionId, 'completed');
+        await refreshChallengeAfterAnalysisFailure();
         setModalMessage({
           title: 'Analysis Failed',
           description: err.error || 'Analysis failed. Check console for details.',
@@ -272,9 +280,8 @@ export default function ChallengeDetailPage() {
         return;
       }
       updateSessionStatus(sessionId, 'queued');
-    } catch (err) {
-      console.error('Analysis error:', err);
-      updateSessionStatus(sessionId, 'completed');
+    } catch {
+      await refreshChallengeAfterAnalysisFailure();
       setModalMessage({
         title: 'Analysis Unavailable',
         description: 'Failed to connect to analysis engine.',
