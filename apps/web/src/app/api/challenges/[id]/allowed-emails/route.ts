@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import type { Challenge } from '@/types';
+import { getChallengeById } from '@/lib/challenge-queries';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -15,7 +15,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }

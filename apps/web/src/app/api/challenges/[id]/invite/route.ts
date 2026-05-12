@@ -3,8 +3,8 @@ import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { generateToken } from '@/lib/utils';
 import { addEmailToAllowlist, validateChallengeAccess } from '@/lib/challenge-access';
+import { getChallengeById } from '@/lib/challenge-queries';
 import { v4 as uuidv4 } from 'uuid';
-import type { Challenge } from '@/types';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });

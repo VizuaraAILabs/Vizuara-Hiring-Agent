@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser, isAdmin } from '@/lib/auth';
-import { checkEnrollmentStatus } from '@/lib/enrollment';
+import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
+import { getChallengeById } from '@/lib/challenge-queries';
 import type { Challenge, Session, StarterFile } from '@/types';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +14,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
@@ -51,7 +52,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
@@ -103,13 +104,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         : null;
 
       if (sessionsLimit != null) {
-        const planStatus = await checkEnrollmentStatus(user.companyId);
-        if (planStatus.sessionsLimit !== -1 && sessionsLimit > planStatus.sessionsLimit) {
-          return NextResponse.json(
-            { error: `Session limit cannot exceed your plan limit of ${planStatus.sessionsLimit}.` },
-            { status: 400 }
-          );
-        }
+        const limitError = await validateChallengeSessionLimit(user.companyId, sessionsLimit, { challengeId: id });
+        if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
       }
 
       const parsedStartsAt = body.starts_at ? new Date(body.starts_at) : null;

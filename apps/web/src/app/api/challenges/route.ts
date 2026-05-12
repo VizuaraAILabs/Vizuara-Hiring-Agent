@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { checkEnrollmentStatus } from '@/lib/enrollment';
+import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
+import { getChallengeById } from '@/lib/challenge-queries';
 import { v4 as uuidv4 } from 'uuid';
-import type { Challenge } from '@/types';
 
 export async function GET() {
   try {
@@ -16,7 +16,26 @@ export async function GET() {
     }
 
     const challenges = await sql`
-      SELECT c.*, COUNT(s.id)::int as candidate_count
+      SELECT
+        c.id,
+        c.company_id,
+        c.title,
+        c.description,
+        c.time_limit_min,
+        c.is_active,
+        c.starter_files_dir,
+        c.starter_files,
+        c.sessions_limit,
+        c.allowed_emails,
+        c.starts_at,
+        c.ends_at,
+        c.role,
+        c.tech_stack,
+        c.seniority,
+        c.focus_areas,
+        c.context,
+        c.created_at,
+        COUNT(s.id)::int as candidate_count
       FROM challenges c
       LEFT JOIN sessions s ON s.challenge_id = c.id
       WHERE c.company_id = ${user.companyId}
@@ -58,13 +77,8 @@ export async function POST(request: Request) {
       : null;
 
     if (sessionsLimit != null) {
-      const planStatus = await checkEnrollmentStatus(user.companyId);
-      if (planStatus.sessionsLimit !== -1 && sessionsLimit > planStatus.sessionsLimit) {
-        return NextResponse.json(
-          { error: `Session limit cannot exceed your plan limit of ${planStatus.sessionsLimit}.` },
-          { status: 400 }
-        );
-      }
+      const limitError = await validateChallengeSessionLimit(user.companyId, sessionsLimit);
+      if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
     }
 
     const startsAt = starts_at ? new Date(starts_at) : null;
@@ -95,7 +109,11 @@ export async function POST(request: Request) {
       VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${startsAt ? startsAt.toISOString() : null}, ${endsAt ? endsAt.toISOString() : null}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
     `;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
+
+    if (!challenge) {
+      return NextResponse.json({ error: 'Challenge not found after creation' }, { status: 500 });
+    }
 
     // Ensure starter_files is a parsed array
     const parsedFiles = typeof challenge.starter_files === 'string'

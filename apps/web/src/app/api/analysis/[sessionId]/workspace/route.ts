@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import type { Session, Challenge, WorkspaceSnapshot } from '@/types';
+import { getChallengeById } from '@/lib/challenge-queries';
+import type { Session, WorkspaceSnapshot } from '@/types';
 
 function normalizeWorkspaceSnapshot(snapshot: unknown): WorkspaceSnapshot | null {
   let parsed = snapshot;
@@ -28,7 +29,7 @@ async function verifyAccess(sessionId: string, userId: string) {
   const [session] = await sql<Session[]>`SELECT * FROM sessions WHERE id = ${sessionId}`;
   if (!session) return null;
 
-  const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${session.challenge_id}`;
+  const challenge = await getChallengeById(session.challenge_id);
   if (!challenge || challenge.company_id !== userId) return null;
 
   return session;

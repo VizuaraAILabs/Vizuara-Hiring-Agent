@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { recordAnalysisFailure } from '@/lib/analysis-failure-log';
-import type { AnalysisResult, Session, Challenge } from '@/types';
+import { getChallengeById } from '@/lib/challenge-queries';
+import type { AnalysisResult, Session } from '@/types';
 
 const ANALYSIS_START_TIMEOUT_MS = 20_000;
 
@@ -23,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${session.challenge_id}`;
+    const challenge = await getChallengeById(session.challenge_id);
     if (!challenge || challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -58,7 +59,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${session.challenge_id}`;
+    const challenge = await getChallengeById(session.challenge_id);
     if (!challenge || challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
