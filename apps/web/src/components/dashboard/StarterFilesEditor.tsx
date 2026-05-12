@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { codeToHtml } from 'shiki';
 import type { StarterFile } from '@/types';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface StarterFilesEditorProps {
   files: StarterFile[];
@@ -872,7 +873,7 @@ export default function StarterFilesEditor({
           >
             {generating ? (
               <>
-                <span className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full" />
+                <ArcSpinner label="Generating starter files" sizeClassName="h-3 w-3" />
                 Generating...
               </>
             ) : (

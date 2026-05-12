@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth';
 import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import FPLLogo from '@/components/FPLLogo';
+import ArcSpinner from '@/components/ArcSpinner';
 import { useAuth } from '@/context/AuthContext';
 import { getClientAuth, hasFirebaseClientConfig } from '@/lib/firebase-client';
 
@@ -389,7 +390,10 @@ export default function RegisterPage() {
     <Suspense
       fallback={
         <main className="min-h-screen bg-[#090909] pt-16.25 text-white grid place-items-center">
-          <p className="text-sm text-neutral-500">Loading signup...</p>
+          <div className="flex flex-col items-center gap-4">
+            <ArcSpinner label="Loading signup" />
+            <p className="text-sm text-neutral-500">Loading signup...</p>
+          </div>
         </main>
       }
     >

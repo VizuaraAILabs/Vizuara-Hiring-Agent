@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -20,8 +21,9 @@ export default function AuthGate({ children }: AuthGateProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500">Loading...</p>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <ArcSpinner label="Loading account" />
+        <p className="text-sm text-neutral-500">Loading account...</p>
       </div>
     );
   }

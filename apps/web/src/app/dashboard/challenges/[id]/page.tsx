@@ -8,6 +8,7 @@ import { formatDateTime } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
+import ArcSpinner from '@/components/ArcSpinner';
 import type { Challenge, Session, StarterFile } from '@/types';
 
 interface ChallengeDetail extends Challenge {
@@ -720,20 +721,14 @@ export default function ChallengeDetailPage() {
                             {visibleStatus === 'queued' && (
                               <span className="flex items-center gap-2 text-sm font-medium text-amber-300">
                                 {isStartingAnalysis && (
-                                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                  </svg>
+                                  <ArcSpinner label="Queueing analysis" sizeClassName="h-4 w-4" />
                                 )}
                                 Queued
                               </span>
                             )}
                             {visibleStatus === 'analyzing' && (
                               <span className="flex items-center gap-2 text-sm font-medium text-violet-300">
-                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
+                                <ArcSpinner label="Analyzing session" sizeClassName="h-4 w-4" />
                                 Analyzing...
                               </span>
                             )}

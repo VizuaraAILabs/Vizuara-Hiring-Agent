@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, Eye, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, Eye, RefreshCw } from 'lucide-react';
 import { getScoreColor, getScoreBgColor } from '@/lib/utils';
 import type { DimensionDetail } from '@/types';
 import DimensionEvidenceModal from './DimensionEvidenceModal';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface ScoreSummaryProps {
   dimensions: Record<string, DimensionDetail>;
@@ -44,7 +45,7 @@ export default function ScoreSummary({ dimensions, scores, enriching = false, en
           <h3 className="text-lg font-semibold text-white">Score Breakdown</h3>
           {enriching && (
             <div className="flex items-center gap-1.5 text-neutral-600 text-xs">
-              <Loader2 size={12} className="animate-spin" />
+              <ArcSpinner label="Generating evidence" sizeClassName="h-3 w-3" />
               <span>Generating evidence…</span>
             </div>
           )}

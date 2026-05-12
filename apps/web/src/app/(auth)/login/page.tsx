@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import FPLLogo from '@/components/FPLLogo';
+import ArcSpinner from '@/components/ArcSpinner';
 import { getClientAuth, hasFirebaseClientConfig } from '@/lib/firebase-client';
 import { useAuth } from '@/context/AuthContext';
 
@@ -295,7 +296,10 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <main className="min-h-screen bg-[#090909] text-white grid place-items-center">
-          <p className="text-sm text-neutral-500">Loading login...</p>
+          <div className="flex flex-col items-center gap-4">
+            <ArcSpinner label="Loading login" />
+            <p className="text-sm text-neutral-500">Loading login...</p>
+          </div>
         </main>
       }
     >

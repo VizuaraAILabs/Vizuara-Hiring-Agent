@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useInterview, type InterviewMessage } from '@/hooks/useInterview';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface InterviewWidgetProps {
   token: string;
@@ -135,7 +136,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
                 className="shrink-0 w-9 h-9 rounded-xl bg-primary hover:bg-primary-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center cursor-pointer"
               >
                 {sending ? (
-                  <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <ArcSpinner label="Sending message" sizeClassName="h-3.5 w-3.5" />
                 ) : (
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                     <path d="M1 7h12M7 1l6 6-6 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

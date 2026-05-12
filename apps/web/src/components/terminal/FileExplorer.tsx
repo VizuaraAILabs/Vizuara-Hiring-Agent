@@ -6,6 +6,7 @@ import FileTree from './FileTree';
 import CodeViewer from './CodeViewer';
 import type { FileTreeActions } from './FileTreeNode';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface FileExplorerProps {
   token: string;
@@ -158,7 +159,7 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
         <div className="flex-1 min-h-0 overflow-auto file-tree-scroll">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
+              <ArcSpinner label="Loading files" sizeClassName="h-5 w-5" />
             </div>
           ) : error ? (
             <div className="flex items-center justify-center h-32 px-3">

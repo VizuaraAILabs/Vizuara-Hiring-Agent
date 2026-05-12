@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Dropdown from '@/components/Dropdown';
+import ArcSpinner from '@/components/ArcSpinner';
 import { useAuth } from '@/context/AuthContext';
 import type { FeedbackRecord, FeedbackReply, FeedbackStats, FeedbackType } from '@/types/feedback';
 
@@ -255,11 +256,16 @@ export default function AdminFeedbackDashboard() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-neutral-500 py-10">Loading...</td>
+                  <td colSpan={7} className="py-10">
+                    <div className="flex flex-col items-center gap-3 text-neutral-500">
+                      <ArcSpinner label="Loading feedback" sizeClassName="h-8 w-8" />
+                      <span className="text-sm">Loading feedback...</span>
+                    </div>
+                  </td>
                 </tr>
               ) : feedback.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center text-neutral-500 py-10">No feedback found.</td>
+                  <td colSpan={7} className="text-center text-neutral-500 py-10">No feedback found.</td>
                 </tr>
               ) : (
                 feedback.map((row) => (
