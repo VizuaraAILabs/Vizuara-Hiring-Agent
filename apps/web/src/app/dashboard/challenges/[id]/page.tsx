@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, FolderCode, Link2, Users } from 'lucide-react';
+import { Copy, FileText, FolderCode, Link2, Users } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -34,10 +34,17 @@ export default function ChallengeDetailPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [analysisStartingIds, setAnalysisStartingIds] = useState<Set<string>>(new Set());
   const [copiedShareable, setCopiedShareable] = useState(false);
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
   const [allowedEmailsSaving, setAllowedEmailsSaving] = useState(false);
   const [allowedEmailsSaved, setAllowedEmailsSaved] = useState(false);
+  const [accessStartsAt, setAccessStartsAt] = useState('');
+  const [accessEndsAt, setAccessEndsAt] = useState('');
+  const [accessSessionsLimit, setAccessSessionsLimit] = useState('');
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessSaved, setAccessSaved] = useState(false);
+  const [accessError, setAccessError] = useState('');
   const [starterFiles, setStarterFiles] = useState<StarterFile[]>([]);
   const [savedStarterFiles, setSavedStarterFiles] = useState<StarterFile[]>([]);
   const [starterFilesSaving, setStarterFilesSaving] = useState(false);
@@ -56,12 +63,23 @@ export default function ChallengeDetailPage() {
     return data;
   }, [challengeId]);
 
+  function toDateTimeLocal(value: string | null | undefined) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  }
+
   useEffect(() => {
     fetchChallengeDetail()
       .then((data) => {
         const files = parseStarterFiles(data.starter_files);
         setChallenge(data);
         setAllowedEmails(data.allowed_emails ?? []);
+        setAccessStartsAt(toDateTimeLocal(data.starts_at));
+        setAccessEndsAt(toDateTimeLocal(data.ends_at));
+        setAccessSessionsLimit(data.sessions_limit != null ? String(data.sessions_limit) : '');
         setStarterFiles(files);
         setSavedStarterFiles(files);
       })
@@ -191,6 +209,37 @@ export default function ChallengeDetailPage() {
     }
   }
 
+  async function handleSaveAccessSettings() {
+    setAccessSaving(true);
+    setAccessSaved(false);
+    setAccessError('');
+
+    try {
+      const res = await fetch(`/api/challenges/${challengeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessions_limit: accessSessionsLimit ? parseInt(accessSessionsLimit) : null,
+          starts_at: accessStartsAt ? new Date(accessStartsAt).toISOString() : null,
+          ends_at: accessEndsAt ? new Date(accessEndsAt).toISOString() : null,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to save assessment access settings');
+      }
+
+      setChallenge((current) => current ? { ...current, ...data } : current);
+      setAccessSaved(true);
+      setTimeout(() => setAccessSaved(false), 2500);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : 'Failed to save assessment access settings');
+    } finally {
+      setAccessSaving(false);
+    }
+  }
+
   async function handleSaveStarterFiles() {
     setStarterFilesSaving(true);
     setStarterFilesSaved(false);
@@ -236,6 +285,8 @@ export default function ChallengeDetailPage() {
       const data = await res.json();
       if (res.ok) {
         setInviteLink(`${window.location.origin}${data.invite_url}`);
+        const normalizedEmail = inviteForm.email.trim().toLowerCase();
+        setAllowedEmails((current) => current.includes(normalizedEmail) ? current : [...current, normalizedEmail]);
         setInviteForm({ name: '', email: '' });
         setChallenge(await fetchChallengeDetail());
       }
@@ -295,6 +346,13 @@ export default function ChallengeDetailPage() {
     }
   }
 
+  function copySessionLink(session: Session) {
+    const url = `${window.location.origin}/session/${session.token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedSessionId(session.id);
+    setTimeout(() => setCopiedSessionId(null), 2000);
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
@@ -347,7 +405,7 @@ export default function ChallengeDetailPage() {
       </div>
 
       {activeTab === 'description' && (
-        <div className="bg-surface border border-white/5 rounded-2xl p-6">
+        <div className="px-6 pb-6">
           {challenge.description ? <MarkdownViewer content={challenge.description} /> : <p className="text-neutral-600">No description configured.</p>}
         </div>
       )}
@@ -399,7 +457,7 @@ export default function ChallengeDetailPage() {
             <div className="rounded-2xl border border-primary/20 bg-surface p-5">
               <div className="mb-4">
                 <p className="text-sm font-medium text-white">Shareable Assessment Link</p>
-                <p className="mt-1 text-xs text-neutral-500">Share this single link with all candidates. They enter their own details before starting.</p>
+                <p className="mt-1 text-xs text-neutral-500">Share this single link with all candidates. The assessment window controls when they can register or start.</p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
@@ -423,13 +481,67 @@ export default function ChallengeDetailPage() {
             </div>
 
             <div className="rounded-2xl border border-white/5 bg-surface p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-white">Assessment Access</p>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    Limits apply to both shareable registrations and personalized invite creation. The window controls entry only.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {accessSaved && <span className="text-xs text-primary">Saved!</span>}
+                  {accessError && <span className="max-w-64 text-xs text-red-400">{accessError}</span>}
+                  <button
+                    type="button"
+                    onClick={handleSaveAccessSettings}
+                    disabled={accessSaving}
+                    className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+                  >
+                    {accessSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Session Limit</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={accessSessionsLimit}
+                    onChange={(e) => setAccessSessionsLimit(e.target.value)}
+                    placeholder="Plan limit"
+                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Starts</label>
+                  <input
+                    type="datetime-local"
+                    value={accessStartsAt}
+                    onChange={(e) => setAccessStartsAt(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Ends</label>
+                  <input
+                    type="datetime-local"
+                    value={accessEndsAt}
+                    onChange={(e) => setAccessEndsAt(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/5 bg-surface p-5">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">Participant Restrictions</p>
+                  <p className="text-sm font-medium text-white">Candidate Email Allowlist</p>
                   <p className="mt-0.5 text-xs text-neutral-500">
                     {allowedEmails.length === 0
-                      ? 'Anyone with the link can attempt this assessment. Add emails to restrict access.'
-                      : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can attempt this assessment.`}
+                      ? 'Anyone with the shareable link can register. Personalized invites are added here automatically.'
+                      : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can register through the shareable link.`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -561,13 +673,14 @@ export default function ChallengeDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
+              <table className="w-full min-w-[820px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
                     <th className="px-5 py-3 font-medium">Email</th>
                     <th className="px-5 py-3 font-medium">Started</th>
                     <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium">Session Link</th>
                     <th className="px-5 py-3 text-right font-medium">Action</th>
                   </tr>
                 </thead>
@@ -585,6 +698,17 @@ export default function ChallengeDetailPage() {
                           <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
                             {statusLabels[visibleStatus] ?? visibleStatus}
                           </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() => copySessionLink(session)}
+                            className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-primary"
+                            title="Copy candidate session link"
+                          >
+                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                            {copiedSessionId === session.id ? 'Copied' : 'Copy'}
+                          </button>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex justify-end">

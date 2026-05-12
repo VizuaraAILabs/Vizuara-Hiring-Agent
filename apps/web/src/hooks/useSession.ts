@@ -36,11 +36,12 @@ export function useSession(token: string) {
       if (res.ok) {
         const updated = await res.json();
         setSession((prev) => prev ? { ...prev, ...updated } : null);
-        return true;
+        return { success: true, error: null };
       }
-      return false;
+      const data = await res.json().catch(() => null);
+      return { success: false, error: data?.error || 'Could not start the session. Please try again.' };
     } catch {
-      return false;
+      return { success: false, error: 'Could not start the session. Please try again.' };
     }
   };
 

@@ -69,12 +69,12 @@ export default function SessionPage() {
     if (starting) return;
     setStarting(true);
     setStartError('');
-    const success = await startSession();
-    if (success) {
+    const result = await startSession();
+    if (result.success) {
       router.push(`/session/${token}/terminal`);
       return;
     }
-    setStartError('Could not start the session. Please try again.');
+    setStartError(result.error || 'Could not start the session. Please try again.');
     setStarting(false);
   }
 

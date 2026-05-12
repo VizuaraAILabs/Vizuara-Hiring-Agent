@@ -21,11 +21,13 @@ export interface Challenge {
   title: string;
   description: string;
   time_limit_min: number;
-  is_active: number;
+  is_active: boolean | number;
   starter_files_dir: string | null;
   starter_files: StarterFile[] | null;
   sessions_limit: number | null;
   allowed_emails: string[] | null;
+  starts_at: string | null;
+  ends_at: string | null;
   role: string | null;
   tech_stack: string | null;
   seniority: string | null;
@@ -155,6 +157,12 @@ export interface SessionWithChallenge extends Session {
   challenge_title: string;
   challenge_description: string;
   time_limit_min: number;
+  challenge_is_active?: boolean | number;
+  challenge_starts_at?: string | null;
+  challenge_ends_at?: string | null;
+  challenge_sessions_limit?: number | null;
+  challenge_allowed_emails?: string[] | null;
+  challenge_company_id?: string;
 }
 
 // Cost tracking types

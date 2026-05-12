@@ -10,6 +10,13 @@ interface ChallengeInfo {
   description: string;
   time_limit_min: number;
   company_name: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  availability?: {
+    ok: boolean;
+    reason: string;
+    message: string;
+  };
 }
 
 export default function ApplyPage() {
@@ -23,6 +30,15 @@ export default function ApplyPage() {
   const [form, setForm] = useState({ name: '', email: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const isUnavailable = Boolean(challenge?.availability && !challenge.availability.ok);
+
+  function formatWindowDate(value: string | null) {
+    if (!value) return null;
+    return new Date(value).toLocaleString([], {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+  }
 
   useEffect(() => {
     fetch(`/api/challenges/${challengeId}/apply`)
@@ -140,6 +156,17 @@ export default function ApplyPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
+              {isUnavailable && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                  <p className="text-sm font-semibold text-amber-200">{challenge.availability?.message}</p>
+                  {(challenge.starts_at || challenge.ends_at) && (
+                    <p className="mt-1 text-xs leading-5 text-amber-100/70">
+                      {challenge.starts_at ? `Opens ${formatWindowDate(challenge.starts_at)}` : 'Open now'}
+                      {challenge.ends_at ? ` - closes ${formatWindowDate(challenge.ends_at)}` : ''}
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-neutral-400 mb-2">Full Name</label>
                 <input
@@ -169,7 +196,7 @@ export default function ApplyPage() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || isUnavailable}
                 className="w-full bg-primary hover:bg-primary-light disabled:opacity-70 text-black py-4 rounded-xl text-sm font-semibold transition-all btn-glow mt-2 disabled:cursor-wait"
               >
                 {submitting ? 'Creating your session...' : 'Continue to Assessment'}

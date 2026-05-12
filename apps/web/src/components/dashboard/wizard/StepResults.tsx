@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ArcSpinner from '@/components/ArcSpinner';
-import { useAuth } from '@/context/AuthContext';
 import type { GeneratedChallenge } from './types';
 
 const difficultyColors: Record<string, string> = {
@@ -28,12 +27,13 @@ interface StepResultsProps {
 
 export default function StepResults({ challenges, timeLimitMin, role, techStack, seniority, focusAreas, context, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
-  const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
   const [customizingIndex, setCustomizingIndex] = useState<number | null>(null);
   const [sessionsLimits, setSessionsLimits] = useState<Record<number, string>>({});
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
   const [error, setError] = useState('');
@@ -109,8 +109,10 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
           description: challenge.description,
           time_limit_min: timeLimitMin,
           starter_files: starterFiles,
-          sessions_limit: user?.isAdmin && sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
+          sessions_limit: sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
           allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
+          starts_at: startsAt ? new Date(startsAt).toISOString() : undefined,
+          ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
           role: role || undefined,
           tech_stack: techStack && techStack.length > 0 ? techStack.join(', ') : undefined,
           seniority: seniority || undefined,
@@ -165,6 +167,8 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         timeLimit: timeLimitMin,
         starterFiles,
         allowedEmails: allowedEmails.length > 0 ? allowedEmails : undefined,
+        startsAt,
+        endsAt,
       })
     );
     setCustomizingIndex(null);
@@ -197,13 +201,13 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         </div>
       )}
 
-      {/* Participant Restrictions */}
+      {/* Candidate access controls */}
       <div className="bg-surface border border-white/10 rounded-xl p-5 mb-6">
-        <p className="text-sm font-medium text-white mb-1">Participant Restrictions</p>
+        <p className="text-sm font-medium text-white mb-1">Candidate Email Allowlist</p>
         <p className="text-xs text-neutral-500 mb-3">
           {allowedEmails.length === 0
-            ? 'Anyone with the link can attempt this assessment. Add emails to restrict access.'
-            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can attempt this assessment.`}
+            ? 'Anyone with the shareable link can register. Personalized invites are added here automatically.'
+            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can register through the shareable link.`}
         </p>
         <div
           className="bg-[#0a0a0a] px-3 py-2 min-h-12 flex flex-wrap gap-2 items-center cursor-text"
@@ -242,6 +246,33 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
             placeholder={allowedEmails.length === 0 ? 'Type an email and press Enter or comma…' : ''}
             className="flex-1 min-w-55 bg-transparent text-white text-sm placeholder:text-neutral-600 focus:outline-none"
           />
+        </div>
+      </div>
+
+      <div className="bg-surface border border-white/10 rounded-xl p-5 mb-6">
+        <p className="text-sm font-medium text-white mb-1">Assessment Window</p>
+        <p className="text-xs text-neutral-500 mb-3">
+          Candidates can enter or start only during this window. Active sessions still use the challenge timer.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Starts</label>
+            <input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Ends</label>
+            <input
+              type="datetime-local"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+            />
+          </div>
         </div>
       </div>
 
@@ -315,22 +346,19 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
                 </div>
               )}
 
-              {/* Admin session limit */}
-              {user?.isAdmin && (
-                <div className="mb-4">
-                  <label className="block text-xs font-medium text-neutral-500 mb-1">
-                    Session limit <span className="text-neutral-600">(leave blank for unlimited)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Unlimited"
-                    value={sessionsLimits[i] ?? ''}
-                    onChange={(e) => setSessionsLimits((prev) => ({ ...prev, [i]: e.target.value }))}
-                    className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                  />
-                </div>
-              )}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-neutral-500 mb-1">
+                  Session limit <span className="text-neutral-600">(leave blank for plan limit)</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Plan limit"
+                  value={sessionsLimits[i] ?? ''}
+                  onChange={(e) => setSessionsLimits((prev) => ({ ...prev, [i]: e.target.value }))}
+                  className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                />
+              </div>
 
               {/* Actions */}
               <div className="flex gap-3 pt-2 border-t border-white/5">

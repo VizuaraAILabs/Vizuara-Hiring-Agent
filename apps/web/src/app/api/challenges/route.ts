@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser, isAdmin } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth';
+import { checkEnrollmentStatus } from '@/lib/enrollment';
 import { v4 as uuidv4 } from 'uuid';
 import type { Challenge } from '@/types';
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
     }
 
-    const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, role, tech_stack, seniority, focus_areas, context } = await request.json();
+    const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context } = await request.json();
 
     if (!title || !description) {
       return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
@@ -52,10 +53,28 @@ export async function POST(request: Request) {
     const starterFiles = Array.isArray(starter_files) && starter_files.length > 0
       ? JSON.stringify(starter_files)
       : null;
-    // Only admins can set a per-challenge session limit
-    const sessionsLimit = isAdmin(user.email, user.role) && sessions_limit != null
+    const sessionsLimit = sessions_limit != null && sessions_limit !== ''
       ? Math.max(1, parseInt(sessions_limit) || 1)
       : null;
+
+    if (sessionsLimit != null) {
+      const planStatus = await checkEnrollmentStatus(user.companyId);
+      if (planStatus.sessionsLimit !== -1 && sessionsLimit > planStatus.sessionsLimit) {
+        return NextResponse.json(
+          { error: `Session limit cannot exceed your plan limit of ${planStatus.sessionsLimit}.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    const startsAt = starts_at ? new Date(starts_at) : null;
+    const endsAt = ends_at ? new Date(ends_at) : null;
+    if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime()))) {
+      return NextResponse.json({ error: 'Invalid assessment window date.' }, { status: 400 });
+    }
+    if (startsAt && endsAt && startsAt >= endsAt) {
+      return NextResponse.json({ error: 'Assessment end time must be after the start time.' }, { status: 400 });
+    }
 
     // Parse allowed_emails: accept array or comma-separated string
     const rawEmails: string[] = Array.isArray(allowed_emails)
@@ -72,8 +91,8 @@ export async function POST(request: Request) {
         : null;
 
     await sql`
-      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, role, tech_stack, seniority, focus_areas, context)
-      VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
+      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context)
+      VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${startsAt ? startsAt.toISOString() : null}, ${endsAt ? endsAt.toISOString() : null}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
     `;
 
     const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;

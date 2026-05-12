@@ -1,12 +1,11 @@
 import sql from '@/lib/db';
-import { checkEnrollmentStatus } from '@/lib/enrollment';
-import { isAdmin } from '@/lib/auth';
 import { generateToken } from '@/lib/utils';
+import { validateChallengeAccess } from '@/lib/challenge-access';
 import type { Challenge } from '@/types';
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
-// Public endpoint — no auth required. Candidates self-register for a challenge.
+// Public endpoint: candidates self-register for a challenge.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -22,19 +21,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
     }
 
-    // Allowlist check — if set, only allowed emails may proceed
-    if (Array.isArray(challenge.allowed_emails) && challenge.allowed_emails.length > 0) {
-      const normalizedInput = candidate_email.trim().toLowerCase();
-      const allowed = challenge.allowed_emails.map((e: string) => e.trim().toLowerCase());
-      if (!allowed.includes(normalizedInput)) {
-        return NextResponse.json(
-          { error: 'Only invited participants are allowed to attempt the assessment.' },
-          { status: 403 }
-        );
-      }
+    const access = await validateChallengeAccess(challenge, {
+      candidateEmail: candidate_email,
+      enforceEmailAllowlist: true,
+    });
+    if (!access.ok) {
+      return NextResponse.json({ error: access.message, reason: access.reason }, { status: access.status });
     }
 
-    // Check if this candidate already has any session for this challenge
+    // Check if this candidate already has any session for this challenge.
     const [existing] = await sql`
       SELECT token, status FROM sessions
       WHERE challenge_id = ${id} AND candidate_email = ${candidate_email}
@@ -43,7 +38,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (existing) {
       if (existing.status === 'pending' || existing.status === 'active') {
-        // Return existing session token so they can resume
         return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
       }
       if (existing.status === 'queued' || existing.status === 'analyzing') {
@@ -52,40 +46,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           { status: 403 }
         );
       }
-      // Already completed or analyzed — block reattempt
       return NextResponse.json(
         { error: 'You have already completed this assessment. Each candidate may only attempt it once.' },
         { status: 403 }
       );
     }
 
-    // Look up the company email to determine if this is an admin-created challenge
-    const [company] = await sql<{ email: string }[]>`SELECT email FROM companies WHERE id = ${challenge.company_id}`;
-    const isAdminChallenge = company ? isAdmin(company.email) : false;
-
-    if (isAdminChallenge) {
-      // For admin challenges: enforce per-challenge sessions_limit if set, otherwise unlimited
-      if (challenge.sessions_limit != null) {
-        const [{ count }] = await sql<{ count: number }[]>`
-          SELECT COUNT(*)::int AS count FROM sessions WHERE challenge_id = ${id}
-        `;
-        if (count >= challenge.sessions_limit) {
-          return NextResponse.json(
-            { error: 'This assessment has reached its maximum number of participants.' },
-            { status: 403 }
-          );
-        }
-      }
-    } else {
-      // For regular companies: enforce plan quotas
-      const planStatus = await checkEnrollmentStatus(challenge.company_id);
-      if (!planStatus.canCreateSession) {
-        // Candidates see a generic message — never expose payment details
-        return NextResponse.json(
-          { error: 'This assessment is temporarily unavailable. Please contact the company.' },
-          { status: 403 }
-        );
-      }
+    const creationAccess = await validateChallengeAccess(challenge, {
+      enforceCapacity: true,
+      enforcePlanQuota: true,
+    });
+    if (!creationAccess.ok) {
+      return NextResponse.json(
+        { error: creationAccess.message, reason: creationAccess.reason },
+        { status: creationAccess.status }
+      );
     }
 
     const sessionId = uuidv4();
@@ -103,21 +78,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-// Public endpoint — returns challenge info for the apply page (no auth)
+// Public endpoint: returns challenge info for the apply page.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
-    const [challenge] = await sql`
-      SELECT id, title, description, time_limit_min, company_id FROM challenges WHERE id = ${id}
+    const [challenge] = await sql<Challenge[]>`
+      SELECT id, title, description, time_limit_min, company_id, is_active, sessions_limit, allowed_emails, starts_at, ends_at, starter_files_dir, starter_files, role, tech_stack, seniority, focus_areas, context, created_at
+      FROM challenges WHERE id = ${id}
     `;
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    // Get company name for branding
     const [company] = await sql`SELECT name FROM companies WHERE id = ${challenge.company_id}`;
+    const access = await validateChallengeAccess(challenge);
 
     return NextResponse.json({
       id: challenge.id,
@@ -125,6 +101,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       description: challenge.description,
       time_limit_min: challenge.time_limit_min,
       company_name: company?.name || 'Unknown',
+      starts_at: challenge.starts_at,
+      ends_at: challenge.ends_at,
+      availability: access.ok
+        ? { ok: true, reason: 'ok', message: 'OK' }
+        : { ok: false, reason: access.reason, message: access.message },
     });
   } catch (error) {
     console.error('Error fetching challenge for apply:', error);

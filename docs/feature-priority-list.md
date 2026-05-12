@@ -36,6 +36,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: Recruiters/admins may accidentally create usable candidate sessions after an assessment is closed, expired, or at capacity. Candidate access behavior depends on which invitation path was used.
 - Suggested fix: Centralize challenge-access validation in a shared helper and call it from public apply, recruiter invite, and session start routes.
 
+### FEAT-P0-004: Companies should set per-challenge session limits enforced across all invite paths
+
+- Status: Proposed
+- Area: Assessment access / license control
+- Evidence: The `challenges.sessions_limit` field exists, but the creation UI and API only allow admins to set it. Company recruiters cannot cap a specific challenge from their dashboard. Public shareable-link application enforces `sessions_limit` for admin-created challenges, while personalized invites created through `apps/web/src/app/api/challenges/[id]/invite/route.ts` create sessions without checking the per-challenge limit.
+- Impact: Companies cannot self-serve participant caps for a campus drive or role-specific assessment, and personalized invites can exceed the intended challenge capacity, creating quota/licensing surprises.
+- Suggested fix: Expose `sessions_limit` to company users when creating and editing challenges. Validate that the configured limit is compatible with the company's remaining LIC/plan quota where applicable. Enforce the limit in a shared challenge-access helper used by both public apply session creation and personalized invite creation, so neither shareable links nor direct invites can exceed the challenge cap.
+
 ## P1
 
 ### FEAT-P1-001: Add editable challenge settings after creation
@@ -53,6 +61,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Evidence: The challenge detail page generates one invite link at a time. Admin has bulk email tooling for companies in `apps/web/src/app/dashboard/admin/page.tsx`, but recruiters cannot bulk-import candidates, email assessment links, or track sent reminders from the challenge page.
 - Impact: Campus drives and batch hiring workflows require manual copy/paste and external tracking.
 - Suggested fix: Add CSV/email-list import, bulk invite generation, email send history, resend/reminder actions, and bounced/failed-send status if supported by the email provider.
+
+### FEAT-P1-005: Send personalized invite emails with custom company-authored message bodies
+
+- Status: Proposed
+- Area: Candidate communication / recruiter operations
+- Evidence: Personalized invites currently create a session token and return `/session/{token}` from `apps/web/src/app/api/challenges/[id]/invite/route.ts`, while the challenge detail UI only displays the generated link for manual copying. There is no recruiter-facing action to email the invite directly, and no company-authored email template/body for candidate instructions.
+- Impact: Recruiters must copy links into external email tools, which is slow, error-prone, and makes invite messaging inconsistent across candidates or drives.
+- Suggested fix: Add an optional "Send email" flow after personalized invite creation. Let companies write and save a default invite email body per assessment or company, with merge fields such as candidate name, challenge title, assessment link, time limit, start date, and end date. Send through the existing email provider, record delivery attempts/status on the invite/session, and keep the generated link visible for manual fallback.
 
 ### FEAT-P1-003: Add candidate lifecycle controls
 
