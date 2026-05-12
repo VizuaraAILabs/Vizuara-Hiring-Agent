@@ -3,19 +3,87 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Copy, FileText, FolderCode, Link2, Users } from 'lucide-react';
+import { CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
 import ArcSpinner from '@/components/ArcSpinner';
+import { useSubscription } from '@/context/SubscriptionContext';
 import type { Challenge, Session, StarterFile } from '@/types';
 
 interface ChallengeDetail extends Challenge {
   sessions: Session[];
 }
 
-type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'candidates';
+type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'candidates' | 'settings';
+
+type SettingsForm = {
+  title: string;
+  description: string;
+  timeLimitMin: string;
+  role: string;
+  techStack: string[];
+  seniority: string;
+  focusAreas: string[];
+  context: string;
+};
+
+type RoleOption = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+type Option = {
+  value: string;
+  label: string;
+};
+
+const roleOptions: RoleOption[] = [
+  { id: 'full-stack', name: 'Full-Stack', description: 'End-to-end web applications' },
+  { id: 'backend', name: 'Backend', description: 'APIs, services, databases' },
+  { id: 'frontend', name: 'Frontend', description: 'UI, components, client apps' },
+  { id: 'data-ml', name: 'Data / ML', description: 'Data pipelines and ML systems' },
+  { id: 'devops', name: 'DevOps', description: 'Infrastructure and automation' },
+];
+
+const techSuggestions: Record<string, string[]> = {
+  backend: ['Node.js', 'Python', 'Go', 'Java', 'Express', 'FastAPI', 'Django', 'PostgreSQL', 'MongoDB', 'Redis', 'GraphQL'],
+  frontend: ['React', 'Vue', 'Angular', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Redux'],
+  'full-stack': ['React', 'Next.js', 'Node.js', 'TypeScript', 'Python', 'PostgreSQL', 'MongoDB', 'Redis', 'Express', 'Tailwind CSS', 'GraphQL'],
+  'data-ml': ['Python', 'pandas', 'scikit-learn', 'SQL', 'Spark', 'PyTorch', 'TensorFlow'],
+  devops: ['Docker', 'Kubernetes', 'Terraform', 'AWS', 'GCP', 'Bash', 'Ansible'],
+};
+
+const seniorityOptions: Option[] = [
+  { value: 'junior', label: 'Junior (0-2 yrs)' },
+  { value: 'mid', label: 'Mid-Level (2-5 yrs)' },
+  { value: 'senior', label: 'Senior (5-8 yrs)' },
+  { value: 'staff', label: 'Staff / Principal (8+ yrs)' },
+];
+
+const focusOptions: Option[] = [
+  { value: 'debugging', label: 'Debugging' },
+  { value: 'system-design', label: 'System Design' },
+  { value: 'api-design', label: 'API Design' },
+  { value: 'testing', label: 'Testing' },
+  { value: 'refactoring', label: 'Refactoring' },
+  { value: 'performance', label: 'Performance' },
+  { value: 'security', label: 'Security' },
+  { value: 'data-modeling', label: 'Data Modeling' },
+];
+
+const emptySettingsForm: SettingsForm = {
+  title: '',
+  description: '',
+  timeLimitMin: '',
+  role: '',
+  techStack: [],
+  seniority: '',
+  focusAreas: [],
+  context: '',
+};
 
 function parseStarterFiles(raw: unknown): StarterFile[] {
   const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -24,9 +92,29 @@ function parseStarterFiles(raw: unknown): StarterFile[] {
     : [];
 }
 
+function parseCsvList(value: string | null | undefined): string[] {
+  return value
+    ? value.split(',').map((item) => item.trim()).filter(Boolean)
+    : [];
+}
+
+function challengeToSettingsForm(challenge: Challenge): SettingsForm {
+  return {
+    title: challenge.title ?? '',
+    description: challenge.description ?? '',
+    timeLimitMin: String(challenge.time_limit_min ?? ''),
+    role: challenge.role ?? '',
+    techStack: parseCsvList(challenge.tech_stack),
+    seniority: challenge.seniority ?? '',
+    focusAreas: parseCsvList(challenge.focus_areas),
+    context: challenge.context ?? '',
+  };
+}
+
 export default function ChallengeDetailPage() {
   const params = useParams();
   const challengeId = params.id as string;
+  const { planStatus, refreshSubscription } = useSubscription();
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ChallengeTab>('description');
@@ -51,6 +139,11 @@ export default function ChallengeDetailPage() {
   const [starterFilesSaving, setStarterFilesSaving] = useState(false);
   const [starterFilesSaved, setStarterFilesSaved] = useState(false);
   const [starterFilesError, setStarterFilesError] = useState('');
+  const [settingsForm, setSettingsForm] = useState<SettingsForm>(emptySettingsForm);
+  const [settingsCustomTech, setSettingsCustomTech] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
@@ -83,6 +176,7 @@ export default function ChallengeDetailPage() {
         setAccessSessionsLimit(data.sessions_limit != null ? String(data.sessions_limit) : '');
         setStarterFiles(files);
         setSavedStarterFiles(files);
+        setSettingsForm(challengeToSettingsForm(data));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -122,13 +216,36 @@ export default function ChallengeDetailPage() {
     () => JSON.stringify(starterFiles) !== JSON.stringify(savedStarterFiles),
     [starterFiles, savedStarterFiles]
   );
+  const hasStartedSession = challenge?.sessions.some((session) => Boolean(session.started_at)) ?? false;
+  const availableAssessmentCount = planStatus?.sessionsLimit === -1
+    ? null
+    : planStatus
+      ? Math.max(0, planStatus.sessionsLimit - planStatus.sessionsUsed)
+      : undefined;
+  const activeTechSuggestions = techSuggestions[settingsForm.role] ?? Object.values(techSuggestions).flat();
+  const uniqueTechSuggestions = Array.from(new Set(activeTechSuggestions));
+  const hasCustomRole = settingsForm.role && !roleOptions.some((option) => option.id === settingsForm.role);
+  const hasCustomSeniority = settingsForm.seniority && !seniorityOptions.some((option) => option.value === settingsForm.seniority);
+  const customFocusAreas = settingsForm.focusAreas.filter(
+    (area) => !focusOptions.some((option) => option.value === area)
+  );
+
+  useEffect(() => {
+    if (typeof availableAssessmentCount !== 'number' || accessSessionsLimit === '') return;
+    const parsed = Number(accessSessionsLimit);
+    if (Number.isFinite(parsed) && parsed > availableAssessmentCount) {
+      setAccessSessionsLimit(String(availableAssessmentCount));
+    }
+  }, [accessSessionsLimit, availableAssessmentCount]);
+
   const assessmentUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${challengeId}` : `/apply/${challengeId}`;
 
   const tabs = [
     { id: 'description' as const, label: 'Description', icon: FileText },
     { id: 'starter-files' as const, label: 'Starter Files', icon: FolderCode, badge: starterFileCount },
-    { id: 'distribution' as const, label: 'Invitations', icon: Link2 },
+    { id: 'distribution' as const, label: 'Access Control', icon: Link2 },
     { id: 'candidates' as const, label: 'Candidates', icon: Users, badge: challenge?.sessions.length ?? 0 },
+    { id: 'settings' as const, label: 'Settings', icon: SettingsIcon },
   ];
 
   const statusColors: Record<string, string> = {
@@ -183,6 +300,56 @@ export default function ChallengeDetailPage() {
       return merged;
     });
     setEmailDraft('');
+  }
+
+  function handleAccessSessionsLimitChange(value: string) {
+    if (value === '') {
+      setAccessSessionsLimit('');
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+
+    const normalized = Math.max(0, Math.floor(parsed));
+    const capped = typeof availableAssessmentCount === 'number'
+      ? Math.min(normalized, availableAssessmentCount)
+      : normalized;
+    setAccessSessionsLimit(String(capped));
+  }
+
+  function addSettingsTech(tech: string) {
+    const trimmed = tech.trim();
+    if (!trimmed) return;
+    setSettingsForm((form) => (
+      form.techStack.includes(trimmed)
+        ? form
+        : { ...form, techStack: [...form.techStack, trimmed] }
+    ));
+  }
+
+  function removeSettingsTech(tech: string) {
+    setSettingsForm((form) => ({
+      ...form,
+      techStack: form.techStack.filter((item) => item !== tech),
+    }));
+  }
+
+  function handleSettingsCustomTechKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    addSettingsTech(settingsCustomTech);
+    setSettingsCustomTech('');
+  }
+
+  function toggleSettingsFocusArea(area: string) {
+    setSettingsForm((form) => {
+      if (form.focusAreas.includes(area)) {
+        return { ...form, focusAreas: form.focusAreas.filter((item) => item !== area) };
+      }
+      if (form.focusAreas.length >= 4) return form;
+      return { ...form, focusAreas: [...form.focusAreas, area] };
+    });
   }
 
   async function handleSaveAllowedEmails() {
@@ -269,6 +436,45 @@ export default function ChallengeDetailPage() {
     }
   }
 
+  async function handleSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSettingsSaving(true);
+    setSettingsSaved(false);
+    setSettingsError('');
+
+    try {
+      const res = await fetch(`/api/challenges/${challengeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: settingsForm.title,
+          description: settingsForm.description,
+          time_limit_min: settingsForm.timeLimitMin ? Number(settingsForm.timeLimitMin) : '',
+          role: settingsForm.role,
+          tech_stack: settingsForm.techStack.join(', '),
+          seniority: settingsForm.seniority,
+          focus_areas: settingsForm.focusAreas.join(', '),
+          context: settingsForm.context,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to save settings');
+      }
+
+      setChallenge((current) => current ? { ...current, ...data } : current);
+      setSettingsForm(challengeToSettingsForm(data));
+      setSettingsCustomTech('');
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2500);
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Failed to save settings');
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     setInviteLoading(true);
@@ -290,6 +496,7 @@ export default function ChallengeDetailPage() {
         setAllowedEmails((current) => current.includes(normalizedEmail) ? current : [...current, normalizedEmail]);
         setInviteForm({ name: '', email: '' });
         setChallenge(await fetchChallengeDetail());
+        await refreshSubscription();
       }
     } catch (err) {
       console.error(err);
@@ -453,19 +660,26 @@ export default function ChallengeDetailPage() {
       )}
 
       {activeTab === 'distribution' && (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-primary/20 bg-surface p-5">
-              <div className="mb-4">
-                <p className="text-sm font-medium text-white">Shareable Assessment Link</p>
-                <p className="mt-1 text-xs text-neutral-500">Share this single link with all candidates. The assessment window controls when they can register or start.</p>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="space-y-5">
+            <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
+              <div className="border-b border-white/5 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Link2 className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Shareable Link</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">Public registration path</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-col gap-3 p-5 lg:flex-row">
                 <input
                   type="text"
                   value={assessmentUrl}
                   readOnly
-                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2 text-xs font-mono text-primary"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-xs font-mono text-primary"
                 />
                 <button
                   type="button"
@@ -474,23 +688,27 @@ export default function ChallengeDetailPage() {
                     setCopiedShareable(true);
                     setTimeout(() => setCopiedShareable(false), 2000);
                   }}
-                  className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-xs font-semibold text-black transition-all hover:bg-primary-light"
                 >
-                  {copiedShareable ? 'Copied!' : 'Copy Link'}
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copiedShareable ? 'Copied' : 'Copy Link'}
                 </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/5 bg-surface p-5">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white">Assessment Access</p>
-                  <p className="mt-0.5 text-xs text-neutral-500">
-                    Limits apply to both shareable registrations and personalized invite creation. The window controls entry only.
-                  </p>
-                </div>
+            <div className="rounded-2xl border border-white/5 bg-surface">
+              <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  {accessSaved && <span className="text-xs text-primary">Saved!</span>}
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-neutral-300">
+                    <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Entry Rules</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">Shared by invites and the public link</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {accessSaved && <span className="text-xs text-primary">Saved</span>}
                   {accessError && <span className="max-w-64 text-xs text-red-400">{accessError}</span>}
                   <button
                     type="button"
@@ -498,55 +716,90 @@ export default function ChallengeDetailPage() {
                     disabled={accessSaving}
                     className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
                   >
-                    {accessSaving ? 'Saving...' : 'Save'}
+                    {accessSaving ? 'Saving...' : 'Save Rules'}
                   </button>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div>
-                  <label className="mb-1.5 block text-xs text-neutral-500">Session Limit</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={accessSessionsLimit}
-                    onChange={(e) => setAccessSessionsLimit(e.target.value)}
-                    placeholder="Plan limit"
-                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
+
+              <div className="grid gap-0 lg:grid-cols-[minmax(240px,0.9fr)_minmax(0,1.1fr)]">
+                <div className="border-b border-white/5 p-5 lg:border-b-0 lg:border-r lg:border-white/5">
+                  <label className="block text-xs font-medium uppercase tracking-[0.16em] text-primary">Session Limit</label>
+                  <div className="mt-3 flex items-end gap-3">
+                    <input
+                      type="number"
+                      min={0}
+                      max={typeof availableAssessmentCount === 'number' ? availableAssessmentCount : undefined}
+                      value={accessSessionsLimit}
+                      onChange={(e) => handleAccessSessionsLimitChange(e.target.value)}
+                      placeholder="Plan"
+                      className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary/50 sm:w-40"
+                    />
+                    <div className="pb-2">
+                      <p className="text-xs text-neutral-500">Available</p>
+                      <p className="text-sm font-medium text-white">
+                        {availableAssessmentCount === null
+                          ? 'Unlimited'
+                          : availableAssessmentCount === undefined
+                            ? 'Checking...'
+                            : `${availableAssessmentCount} assessment${availableAssessmentCount !== 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{
+                        width: accessSessionsLimit && typeof availableAssessmentCount === 'number' && availableAssessmentCount > 0
+                          ? `${Math.min(100, Math.round((Number(accessSessionsLimit) / availableAssessmentCount) * 100))}%`
+                          : '0%',
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-neutral-500">Blank uses the plan&apos;s remaining assessment capacity.</p>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-neutral-500">Starts</label>
-                  <input
-                    type="datetime-local"
-                    value={accessStartsAt}
-                    onChange={(e) => setAccessStartsAt(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-neutral-500">Ends</label>
-                  <input
-                    type="datetime-local"
-                    value={accessEndsAt}
-                    onChange={(e) => setAccessEndsAt(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
+
+                <div className="p-5">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-medium text-white">
+                    <CalendarClock className="h-4 w-4 text-neutral-500" aria-hidden="true" />
+                    Assessment Window
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs text-neutral-500">Starts</label>
+                      <input
+                        type="datetime-local"
+                        value={accessStartsAt}
+                        onChange={(e) => setAccessStartsAt(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs text-neutral-500">Ends</label>
+                      <input
+                        type="datetime-local"
+                        value={accessEndsAt}
+                        onChange={(e) => setAccessEndsAt(e.target.value)}
+                        className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-neutral-500">The window controls entry. It does not end an already-started assessment.</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/5 bg-surface p-5">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="rounded-2xl border border-white/5 bg-surface">
+              <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">Candidate Email Allowlist</p>
+                  <p className="text-sm font-semibold text-white">Candidate Email Allowlist</p>
                   <p className="mt-0.5 text-xs text-neutral-500">
                     {allowedEmails.length === 0
-                      ? 'Anyone with the shareable link can register. Personalized invites are added here automatically.'
-                      : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can register through the shareable link.`}
+                      ? 'Open to anyone with the shareable link'
+                      : `${allowedEmails.length} email${allowedEmails.length !== 1 ? 's' : ''} allowed through the shareable link`}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  {allowedEmailsSaved && <span className="text-xs text-primary">Saved!</span>}
+                <div className="flex flex-wrap items-center gap-3">
+                  {allowedEmailsSaved && <span className="text-xs text-primary">Saved</span>}
                   {allowedEmails.length > 0 && (
                     <button
                       type="button"
@@ -567,102 +820,363 @@ export default function ChallengeDetailPage() {
                     disabled={allowedEmailsSaving}
                     className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
                   >
-                    {allowedEmailsSaving ? 'Saving...' : 'Save'}
+                    {allowedEmailsSaving ? 'Saving...' : 'Save Allowlist'}
                   </button>
                 </div>
               </div>
 
-              <div
-                className="flex min-h-12 cursor-text flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2"
-                onClick={(e) => {
-                  const input = (e.currentTarget as HTMLElement).querySelector('input');
-                  input?.focus();
-                }}
-              >
-                {allowedEmails.map((email) => (
-                  <span key={email} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                    {email}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAllowedEmails((prev) => prev.filter((em) => em !== email));
-                      }}
-                      className="text-primary/60 hover:text-primary"
-                      aria-label={`Remove ${email}`}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="email"
-                  value={emailDraft}
-                  onChange={(e) => setEmailDraft(e.target.value)}
-                  onKeyDown={handleEmailKeyDown}
-                  onPaste={handleEmailPaste}
-                  onBlur={commitEmailDraft}
-                  placeholder={allowedEmails.length === 0 ? 'Type an email and press Enter or comma...' : ''}
-                  className="min-w-55 flex-1 bg-transparent text-sm text-white placeholder:text-neutral-600 focus:outline-none"
-                />
+              <div className="p-5">
+                <div
+                  className="flex min-h-14 cursor-text flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/45 px-3 py-2.5"
+                  onClick={(e) => {
+                    const input = (e.currentTarget as HTMLElement).querySelector('input');
+                    input?.focus();
+                  }}
+                >
+                  {allowedEmails.map((email) => (
+                    <span key={email} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                      {email}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAllowedEmails((prev) => prev.filter((em) => em !== email));
+                        }}
+                        className="text-primary/60 hover:text-primary"
+                        aria-label={`Remove ${email}`}
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="email"
+                    value={emailDraft}
+                    onChange={(e) => setEmailDraft(e.target.value)}
+                    onKeyDown={handleEmailKeyDown}
+                    onPaste={handleEmailPaste}
+                    onBlur={commitEmailDraft}
+                    placeholder={allowedEmails.length === 0 ? 'Add email and press Enter...' : ''}
+                    className="min-w-55 flex-1 bg-transparent text-sm text-white placeholder:text-neutral-600 focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-white">Invite Candidate</h2>
-            <form onSubmit={handleInvite} className="space-y-4 rounded-2xl border border-white/5 bg-surface p-6">
-              <div>
-                <label className="mb-1 block text-sm text-neutral-500">Name</label>
-                <input
-                  type="text"
-                  value={inviteForm.name}
-                  onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  required
-                />
+          <aside className="xl:sticky xl:top-32 xl:self-start">
+            <div className="rounded-2xl border border-white/5 bg-surface">
+              <div className="border-b border-white/5 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <MailPlus className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
+                    <p className="mt-0.5 text-xs text-neutral-500">Creates a candidate session link</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-sm text-neutral-500">Email</label>
-                <input
-                  type="email"
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                  className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={inviteLoading}
-                className="btn-glow w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
-              >
-                {inviteLoading ? 'Sending...' : 'Generate Invite Link'}
-              </button>
-            </form>
+
+              <form onSubmit={handleInvite} className="space-y-4 p-5">
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Name</label>
+                  <input
+                    type="text"
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Email</label>
+                  <input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+                >
+                  {inviteLoading ? 'Generating...' : 'Generate Invite Link'}
+                </button>
+              </form>
+            </div>
 
             {inviteLink && (
-              <div className="glow-green mt-4 rounded-2xl border border-primary/20 bg-surface p-4">
-                <p className="mb-2 text-xs text-neutral-500">Share this link with the candidate:</p>
+              <div className="mt-4 rounded-2xl border border-primary/20 bg-[#0f1210] p-4">
+                <p className="mb-2 text-xs font-medium text-white">Candidate Link</p>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={inviteLink}
                     readOnly
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2 text-xs font-mono text-primary"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-2 text-xs font-mono text-primary"
                   />
                   <button
                     type="button"
                     onClick={() => navigator.clipboard.writeText(inviteLink)}
-                    className="rounded-xl bg-white/5 px-3 py-2 text-xs text-neutral-400 transition-colors hover:bg-white/10"
+                    className="rounded-xl bg-white/5 px-3 py-2 text-xs text-neutral-300 transition-colors hover:bg-white/10"
                   >
                     Copy
                   </button>
                 </div>
               </div>
             )}
-          </div>
+          </aside>
         </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <form onSubmit={handleSaveSettings} className="space-y-6">
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-surface p-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Challenge Settings</p>
+              <p className="mt-0.5 text-xs text-neutral-500">Edit the candidate-facing brief and internal role metadata.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {settingsSaved && <span className="text-xs text-primary">Saved!</span>}
+              {settingsError && <span className="max-w-72 text-xs text-red-400">{settingsError}</span>}
+              <button
+                type="submit"
+                disabled={settingsSaving}
+                className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+              >
+                {settingsSaving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/5 bg-surface p-5">
+                <p className="mb-4 text-sm font-medium text-white">Brief</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs text-neutral-500">Title</label>
+                    <input
+                      type="text"
+                      value={settingsForm.title}
+                      onChange={(e) => setSettingsForm((form) => ({ ...form, title: e.target.value }))}
+                      className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs text-neutral-500">Description</label>
+                    <textarea
+                      value={settingsForm.description}
+                      onChange={(e) => setSettingsForm((form) => ({ ...form, description: e.target.value }))}
+                      rows={14}
+                      className="w-full resize-y rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm leading-6 text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-surface p-5">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">Starter Files</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      {starterFileCount > 0 ? `${starterFileCount} file${starterFileCount !== 1 ? 's' : ''} configured` : 'No starter files configured'}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/dashboard/challenges/${challenge.id}/starter-files`}
+                    className="rounded-xl bg-white/5 px-4 py-2 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
+                  >
+                    Open Editor
+                  </Link>
+                </div>
+                {hasStarterFileChanges && <p className="text-xs text-amber-300">Starter files have unsaved changes in the Starter Files tab.</p>}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/5 bg-surface p-5">
+                <p className="mb-4 text-sm font-medium text-white">Timing</p>
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Time Limit</label>
+                  <input
+                    type="number"
+                    min={10}
+                    max={45}
+                    value={settingsForm.timeLimitMin}
+                    onChange={(e) => setSettingsForm((form) => ({ ...form, timeLimitMin: e.target.value }))}
+                    disabled={hasStartedSession}
+                    className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-60"
+                    required
+                  />
+                  {hasStartedSession && (
+                    <p className="mt-2 text-xs text-neutral-500">Locked because at least one candidate has started.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-surface p-5">
+                <p className="mb-4 text-sm font-medium text-white">Role Metadata</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-xs text-neutral-500">Role</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {roleOptions.map((option) => {
+                        const selected = settingsForm.role === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setSettingsForm((form) => ({ ...form, role: option.id }))}
+                            className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                              selected
+                                ? 'border-primary/50 bg-primary/10 text-primary'
+                                : 'border-white/10 bg-[#0a0a0a] text-neutral-400 hover:border-white/20 hover:text-white'
+                            }`}
+                          >
+                            <span className="block text-sm font-medium">{option.name}</span>
+                            <span className="mt-0.5 block text-xs opacity-70">{option.description}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {hasCustomRole && (
+                      <p className="mt-2 text-xs text-amber-300">Current saved role: {settingsForm.role}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs text-neutral-500">Tech Stack</label>
+                    {settingsForm.techStack.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {settingsForm.techStack.map((tech) => (
+                          <span
+                            key={tech}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm text-primary"
+                          >
+                            {tech}
+                            <button
+                              type="button"
+                              onClick={() => removeSettingsTech(tech)}
+                              className="text-primary/60 transition-colors hover:text-white"
+                              aria-label={`Remove ${tech}`}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {uniqueTechSuggestions
+                        .filter((tech) => !settingsForm.techStack.includes(tech))
+                        .slice(0, 14)
+                        .map((tech) => (
+                          <button
+                            key={tech}
+                            type="button"
+                            onClick={() => addSettingsTech(tech)}
+                            className="rounded-full border border-white/10 bg-[#0a0a0a] px-3 py-1.5 text-sm text-neutral-400 transition-all hover:border-primary/30 hover:text-white"
+                          >
+                            + {tech}
+                          </button>
+                        ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={settingsCustomTech}
+                      onChange={(e) => setSettingsCustomTech(e.target.value)}
+                      onKeyDown={handleSettingsCustomTechKeyDown}
+                      onBlur={() => {
+                        addSettingsTech(settingsCustomTech);
+                        setSettingsCustomTech('');
+                      }}
+                      placeholder="Type a technology and press Enter..."
+                      className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs text-neutral-500">Seniority</label>
+                    <select
+                      value={settingsForm.seniority}
+                      onChange={(e) => setSettingsForm((form) => ({ ...form, seniority: e.target.value }))}
+                      className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      <option value="">Not set</option>
+                      {seniorityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                      {hasCustomSeniority && <option value={settingsForm.seniority}>{settingsForm.seniority}</option>}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-500">Focus Areas</label>
+                    <p className="mb-3 text-xs text-neutral-600">Select up to 4 skills this challenge should emphasize.</p>
+                    {customFocusAreas.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {customFocusAreas.map((area) => (
+                          <span
+                            key={area}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs text-amber-300"
+                          >
+                            {area}
+                            <button
+                              type="button"
+                              onClick={() => toggleSettingsFocusArea(area)}
+                              className="text-amber-300/60 transition-colors hover:text-white"
+                              aria-label={`Remove ${area}`}
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      {focusOptions.map((option) => {
+                        const selected = settingsForm.focusAreas.includes(option.value);
+                        const disabled = !selected && settingsForm.focusAreas.length >= 4;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => toggleSettingsFocusArea(option.value)}
+                            disabled={disabled}
+                            className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                              selected
+                                ? 'border-primary/50 bg-primary/10 text-primary'
+                                : 'border-white/10 bg-[#0a0a0a] text-neutral-400 hover:border-white/20 hover:text-neutral-300'
+                            } disabled:cursor-not-allowed disabled:opacity-40`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs text-neutral-500">Context</label>
+                    <textarea
+                      value={settingsForm.context}
+                      onChange={(e) => setSettingsForm((form) => ({ ...form, context: e.target.value }))}
+                      rows={5}
+                      className="w-full resize-y rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm leading-6 text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
       )}
 
       {activeTab === 'candidates' && (
