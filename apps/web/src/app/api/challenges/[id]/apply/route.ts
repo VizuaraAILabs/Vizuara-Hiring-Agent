@@ -1,6 +1,6 @@
 import sql from '@/lib/db';
 import { generateToken } from '@/lib/utils';
-import { validateChallengeAccess } from '@/lib/challenge-access';
+import { normalizeEmail, validateChallengeAccess } from '@/lib/challenge-access';
 import { getChallengeById } from '@/lib/challenge-queries';
 import type { Challenge } from '@/types';
 import { NextResponse } from 'next/server';
@@ -22,8 +22,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
     }
 
+    const normalizedEmail = normalizeEmail(String(candidate_email));
+    const candidateName = String(candidate_name).trim();
+    if (!candidateName || !normalizedEmail) {
+      return NextResponse.json({ error: 'Name and email are required' }, { status: 400 });
+    }
+
     const access = await validateChallengeAccess(challenge, {
-      candidateEmail: candidate_email,
+      candidateEmail: normalizedEmail,
       enforceEmailAllowlist: true,
     });
     if (!access.ok) {
@@ -33,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Check if this candidate already has any session for this challenge.
     const [existing] = await sql`
       SELECT token, status FROM sessions
-      WHERE challenge_id = ${id} AND candidate_email = ${candidate_email}
+      WHERE challenge_id = ${id} AND LOWER(TRIM(candidate_email)) = ${normalizedEmail}
       ORDER BY created_at DESC LIMIT 1
     `;
 
@@ -69,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     await sql`
       INSERT INTO sessions (id, challenge_id, candidate_name, candidate_email, token)
-      VALUES (${sessionId}, ${id}, ${candidate_name}, ${candidate_email}, ${token})
+      VALUES (${sessionId}, ${id}, ${candidateName}, ${normalizedEmail}, ${token})
     `;
 
     return NextResponse.json({ token, invite_url: `/session/${token}` }, { status: 201 });

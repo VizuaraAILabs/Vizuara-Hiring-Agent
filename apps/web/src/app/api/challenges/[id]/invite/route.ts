@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { generateToken } from '@/lib/utils';
-import { addEmailToAllowlist, validateChallengeAccess } from '@/lib/challenge-access';
+import { addEmailToAllowlist, normalizeEmail, validateChallengeAccess } from '@/lib/challenge-access';
 import { getChallengeById } from '@/lib/challenge-queries';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -34,6 +34,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Candidate name and email are required' }, { status: 400 });
     }
 
+    const normalizedEmail = normalizeEmail(String(candidate_email));
+    const candidateName = String(candidate_name).trim();
+    if (!candidateName || !normalizedEmail) {
+      return NextResponse.json({ error: 'Candidate name and email are required' }, { status: 400 });
+    }
+
     const timingAccess = await validateChallengeAccess(challenge, { allowBeforeStart: true });
     if (!timingAccess.ok) {
       return NextResponse.json(
@@ -44,13 +50,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const [existing] = await sql`
       SELECT token, status FROM sessions
-      WHERE challenge_id = ${id} AND candidate_email = ${candidate_email}
+      WHERE challenge_id = ${id} AND LOWER(TRIM(candidate_email)) = ${normalizedEmail}
       ORDER BY created_at DESC LIMIT 1
     `;
 
     if (existing) {
       if (existing.status === 'pending' || existing.status === 'active') {
-        const allowedEmails = addEmailToAllowlist(challenge.allowed_emails, candidate_email);
+        const allowedEmails = addEmailToAllowlist(challenge.allowed_emails, normalizedEmail);
         await sql`UPDATE challenges SET allowed_emails = ${allowedEmails} WHERE id = ${id}`;
         return NextResponse.json({ token: existing.token, invite_url: `/session/${existing.token}` });
       }
@@ -71,14 +77,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const sessionId = uuidv4();
     const token = generateToken();
-    const allowedEmails = addEmailToAllowlist(challenge.allowed_emails, candidate_email);
+    const allowedEmails = addEmailToAllowlist(challenge.allowed_emails, normalizedEmail);
 
     await sql.begin(async (tx) => {
       const trx = tx as unknown as typeof sql;
 
       await trx`
         INSERT INTO sessions (id, challenge_id, candidate_name, candidate_email, token)
-        VALUES (${sessionId}, ${id}, ${candidate_name}, ${candidate_email}, ${token})
+        VALUES (${sessionId}, ${id}, ${candidateName}, ${normalizedEmail}, ${token})
       `;
       await trx`UPDATE challenges SET allowed_emails = ${allowedEmails} WHERE id = ${id}`;
     });
