@@ -402,7 +402,14 @@ export default function ChallengeDetailPage() {
       setAccessSaved(true);
       setTimeout(() => setAccessSaved(false), 2500);
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : 'Failed to save assessment access settings');
+      const message = err instanceof Error ? err.message : 'Failed to save assessment access settings';
+      setAccessError(message);
+      if (message.includes('Session limit cannot exceed')) {
+        setModalMessage({
+          title: 'Session Limit Needs Review',
+          description: `${message} The saved session limit may need to be lowered before changing access settings.`,
+        });
+      }
     } finally {
       setAccessSaving(false);
     }

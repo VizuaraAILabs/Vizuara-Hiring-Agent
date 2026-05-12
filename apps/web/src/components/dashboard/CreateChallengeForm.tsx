@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StarterFilesEditor from './StarterFilesEditor';
+import { useSubscription } from '@/context/SubscriptionContext';
 import type { StarterFile } from '@/types';
 
 export default function CreateChallengeForm() {
   const router = useRouter();
+  const { planStatus } = useSubscription();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeLimit, setTimeLimit] = useState(30);
@@ -18,6 +20,11 @@ export default function CreateChallengeForm() {
   const [emailDraft, setEmailDraft] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const availableAssessmentCount = planStatus?.sessionsLimit === -1
+    ? null
+    : planStatus
+      ? Math.max(0, planStatus.sessionsLimit - planStatus.sessionsUsed)
+      : undefined;
 
   useEffect(() => {
     const prefill = sessionStorage.getItem('prefill_challenge');
@@ -27,6 +34,7 @@ export default function CreateChallengeForm() {
         if (data.title) setTitle(data.title);
         if (data.description) setDescription(data.description);
         if (data.timeLimit) setTimeLimit(Math.max(10, Math.min(45, data.timeLimit)));
+        if (data.sessionsLimit != null) setSessionsLimit(String(data.sessionsLimit));
         if (data.starterFiles) setStarterFiles(data.starterFiles);
         if (Array.isArray(data.allowedEmails)) setAllowedEmails(data.allowedEmails);
         if (data.startsAt) setStartsAt(data.startsAt);
@@ -70,6 +78,22 @@ export default function CreateChallengeForm() {
       return merged;
     });
     setEmailDraft('');
+  }
+
+  function handleSessionsLimitChange(value: string) {
+    if (value === '') {
+      setSessionsLimit('');
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+
+    const normalized = Math.max(0, Math.floor(parsed));
+    const capped = typeof availableAssessmentCount === 'number'
+      ? Math.min(normalized, availableAssessmentCount)
+      : normalized;
+    setSessionsLimit(String(capped));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -161,12 +185,19 @@ export default function CreateChallengeForm() {
         </label>
         <p className="mb-2 text-xs text-neutral-600">
           Maximum number of candidates who can create or receive sessions for this challenge.
+          {' '}
+          {availableAssessmentCount === null
+            ? 'Available: unlimited.'
+            : availableAssessmentCount === undefined
+              ? 'Checking availability...'
+              : `Available: ${availableAssessmentCount} assessment${availableAssessmentCount !== 1 ? 's' : ''}.`}
         </p>
         <input
           type="number"
           value={sessionsLimit}
-          onChange={(e) => setSessionsLimit(e.target.value)}
-          min={1}
+          onChange={(e) => handleSessionsLimitChange(e.target.value)}
+          min={0}
+          max={typeof availableAssessmentCount === 'number' ? availableAssessmentCount : undefined}
           placeholder="Plan limit"
           className="w-36 rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-white placeholder-neutral-600 transition-all focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
         />

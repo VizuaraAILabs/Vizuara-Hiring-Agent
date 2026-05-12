@@ -25,6 +25,7 @@ interface ChallengeAccessOptions {
   enforceCapacity?: boolean;
   enforcePlanQuota?: boolean;
   allowBeforeStart?: boolean;
+  db?: typeof sql;
 }
 
 export function normalizeEmail(email: string) {
@@ -91,7 +92,8 @@ export async function validateChallengeAccess(
   }
 
   if (options.enforceCapacity && challenge.sessions_limit != null) {
-    const [{ count }] = await sql<{ count: number }[]>`
+    const db = options.db ?? sql;
+    const [{ count }] = await db<{ count: number }[]>`
       SELECT COUNT(*)::int AS count FROM sessions WHERE challenge_id = ${challenge.id}
     `;
     if (count >= challenge.sessions_limit) {
@@ -100,7 +102,8 @@ export async function validateChallengeAccess(
   }
 
   if (options.enforcePlanQuota) {
-    const [company] = await sql<{ email: string }[]>`
+    const db = options.db ?? sql;
+    const [company] = await db<{ email: string }[]>`
       SELECT email FROM companies WHERE id = ${challenge.company_id}
     `;
     const isAdminChallenge = company ? isAdmin(company.email) : false;

@@ -38,11 +38,11 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P0-004: Companies should set per-challenge session limits enforced across all invite paths
 
-- Status: Proposed
+- Status: Implemented
 - Area: Assessment access / license control
-- Evidence: The `challenges.sessions_limit` field exists, but the creation UI and API only allow admins to set it. Company recruiters cannot cap a specific challenge from their dashboard. Public shareable-link application enforces `sessions_limit` for admin-created challenges, while personalized invites created through `apps/web/src/app/api/challenges/[id]/invite/route.ts` create sessions without checking the per-challenge limit.
+- Evidence: Companies can set `sessions_limit` during manual challenge creation, generated-challenge creation, and from the challenge detail `Access Control` tab. The create/edit APIs validate the configured limit against remaining plan availability. Public shareable-link registration and personalized invite creation both call the shared challenge-access helper with capacity enforcement.
 - Impact: Companies cannot self-serve participant caps for a campus drive or role-specific assessment, and personalized invites can exceed the intended challenge capacity, creating quota/licensing surprises.
-- Suggested fix: Expose `sessions_limit` to company users when creating and editing challenges. Validate that the configured limit is compatible with the company's remaining LIC/plan quota where applicable. Enforce the limit in a shared challenge-access helper used by both public apply session creation and personalized invite creation, so neither shareable links nor direct invites can exceed the challenge cap.
+- Implementation notes: Session creation paths serialize duplicate lookup, capacity/quota validation, and insert with advisory transaction locks to avoid simultaneous requests exceeding the cap. Existing pending/active sessions are reused rather than consuming additional capacity.
 
 ## P1
 

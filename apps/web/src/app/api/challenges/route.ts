@@ -72,9 +72,14 @@ export async function POST(request: Request) {
     const starterFiles = Array.isArray(starter_files) && starter_files.length > 0
       ? JSON.stringify(starter_files)
       : null;
-    const sessionsLimit = sessions_limit != null && sessions_limit !== ''
-      ? Math.max(1, parseInt(sessions_limit) || 1)
-      : null;
+    let sessionsLimit: number | null = null;
+    if (sessions_limit != null && sessions_limit !== '') {
+      const parsedSessionsLimit = Number(sessions_limit);
+      if (!Number.isFinite(parsedSessionsLimit) || parsedSessionsLimit < 0) {
+        return NextResponse.json({ error: 'Session limit must be zero or greater.' }, { status: 400 });
+      }
+      sessionsLimit = Math.floor(parsedSessionsLimit);
+    }
 
     if (sessionsLimit != null) {
       const limitError = await validateChallengeSessionLimit(user.companyId, sessionsLimit);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ArcSpinner from '@/components/ArcSpinner';
+import { useSubscription } from '@/context/SubscriptionContext';
 import type { GeneratedChallenge } from './types';
 
 const difficultyColors: Record<string, string> = {
@@ -27,6 +28,7 @@ interface StepResultsProps {
 
 export default function StepResults({ challenges, timeLimitMin, role, techStack, seniority, focusAreas, context, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
+  const { planStatus } = useSubscription();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
@@ -39,6 +41,11 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
   const [error, setError] = useState('');
   const [fileWarning, setFileWarning] = useState('');
   const [progressMessage, setProgressMessage] = useState('');
+  const availableAssessmentCount = planStatus?.sessionsLimit === -1
+    ? null
+    : planStatus
+      ? Math.max(0, planStatus.sessionsLimit - planStatus.sessionsUsed)
+      : undefined;
 
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
@@ -72,6 +79,22 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       return merged;
     });
     setEmailDraft('');
+  }
+
+  function handleSessionLimitChange(index: number, value: string) {
+    if (value === '') {
+      setSessionsLimits((prev) => ({ ...prev, [index]: '' }));
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+
+    const normalized = Math.max(0, Math.floor(parsed));
+    const capped = typeof availableAssessmentCount === 'number'
+      ? Math.min(normalized, availableAssessmentCount)
+      : normalized;
+    setSessionsLimits((prev) => ({ ...prev, [index]: String(capped) }));
   }
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
@@ -165,6 +188,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         title: challenge.title,
         description: challenge.description,
         timeLimit: timeLimitMin,
+        sessionsLimit: sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
         starterFiles,
         allowedEmails: allowedEmails.length > 0 ? allowedEmails : undefined,
         startsAt,
@@ -350,12 +374,20 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
                 <label className="block text-xs font-medium text-neutral-500 mb-1">
                   Session limit <span className="text-neutral-600">(leave blank for plan limit)</span>
                 </label>
+                <p className="mb-1.5 text-xs text-neutral-600">
+                  {availableAssessmentCount === null
+                    ? 'Available: unlimited'
+                    : availableAssessmentCount === undefined
+                      ? 'Checking availability...'
+                      : `Available: ${availableAssessmentCount} assessment${availableAssessmentCount !== 1 ? 's' : ''}`}
+                </p>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
+                  max={typeof availableAssessmentCount === 'number' ? availableAssessmentCount : undefined}
                   placeholder="Plan limit"
                   value={sessionsLimits[i] ?? ''}
-                  onChange={(e) => setSessionsLimits((prev) => ({ ...prev, [i]: e.target.value }))}
+                  onChange={(e) => handleSessionLimitChange(i, e.target.value)}
                   className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
                 />
               </div>
