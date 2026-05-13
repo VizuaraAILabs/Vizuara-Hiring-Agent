@@ -47,6 +47,9 @@ export async function GET(request: Request) {
         c.cohort_label,
         c.archived_at,
         c.created_at,
+        (c.starter_files IS NOT NULL OR c.starter_files_dir IS NOT NULL) AS has_starter_files,
+        (c.allowed_emails IS NOT NULL AND array_length(c.allowed_emails, 1) > 0) AS has_allowed_emails,
+        (c.starts_at IS NOT NULL OR c.ends_at IS NOT NULL) AS has_access_window,
         COUNT(s.id)::int as candidate_count
       FROM challenges c
       LEFT JOIN sessions s ON s.challenge_id = c.id

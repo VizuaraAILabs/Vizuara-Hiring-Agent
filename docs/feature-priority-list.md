@@ -156,8 +156,8 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P3-004: Add challenge duplication
 
-- Status: Proposed
+- Status: Implemented
 - Area: Dashboard productivity
 - Evidence: New challenges can be created manually or from wizard/template flow, but there is no duplicate action on the challenge list/detail page.
 - Impact: Similar campus drives or role variants require repetitive setup.
-- Suggested fix: Add "Duplicate challenge" that copies title, description, starter files, allowed emails optionally, role metadata, session limits, and access-window defaults.
+- Implementation notes: Added challenge duplication from dashboard cards and challenge detail. Duplicates copy assessment content and role metadata, optionally copy starter files, cohort label, allowed emails, and access window, and intentionally reset candidate access controls such as session limit, active state, archive state, and candidate sessions.

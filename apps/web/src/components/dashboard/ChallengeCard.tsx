@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Archive, RotateCcw } from 'lucide-react';
+import { Archive, Copy, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { formatDate } from '@/lib/utils';
 
@@ -34,12 +34,23 @@ interface ChallengeCardProps {
   ends_at?: string | null;
   archived_at?: string | null;
   cohort_label?: string | null;
+  has_starter_files?: boolean;
+  has_allowed_emails?: boolean;
+  has_access_window?: boolean;
   created_at: string;
   onArchiveToggle?: (challenge: {
     id: string;
     title: string;
     isActive: boolean;
     isArchived: boolean;
+  }) => void;
+  onDuplicate?: (challenge: {
+    id: string;
+    title: string;
+    hasStarterFiles: boolean;
+    hasAllowedEmails: boolean;
+    hasAccessWindow: boolean;
+    hasCohortLabel: boolean;
   }) => void;
 }
 
@@ -53,8 +64,12 @@ export default function ChallengeCard({
   ends_at,
   archived_at,
   cohort_label,
+  has_starter_files = false,
+  has_allowed_emails = false,
+  has_access_window = false,
   created_at,
   onArchiveToggle,
+  onDuplicate,
 }: ChallengeCardProps) {
   const [now] = useState(() => Date.now());
   const isActive = Boolean(is_active);
@@ -102,6 +117,28 @@ export default function ChallengeCard({
               aria-label={isArchived ? 'Unarchive assessment' : 'Archive assessment'}
             >
               {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {onDuplicate && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDuplicate({
+                  id,
+                  title,
+                  hasStarterFiles: has_starter_files,
+                  hasAllowedEmails: has_allowed_emails,
+                  hasAccessWindow: has_access_window,
+                  hasCohortLabel: Boolean(cohort_label),
+                });
+              }}
+              className="rounded-lg border border-white/10 bg-[#0a0a0a] p-1.5 text-neutral-500 transition-colors hover:border-white/20 hover:text-white"
+              title="Duplicate assessment"
+              aria-label="Duplicate assessment"
+            >
+              <Copy className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
+import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
 import ArcSpinner from '@/components/ArcSpinner';
 import { useSubscription } from '@/context/SubscriptionContext';
 import type { Challenge, Session, StarterFile } from '@/types';
@@ -116,6 +117,7 @@ function challengeToSettingsForm(challenge: Challenge): SettingsForm {
 
 export default function ChallengeDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const challengeId = params.id as string;
   const { planStatus, refreshSubscription } = useSubscription();
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
@@ -149,6 +151,7 @@ export default function ChallengeDetailPage() {
   const [settingsError, setSettingsError] = useState('');
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -634,18 +637,28 @@ export default function ChallengeDetailPage() {
             <p className="mt-1 text-neutral-500">{challenge.time_limit_min} minute time limit</p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setArchiveModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-surface px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
-          >
-            {challenge.archived_at ? (
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <Archive className="h-4 w-4" aria-hidden="true" />
-            )}
-            {challenge.archived_at ? 'Unarchive' : 'Archive'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDuplicateModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-surface px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              <Copy className="h-4 w-4" aria-hidden="true" />
+              Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={() => setArchiveModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-surface px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              {challenge.archived_at ? (
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Archive className="h-4 w-4" aria-hidden="true" />
+              )}
+              {challenge.archived_at ? 'Unarchive' : 'Archive'}
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1397,6 +1410,23 @@ export default function ChallengeDetailPage() {
               }
             : undefined
         }
+      />
+
+      <DuplicateChallengeModal
+        open={duplicateModalOpen}
+        source={{
+          id: challenge.id,
+          title: challenge.title,
+          hasStarterFiles: starterFileCount > 0,
+          hasAllowedEmails: Boolean(challenge.allowed_emails?.length),
+          hasAccessWindow: Boolean(challenge.starts_at || challenge.ends_at),
+          hasCohortLabel: Boolean(challenge.cohort_label),
+        }}
+        onClose={() => setDuplicateModalOpen(false)}
+        onDuplicated={(duplicatedChallengeId) => {
+          setDuplicateModalOpen(false);
+          router.push(`/dashboard/challenges/${duplicatedChallengeId}`);
+        }}
       />
     </div>
   );

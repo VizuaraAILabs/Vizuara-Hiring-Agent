@@ -3,6 +3,7 @@
 import ChallengeCard from '@/components/dashboard/ChallengeCard';
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
@@ -18,9 +19,21 @@ interface ChallengeWithCount {
   ends_at: string | null;
   archived_at: string | null;
   cohort_label: string | null;
+  has_starter_files: boolean;
+  has_allowed_emails: boolean;
+  has_access_window: boolean;
   created_at: string;
   candidate_count: number;
 }
+
+type DuplicateSource = {
+  id: string;
+  title: string;
+  hasStarterFiles: boolean;
+  hasAllowedEmails: boolean;
+  hasAccessWindow: boolean;
+  hasCohortLabel: boolean;
+};
 
 type ChallengeView = 'active' | 'closed' | 'archived' | 'all';
 
@@ -161,6 +174,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<DuplicateSource | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -290,6 +304,7 @@ export default function DashboardPage() {
                 setArchiveError(null);
                 setArchiveTarget(target);
               }}
+              onDuplicate={setDuplicateSource}
             />
           ))}
         </div>
@@ -321,7 +336,16 @@ export default function DashboardPage() {
                 onClick: () => handleArchiveConfirm(true),
               }
             : undefined
-        }
+          }
+      />
+      <DuplicateChallengeModal
+        open={Boolean(duplicateSource)}
+        source={duplicateSource}
+        onClose={() => setDuplicateSource(null)}
+        onDuplicated={(challengeId) => {
+          setDuplicateSource(null);
+          router.push(`/dashboard/challenges/${challengeId}`);
+        }}
       />
     </div>
   );

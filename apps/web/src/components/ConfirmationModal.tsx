@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 interface ConfirmationModalProps {
@@ -18,6 +19,7 @@ interface ConfirmationModalProps {
     label: string;
     onClick: () => void;
   };
+  children?: ReactNode;
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -34,6 +36,7 @@ export default function ConfirmationModal({
   isLoading = false,
   error,
   secondaryAction,
+  children,
   onConfirm,
   onClose,
 }: ConfirmationModalProps) {
@@ -147,6 +150,12 @@ export default function ConfirmationModal({
               className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary disabled:opacity-60"
               autoComplete="off"
             />
+          </div>
+        )}
+
+        {children && (
+          <div className="px-6 pb-5">
+            {children}
           </div>
         )}
 
