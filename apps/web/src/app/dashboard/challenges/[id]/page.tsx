@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
@@ -1195,13 +1195,14 @@ export default function ChallengeDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-[820px] border-collapse text-sm">
+              <table className="w-full min-w-[920px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
                     <th className="px-5 py-3 font-medium">Email</th>
                     <th className="px-5 py-3 font-medium">Started</th>
                     <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium">Decision</th>
                     <th className="px-5 py-3 font-medium">Session Link</th>
                     <th className="px-5 py-3 text-right font-medium">Action</th>
                   </tr>
@@ -1219,6 +1220,11 @@ export default function ChallengeDetailPage() {
                         <td className="px-5 py-4">
                           <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
                             {statusLabels[visibleStatus] ?? visibleStatus}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(session.decision_label)}`}>
+                            {getDecisionLabel(session.decision_label)}
                           </span>
                         </td>
                         <td className="px-5 py-4">

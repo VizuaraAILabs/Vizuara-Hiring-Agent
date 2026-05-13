@@ -148,7 +148,7 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P3-003: Add recruiter notes and decision labels on candidate reports
 
-- Status: Proposed
+- Status: Implemented
 - Area: Hiring workflow / collaboration
 - Evidence: Reports contain generated recommendations, strengths, and areas for growth, but there is no recruiter-owned decision state or notes field on sessions.
 - Impact: Teams need a lightweight place to record review decisions without relying on external spreadsheets.

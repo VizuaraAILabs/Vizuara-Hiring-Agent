@@ -57,6 +57,8 @@ export interface WorkspaceSnapshot {
   files: WorkspaceFile[];
 }
 
+export type DecisionLabel = 'shortlisted' | 'hold' | 'reject' | 'hired';
+
 export interface Session {
   id: string;
   challenge_id: string;
@@ -68,6 +70,11 @@ export interface Session {
   ended_at: string | null;
   created_at: string;
   workspace_snapshot: WorkspaceSnapshot | null;
+  decision_label: DecisionLabel | null;
+  recruiter_notes: string | null;
+  reviewed_by_email: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
 }
 
 export interface Interaction {

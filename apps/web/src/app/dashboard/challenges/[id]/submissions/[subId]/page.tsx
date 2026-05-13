@@ -11,6 +11,7 @@ import ScoreSummary from '@/components/report/ScoreSummary';
 import KeyMoments from '@/components/report/KeyMoments';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
 import WorkspaceViewer from '@/components/report/WorkspaceViewer';
+import RecruiterReviewPanel from '@/components/report/RecruiterReviewPanel';
 // import InlineFeedback from '@/components/feedback/InlineFeedback';
 // import NpsPrompt from '@/components/feedback/NpsPrompt';
 // import CompletionSurvey from '@/components/feedback/CompletionSurvey';
@@ -116,6 +117,10 @@ export default function ReportPage() {
   const handleViewInTranscript = (index: number) => {
     setHighlightIndex(index);
     setActiveTab('transcript');
+  };
+
+  const handleSessionUpdated = (updatedSession: Session) => {
+    setSession(updatedSession);
   };
 
   const handleGenerateNarrative = async () => {
@@ -226,9 +231,10 @@ export default function ReportPage() {
 
       {/* Header */}
       <ReportHeader session={session} analysis={analysis} />
+      <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
 
       {/* Tabs */}
-      <div className="sticky top-0 z-20 -mx-1 mb-6 bg-[#0a0a0a] px-1 py-3">
+      <div className="sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 py-3">
         <div className="grid grid-cols-6 gap-1 bg-surface rounded-2xl p-1 border border-white/5">
           {tabs.map((tab) => (
             <button

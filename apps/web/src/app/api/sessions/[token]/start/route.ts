@@ -3,12 +3,25 @@ import sql from '@/lib/db';
 import { validateChallengeAccess } from '@/lib/challenge-access';
 import type { Session, SessionWithChallenge } from '@/types';
 
+type CandidateSessionWithChallenge = Omit<
+  SessionWithChallenge,
+  'decision_label' | 'recruiter_notes' | 'reviewed_by_email' | 'reviewed_by_name' | 'reviewed_at'
+>;
+
+type CandidateSessionUpdate = Pick<
+  Session,
+  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot'
+>;
+
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
 
-    const [session] = await sql<SessionWithChallenge[]>`
-      SELECT s.*, c.title as challenge_title, c.description as challenge_description,
+    const [session] = await sql<CandidateSessionWithChallenge[]>`
+      SELECT
+        s.id, s.challenge_id, s.candidate_name, s.candidate_email, s.token, s.status,
+        s.started_at, s.ended_at, s.created_at, s.workspace_snapshot,
+        c.title as challenge_title, c.description as challenge_description,
         c.time_limit_min, c.company_id as challenge_company_id, c.is_active as challenge_is_active,
         c.starts_at as challenge_starts_at, c.ends_at as challenge_ends_at,
         c.sessions_limit as challenge_sessions_limit, c.allowed_emails as challenge_allowed_emails
@@ -52,8 +65,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       return NextResponse.json({ error: access.message, reason: access.reason }, { status: access.status });
     }
 
-    const [updated] = await sql<Session[]>`
-      UPDATE sessions SET status = 'active' WHERE id = ${session.id} RETURNING *
+    const [updated] = await sql<CandidateSessionUpdate[]>`
+      UPDATE sessions
+      SET status = 'active'
+      WHERE id = ${session.id}
+      RETURNING
+        id, challenge_id, candidate_name, candidate_email, token, status,
+        started_at, ended_at, created_at, workspace_snapshot
     `;
 
     return NextResponse.json(updated);

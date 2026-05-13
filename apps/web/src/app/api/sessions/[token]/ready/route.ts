@@ -4,6 +4,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
 import type { Session, SessionWithChallenge } from '@/types';
 
+type CandidateSessionWithChallenge = Omit<
+  SessionWithChallenge,
+  'decision_label' | 'recruiter_notes' | 'reviewed_by_email' | 'reviewed_by_name' | 'reviewed_at'
+>;
+
+type CandidateSessionUpdate = Pick<
+  Session,
+  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot'
+>;
+
 const OPENING_SYSTEM_PROMPT = `You are a senior technical interviewer opening a live software engineering assessment.
 Greet the candidate warmly but briefly, acknowledge the challenge they're about to work on, and ask one sharp opening question that probes how they plan to approach it - trade-offs, data structures, or design choices.
 Keep it to 2-3 sentences max. Do not give hints or solve the problem for them.`;
@@ -12,8 +22,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
   try {
     const { token } = await params;
 
-    const [session] = await sql<SessionWithChallenge[]>`
-      SELECT s.*, c.title as challenge_title, c.description as challenge_description
+    const [session] = await sql<CandidateSessionWithChallenge[]>`
+      SELECT
+        s.id, s.challenge_id, s.candidate_name, s.candidate_email, s.token, s.status,
+        s.started_at, s.ended_at, s.created_at, s.workspace_snapshot,
+        c.title as challenge_title, c.description as challenge_description
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
       WHERE s.token = ${token}
@@ -32,11 +45,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     }
 
     const now = new Date().toISOString();
-    const [updated] = await sql<Session[]>`
+    const [updated] = await sql<CandidateSessionUpdate[]>`
       UPDATE sessions
       SET started_at = ${now}
       WHERE id = ${session.id} AND started_at IS NULL
-      RETURNING *
+      RETURNING
+        id, challenge_id, candidate_name, candidate_email, token, status,
+        started_at, ended_at, created_at, workspace_snapshot
     `;
 
     generateOpeningQuestion(session.id, session.challenge_title, session.challenge_description).catch(
