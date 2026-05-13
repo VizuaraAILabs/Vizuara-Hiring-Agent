@@ -4,6 +4,7 @@ import ChallengeCard from '@/components/dashboard/ChallengeCard';
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
+import AnalysisAlertsPanel from '@/components/dashboard/AnalysisAlertsPanel';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
@@ -257,6 +258,8 @@ export default function DashboardPage() {
           New Challenge
         </Link>
       </div>
+
+      <AnalysisAlertsPanel />
 
       <div className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/5 bg-surface p-1">
         {challengeViews.map((challengeView) => (

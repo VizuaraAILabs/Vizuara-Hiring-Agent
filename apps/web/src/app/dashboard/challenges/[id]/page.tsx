@@ -152,6 +152,7 @@ export default function ChallengeDetailPage() {
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [analysisNow, setAnalysisNow] = useState(() => Date.now());
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -218,6 +219,11 @@ export default function ChallengeDetailPage() {
     };
   }, [hasPendingAnalysisSession, fetchChallengeDetail]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setAnalysisNow(Date.now()), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const starterFileCount = starterFiles.filter((file) => file.path && !file.path.endsWith('/.gitkeep')).length;
   const hasStarterFileChanges = useMemo(
     () => JSON.stringify(starterFiles) !== JSON.stringify(savedStarterFiles),
@@ -274,6 +280,17 @@ export default function ChallengeDetailPage() {
     analyzed: 'Analyzed',
     'analysis failed': 'Analysis failed',
   };
+
+  function getAnalysisAlertLabel(session: Session) {
+    const referenceTime = new Date(session.ended_at ?? session.created_at).getTime();
+    const minutes = Number.isFinite(referenceTime)
+      ? Math.floor((analysisNow - referenceTime) / 60000)
+      : 0;
+
+    if (session.status === 'analysis failed') return 'Failed - retry available';
+    if (session.status === 'completed' && minutes >= 5) return 'Analysis not started';
+    return null;
+  }
 
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
@@ -1297,6 +1314,7 @@ export default function ChallengeDetailPage() {
                   {challenge.sessions.map((session) => {
                     const isStartingAnalysis = analysisStartingIds.has(session.id);
                     const visibleStatus = isStartingAnalysis ? 'queued' : session.status;
+                    const analysisAlertLabel = getAnalysisAlertLabel(session);
 
                     return (
                       <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
@@ -1304,9 +1322,16 @@ export default function ChallengeDetailPage() {
                         <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
                         <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>
                         <td className="px-5 py-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
-                            {statusLabels[visibleStatus] ?? visibleStatus}
-                          </span>
+                          <div className="flex flex-col items-start gap-1.5">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
+                              {statusLabels[visibleStatus] ?? visibleStatus}
+                            </span>
+                            {analysisAlertLabel && (
+                              <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+                                {analysisAlertLabel}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(session.decision_label)}`}>

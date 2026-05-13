@@ -114,11 +114,11 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P2-004: Add operational notifications for analysis failures and pending work
 
-- Status: Proposed
+- Status: Implemented
 - Area: Operations / support
 - Evidence: The dashboard polls queued/analyzing sessions, and admin shows pending assessments, but there is no notification workflow when analysis stays queued/analyzing too long or fails.
 - Impact: Recruiters may wait for reports without knowing whether intervention is needed.
-- Suggested fix: Add admin/recruiter alerts for stuck analysis, failed analysis, and completed-but-not-analyzed sessions; include retry actions and timestamps.
+- Implementation notes: Added recruiter dashboard analysis alerts for completed-but-not-started, queued too long, analyzing too long, and failed analysis sessions. Alerts include timestamps, latest error details where available, challenge links, and retry actions for retryable states.
 
 ### FEAT-P2-005: Add company-level plan and quota management in admin
 
