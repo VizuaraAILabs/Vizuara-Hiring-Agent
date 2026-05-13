@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
+import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -22,6 +22,7 @@ type SettingsForm = {
   title: string;
   description: string;
   timeLimitMin: string;
+  cohortLabel: string;
   role: string;
   techStack: string[];
   seniority: string;
@@ -78,6 +79,7 @@ const emptySettingsForm: SettingsForm = {
   title: '',
   description: '',
   timeLimitMin: '',
+  cohortLabel: '',
   role: '',
   techStack: [],
   seniority: '',
@@ -103,6 +105,7 @@ function challengeToSettingsForm(challenge: Challenge): SettingsForm {
     title: challenge.title ?? '',
     description: challenge.description ?? '',
     timeLimitMin: String(challenge.time_limit_min ?? ''),
+    cohortLabel: challenge.cohort_label ?? '',
     role: challenge.role ?? '',
     techStack: parseCsvList(challenge.tech_stack),
     seniority: challenge.seniority ?? '',
@@ -145,6 +148,7 @@ export default function ChallengeDetailPage() {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -457,6 +461,7 @@ export default function ChallengeDetailPage() {
           title: settingsForm.title,
           description: settingsForm.description,
           time_limit_min: settingsForm.timeLimitMin ? Number(settingsForm.timeLimitMin) : '',
+          cohort_label: settingsForm.cohortLabel,
           role: settingsForm.role,
           tech_stack: settingsForm.techStack.join(', '),
           seniority: settingsForm.seniority,
@@ -509,6 +514,35 @@ export default function ChallengeDetailPage() {
       console.error(err);
     } finally {
       setInviteLoading(false);
+    }
+  }
+
+  async function handleArchiveChallenge(close = false) {
+    if (!challenge) return;
+
+    try {
+      const res = await fetch(`/api/challenges/${challenge.id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archived: !challenge.archived_at,
+          close,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || 'Failed to update archive state');
+      }
+
+      setChallenge((current) => current ? { ...current, ...data } : current);
+      setArchiveModalOpen(false);
+    } catch (error) {
+      setModalMessage({
+        title: 'Archive Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update archive state.',
+      });
+      setArchiveModalOpen(false);
     }
   }
 
@@ -582,9 +616,36 @@ export default function ChallengeDetailPage() {
   return (
     <div>
       <div className="sticky top-0 z-30 -mx-6 mb-6 border-b border-white/10 bg-[#0a0a0a]/95 px-6 pt-6 backdrop-blur supports-[backdrop-filter]:bg-[#0a0a0a]/85">
-        <div className="mb-8">
-          <h1 className="text-2xl font-serif italic text-white">{challenge.title}</h1>
-          <p className="mt-1 text-neutral-500">{challenge.time_limit_min} minute time limit</p>
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-serif italic text-white">{challenge.title}</h1>
+              {challenge.archived_at && (
+                <span className="rounded-full bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-400">
+                  Archived
+                </span>
+              )}
+              {challenge.cohort_label && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-neutral-400">
+                  {challenge.cohort_label}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-neutral-500">{challenge.time_limit_min} minute time limit</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setArchiveModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-surface px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
+          >
+            {challenge.archived_at ? (
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Archive className="h-4 w-4" aria-hidden="true" />
+            )}
+            {challenge.archived_at ? 'Unarchive' : 'Archive'}
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -976,6 +1037,18 @@ export default function ChallengeDetailPage() {
                     />
                   </div>
                   <div>
+                    <label className="mb-1.5 block text-xs text-neutral-500">Cohort Label</label>
+                    <input
+                      type="text"
+                      value={settingsForm.cohortLabel}
+                      onChange={(e) => setSettingsForm((form) => ({ ...form, cohortLabel: e.target.value }))}
+                      placeholder="Campus 2026, Backend Drive May..."
+                      maxLength={80}
+                      className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-3 py-2.5 text-sm text-white transition-all placeholder:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <p className="mt-2 text-xs text-neutral-600">Optional label for grouping old assessments.</p>
+                  </div>
+                  <div>
                     <label className="mb-1.5 block text-xs text-neutral-500">Description</label>
                     <textarea
                       value={settingsForm.description}
@@ -1300,6 +1373,30 @@ export default function ChallengeDetailPage() {
         cancelLabel="Close"
         onConfirm={() => setModalMessage(null)}
         onClose={() => setModalMessage(null)}
+      />
+
+      <ConfirmationModal
+        open={archiveModalOpen}
+        title={challenge.archived_at ? 'Unarchive Assessment?' : 'Archive Assessment?'}
+        description={
+          challenge.archived_at
+            ? `"${challenge.title}" will return to the dashboard according to its current access state.`
+            : Boolean(challenge.is_active)
+              ? `"${challenge.title}" may still accept candidates. Archiving only hides it from the main dashboard unless you close it too.`
+              : `"${challenge.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
+        }
+        confirmLabel={challenge.archived_at ? 'Unarchive' : 'Archive Only'}
+        cancelLabel="Cancel"
+        onConfirm={() => handleArchiveChallenge(false)}
+        onClose={() => setArchiveModalOpen(false)}
+        secondaryAction={
+          !challenge.archived_at && Boolean(challenge.is_active)
+            ? {
+                label: 'Close and Archive',
+                onClick: () => handleArchiveChallenge(true),
+              }
+            : undefined
+        }
       />
     </div>
   );

@@ -56,6 +56,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       seniority: null,
       focus_areas: null,
       context: null,
+      cohort_label: null,
+      archived_at: null,
       created_at: session.created_at,
     }, {
       candidateEmail: session.candidate_email,

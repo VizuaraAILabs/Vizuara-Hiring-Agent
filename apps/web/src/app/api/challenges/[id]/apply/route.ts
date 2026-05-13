@@ -122,7 +122,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
 
     const [challenge] = await sql<Challenge[]>`
-      SELECT id, title, description, time_limit_min, company_id, is_active, sessions_limit, allowed_emails, starts_at, ends_at, starter_files_dir, starter_files, role, tech_stack, seniority, focus_areas, context, created_at
+      SELECT id, title, description, time_limit_min, company_id, is_active, sessions_limit, allowed_emails, starts_at, ends_at, starter_files_dir, starter_files, role, tech_stack, seniority, focus_areas, context, cohort_label, archived_at, created_at
       FROM challenges WHERE id = ${id}
     `;
 

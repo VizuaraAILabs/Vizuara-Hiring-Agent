@@ -2,6 +2,7 @@
 
 import ChallengeCard from '@/components/dashboard/ChallengeCard';
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
+import ConfirmationModal from '@/components/ConfirmationModal';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
 import Link from 'next/link';
@@ -13,10 +14,29 @@ interface ChallengeWithCount {
   title: string;
   description: string;
   time_limit_min: number;
-  is_active: number;
+  is_active: boolean | number;
+  ends_at: string | null;
+  archived_at: string | null;
+  cohort_label: string | null;
   created_at: string;
   candidate_count: number;
 }
+
+type ChallengeView = 'active' | 'closed' | 'archived' | 'all';
+
+const challengeViews: { id: ChallengeView; label: string }[] = [
+  { id: 'active', label: 'Active' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'archived', label: 'Archived' },
+  { id: 'all', label: 'All' },
+];
+
+const emptyStateCopy: Record<ChallengeView, { title: string; action: string }> = {
+  active: { title: 'No active assessments', action: 'Create a new assessment' },
+  closed: { title: 'No closed assessments', action: 'View active assessments' },
+  archived: { title: 'No archived assessments', action: 'View active assessments' },
+  all: { title: 'No challenges yet', action: 'Create your first challenge' },
+};
 
 function TrialBanner() {
   const { planStatus } = useSubscription();
@@ -132,6 +152,15 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [challenges, setChallenges] = useState<ChallengeWithCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<ChallengeView>('active');
+  const [archiveTarget, setArchiveTarget] = useState<{
+    id: string;
+    title: string;
+    isActive: boolean;
+    isArchived: boolean;
+  } | null>(null);
+  const [archiveSaving, setArchiveSaving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -140,17 +169,63 @@ export default function DashboardPage() {
       return;
     }
 
-    fetch('/api/challenges')
+    let cancelled = false;
+
+    setLoading(true);
+    fetch(`/api/challenges?view=${view}`)
       .then(async (res) => {
         const data = await res.json().catch(() => []);
         if (!res.ok || !Array.isArray(data)) {
           throw new Error(data?.error || 'Failed to load challenges');
         }
-        setChallenges(data);
+        if (!cancelled) setChallenges(data);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [authLoading, router, user]);
+      .catch((error) => {
+        if (!cancelled) console.error(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, router, user, view]);
+
+  async function handleArchiveConfirm(close = false) {
+    if (!archiveTarget || archiveSaving) return;
+
+    setArchiveSaving(true);
+    setArchiveError(null);
+    try {
+      const res = await fetch(`/api/challenges/${archiveTarget.id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archived: !archiveTarget.isArchived,
+          close,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error || 'Failed to update assessment archive state');
+      }
+
+      setChallenges((current) =>
+        view === 'all'
+          ? current.map((challenge) => challenge.id === archiveTarget.id ? { ...challenge, ...data } : challenge)
+          : current.filter((challenge) => challenge.id !== archiveTarget.id)
+      );
+      setArchiveTarget(null);
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : 'Failed to update assessment archive state');
+    } finally {
+      setArchiveSaving(false);
+    }
+  }
+
+  const emptyCopy = emptyStateCopy[view];
 
   return (
     <div>
@@ -169,25 +244,85 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      <div className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/5 bg-surface p-1">
+        {challengeViews.map((challengeView) => (
+          <button
+            key={challengeView.id}
+            type="button"
+              onClick={() => setView(challengeView.id)}
+              disabled={loading}
+              className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
+                view === challengeView.id
+                  ? 'bg-white/5 text-white'
+                : 'text-neutral-600 hover:text-neutral-300 disabled:hover:text-neutral-600'
+              }`}
+            >
+            {challengeView.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <ConcentricArcLoader />
       ) : challenges.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-neutral-600 text-lg mb-4">No challenges yet</p>
+          <p className="text-neutral-600 text-lg mb-4">{emptyCopy.title}</p>
           <Link
-            href="/dashboard/challenges/new"
+            href={view === 'active' || view === 'all' ? '/dashboard/challenges/new' : '#'}
+            onClick={(event) => {
+              if (view === 'closed' || view === 'archived') {
+                event.preventDefault();
+                setView('active');
+              }
+            }}
             className="text-primary hover:text-primary-light text-sm"
           >
-            Create your first challenge
+            {emptyCopy.action}
           </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {challenges.map((challenge) => (
-            <ChallengeCard key={challenge.id} {...challenge} />
+            <ChallengeCard
+              key={challenge.id}
+              {...challenge}
+              onArchiveToggle={(target) => {
+                setArchiveError(null);
+                setArchiveTarget(target);
+              }}
+            />
           ))}
         </div>
       )}
+
+      <ConfirmationModal
+        open={Boolean(archiveTarget)}
+        title={archiveTarget?.isArchived ? 'Unarchive Assessment?' : 'Archive Assessment?'}
+        description={
+          archiveTarget?.isArchived
+            ? `"${archiveTarget.title}" will return to the dashboard according to its current access state.`
+            : archiveTarget?.isActive
+              ? `"${archiveTarget?.title}" may still accept candidates. Archiving only hides it from this list unless you close it too.`
+              : `"${archiveTarget?.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
+        }
+        confirmLabel={archiveTarget?.isArchived ? 'Unarchive' : 'Archive Only'}
+        cancelLabel="Cancel"
+        isLoading={archiveSaving}
+        error={archiveError}
+        onConfirm={() => handleArchiveConfirm(false)}
+        onClose={() => {
+          setArchiveTarget(null);
+          setArchiveError(null);
+        }}
+        secondaryAction={
+          archiveTarget && !archiveTarget.isArchived && archiveTarget.isActive
+            ? {
+                label: 'Close and Archive',
+                onClick: () => handleArchiveConfirm(true),
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

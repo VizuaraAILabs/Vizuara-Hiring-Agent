@@ -5,7 +5,14 @@ import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
 import { getChallengeById } from '@/lib/challenge-queries';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function GET() {
+type ChallengeView = 'active' | 'closed' | 'archived' | 'all';
+
+function normalizeView(value: string | null): ChallengeView {
+  if (value === 'closed' || value === 'archived' || value === 'all') return value;
+  return 'active';
+}
+
+export async function GET(request: Request) {
   try {
     const user = await getAuthUser();
     if (!user) {
@@ -14,6 +21,9 @@ export async function GET() {
     if (!user.companyId) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const view = normalizeView(searchParams.get('view'));
 
     const challenges = await sql`
       SELECT
@@ -34,13 +44,21 @@ export async function GET() {
         c.seniority,
         c.focus_areas,
         c.context,
+        c.cohort_label,
+        c.archived_at,
         c.created_at,
         COUNT(s.id)::int as candidate_count
       FROM challenges c
       LEFT JOIN sessions s ON s.challenge_id = c.id
       WHERE c.company_id = ${user.companyId}
+        AND (
+          ${view} = 'all'
+          OR (${view} = 'archived' AND c.archived_at IS NOT NULL)
+          OR (${view} = 'active' AND c.archived_at IS NULL AND c.is_active = TRUE AND (c.ends_at IS NULL OR c.ends_at > NOW()))
+          OR (${view} = 'closed' AND c.archived_at IS NULL AND (c.is_active = FALSE OR c.ends_at <= NOW()))
+        )
       GROUP BY c.id
-      ORDER BY c.created_at DESC
+      ORDER BY COALESCE(c.archived_at, c.created_at) DESC
     `;
 
     return NextResponse.json(challenges);
@@ -60,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
     }
 
-    const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context } = await request.json();
+    const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context, cohort_label } = await request.json();
 
     if (!title || !description) {
       return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
@@ -110,8 +128,8 @@ export async function POST(request: Request) {
         : null;
 
     await sql`
-      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context)
-      VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${startsAt ? startsAt.toISOString() : null}, ${endsAt ? endsAt.toISOString() : null}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null})
+      INSERT INTO challenges (id, company_id, title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context, cohort_label)
+      VALUES (${id}, ${user.companyId}, ${title}, ${description}, ${timeLimit}, ${starterDir}, ${starterFiles}, ${sessionsLimit}, ${allowedEmailsValue}, ${startsAt ? startsAt.toISOString() : null}, ${endsAt ? endsAt.toISOString() : null}, ${role || null}, ${tech_stack || null}, ${seniority || null}, ${focusAreasValue}, ${context || null}, ${typeof cohort_label === 'string' && cohort_label.trim() ? cohort_label.trim() : null})
     `;
 
     const challenge = await getChallengeById(id);

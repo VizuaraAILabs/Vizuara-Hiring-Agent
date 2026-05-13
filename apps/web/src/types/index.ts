@@ -33,6 +33,8 @@ export interface Challenge {
   seniority: string | null;
   focus_areas: string | null;
   context: string | null;
+  cohort_label: string | null;
+  archived_at: string | null;
   created_at: string;
 }
 

@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { Archive, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
 import { formatDate } from '@/lib/utils';
 
 function stripMarkdown(text: string): string {
@@ -28,8 +30,17 @@ interface ChallengeCardProps {
   description: string;
   time_limit_min: number;
   candidate_count: number;
-  is_active: number;
+  is_active: boolean | number;
+  ends_at?: string | null;
+  archived_at?: string | null;
+  cohort_label?: string | null;
   created_at: string;
+  onArchiveToggle?: (challenge: {
+    id: string;
+    title: string;
+    isActive: boolean;
+    isArchived: boolean;
+  }) => void;
 }
 
 export default function ChallengeCard({
@@ -39,24 +50,61 @@ export default function ChallengeCard({
   time_limit_min,
   candidate_count,
   is_active,
+  ends_at,
+  archived_at,
+  cohort_label,
   created_at,
+  onArchiveToggle,
 }: ChallengeCardProps) {
+  const [now] = useState(() => Date.now());
+  const isActive = Boolean(is_active);
+  const isArchived = Boolean(archived_at);
+  const isExpired = !isArchived && Boolean(ends_at) && new Date(ends_at as string).getTime() <= now;
+  const statusLabel = isArchived ? 'Archived' : isExpired ? 'Expired' : isActive ? 'Active' : 'Closed';
+  const statusClass = isArchived
+    ? 'bg-neutral-800 text-neutral-500'
+    : isExpired
+      ? 'bg-amber-500/10 text-amber-300'
+      : isActive
+        ? 'bg-primary/10 text-primary'
+        : 'bg-neutral-800 text-neutral-500';
+
   return (
     <Link
       href={`/dashboard/challenges/${id}`}
       className="group block bg-surface border border-white/5 rounded-2xl p-6 hover:border-primary/20 transition-all duration-300"
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-lg font-semibold text-white group-hover:text-primary transition-colors">
-          {title}
-        </h3>
-        <span
-          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-            is_active ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
-          }`}
-        >
-          {is_active ? 'Active' : 'Inactive'}
-        </span>
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-white group-hover:text-primary transition-colors">
+            {title}
+          </h3>
+          {cohort_label && (
+            <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-neutral-600">
+              {cohort_label}
+            </p>
+          )}
+        </div>
+        <div className="ml-4 flex shrink-0 items-center gap-2">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}`}>
+            {statusLabel}
+          </span>
+          {onArchiveToggle && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onArchiveToggle({ id, title, isActive, isArchived });
+              }}
+              className="rounded-lg border border-white/10 bg-[#0a0a0a] p-1.5 text-neutral-500 transition-colors hover:border-white/20 hover:text-white"
+              title={isArchived ? 'Unarchive assessment' : 'Archive assessment'}
+              aria-label={isArchived ? 'Unarchive assessment' : 'Archive assessment'}
+            >
+              {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="text-neutral-500 text-sm line-clamp-2 mb-4">{stripMarkdown(description)}</p>

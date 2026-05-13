@@ -21,6 +21,8 @@ export async function getChallengeById(id: string): Promise<Challenge | undefine
       seniority,
       focus_areas,
       context,
+      cohort_label,
+      archived_at,
       created_at
     FROM challenges
     WHERE id = ${id}

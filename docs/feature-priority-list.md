@@ -132,11 +132,11 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P3-001: Add archived/completed grouping for old assessments
 
-- Status: Proposed
+- Status: Implemented
 - Area: Dashboard organization
 - Evidence: Challenges are listed by creation date and remain visible indefinitely. There is no archive state or folder/grouping model.
 - Impact: Recruiter dashboards will become noisy after several campus drives or hiring cycles.
-- Suggested fix: Add archive/unarchive, filters for active/closed/archived, and optional tags such as campus, role, cohort, or hiring round.
+- Implementation notes: Added archive/unarchive, dashboard filters for active/closed/archived/all, and a single optional cohort label for lightweight grouping. Archiving is dashboard organization only; manual close state and assessment start/end windows continue to control candidate access.
 
 ### FEAT-P3-002: Add copy improvements for candidate-facing unavailable states
 

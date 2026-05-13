@@ -14,6 +14,10 @@ interface ConfirmationModalProps {
   confirmationValue?: string;
   isLoading?: boolean;
   error?: string | null;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
   onConfirm: () => void;
   onClose: () => void;
 }
@@ -29,6 +33,7 @@ export default function ConfirmationModal({
   confirmationValue,
   isLoading = false,
   error,
+  secondaryAction,
   onConfirm,
   onClose,
 }: ConfirmationModalProps) {
@@ -87,6 +92,12 @@ export default function ConfirmationModal({
     if (!canConfirm || isLoading) return;
     setTypedValue('');
     onConfirm();
+  }
+
+  function handleSecondaryAction() {
+    if (isLoading) return;
+    setTypedValue('');
+    secondaryAction?.onClick();
   }
 
   return (
@@ -155,6 +166,16 @@ export default function ConfirmationModal({
           >
             {cancelLabel}
           </button>
+          {secondaryAction && (
+            <button
+              type="button"
+              onClick={handleSecondaryAction}
+              disabled={isLoading}
+              className="h-9 rounded-lg border border-white/10 px-4 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {secondaryAction.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleConfirm}

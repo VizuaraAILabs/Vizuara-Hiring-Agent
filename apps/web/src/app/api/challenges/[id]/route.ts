@@ -90,6 +90,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       'seniority',
       'focus_areas',
       'context',
+      'cohort_label',
     ].some((key) =>
       hasOwn(body, key)
     );
@@ -131,6 +132,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     let seniority = challenge.seniority;
     let focusAreas = challenge.focus_areas;
     let context = challenge.context;
+    let cohortLabel = challenge.cohort_label;
 
     if (hasAccessSettings) {
       if (body.sessions_limit != null && body.sessions_limit !== '') {
@@ -204,6 +206,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       if (hasOwn(body, 'seniority')) seniority = normalizeOptionalString(body.seniority);
       if (hasOwn(body, 'focus_areas')) focusAreas = normalizeOptionalString(body.focus_areas);
       if (hasOwn(body, 'context')) context = normalizeOptionalString(body.context);
+      if (hasOwn(body, 'cohort_label')) cohortLabel = normalizeOptionalString(body.cohort_label);
     }
 
     const preservedStarterFiles = typeof challenge.starter_files === 'string'
@@ -226,6 +229,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         seniority = ${seniority},
         focus_areas = ${focusAreas},
         context = ${context},
+        cohort_label = ${cohortLabel},
         starter_files = ${nextStarterFiles},
         sessions_limit = ${sessionsLimit},
         starts_at = ${startsAt},
