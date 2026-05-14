@@ -1,17 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
-import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot, Challenge } from '@/types';
+import IntegrityPanel from '@/components/report/IntegrityPanel';
+import KeyMoments from '@/components/report/KeyMoments';
+import RecruiterReviewPanel from '@/components/report/RecruiterReviewPanel';
 import ReportHeader from '@/components/report/ReportHeader';
 import ReportSummary from '@/components/report/ReportSummary';
 import ScoreSummary from '@/components/report/ScoreSummary';
-import KeyMoments from '@/components/report/KeyMoments';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
 import WorkspaceViewer from '@/components/report/WorkspaceViewer';
-import RecruiterReviewPanel from '@/components/report/RecruiterReviewPanel';
+import type { AnalysisResult, Challenge, IntegritySummary, Interaction, Session, WorkspaceSnapshot } from '@/types';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 // import InlineFeedback from '@/components/feedback/InlineFeedback';
 // import NpsPrompt from '@/components/feedback/NpsPrompt';
 // import CompletionSurvey from '@/components/feedback/CompletionSurvey';
@@ -22,7 +23,7 @@ const TimelineChart = dynamic(() => import('@/components/report/TimelineChart'),
 const PromptComplexity = dynamic(() => import('@/components/report/PromptComplexity'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('@/components/report/CategoryBreakdown'), { ssr: false });
 
-type Tab = 'summary' | 'overview' | 'timeline' | 'analysis' | 'transcript' | 'files';
+type Tab = 'summary' | 'overview' | 'timeline' | 'analysis' | 'ownership' | 'transcript' | 'files';
 
 export default function ReportPage() {
   const params = useParams();
@@ -44,6 +45,9 @@ export default function ReportPage() {
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [integritySummary, setIntegritySummary] = useState<IntegritySummary | null>(null);
+  const [integrityLoading, setIntegrityLoading] = useState(false);
+  const [integrityError, setIntegrityError] = useState<string | null>(null);
 
   const handleEnrichDimensions = useCallback(async () => {
     setEnrichingDimensions(true);
@@ -146,8 +150,29 @@ export default function ReportPage() {
     }
   };
 
+  const loadIntegritySummary = useCallback(async () => {
+    if (integritySummary || integrityLoading) return;
+    setIntegrityLoading(true);
+    setIntegrityError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/integrity`);
+      if (res.ok) {
+        setIntegritySummary(await res.json());
+      } else {
+        setIntegrityError('Ownership signals could not be generated for this session.');
+      }
+    } catch {
+      setIntegrityError('Ownership signals could not be generated for this session.');
+    } finally {
+      setIntegrityLoading(false);
+    }
+  }, [integrityLoading, integritySummary, sessionId]);
+
   const handleTabChange = async (tab: Tab) => {
     setActiveTab(tab);
+    if (tab === 'ownership') {
+      void loadIntegritySummary();
+    }
     if (tab === 'files' && !workspaceSnapshot && !workspaceLoading) {
       setWorkspaceLoading(true);
       setWorkspaceError(null);
@@ -215,6 +240,7 @@ export default function ReportPage() {
     { key: 'overview', label: 'Overview' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'analysis', label: 'Analysis' },
+    { key: 'ownership', label: 'Ownership' },
     { key: 'transcript', label: 'Narrative' },
     { key: 'files', label: 'Files' },
   ];
@@ -235,7 +261,7 @@ export default function ReportPage() {
 
       {/* Tabs */}
       <div className="sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 py-3">
-        <div className="grid grid-cols-6 gap-1 bg-surface rounded-2xl p-1 border border-white/5">
+        <div className="grid grid-cols-3 gap-1 bg-surface rounded-2xl p-1 border border-white/5 sm:grid-cols-7">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -297,6 +323,14 @@ export default function ReportPage() {
             onViewInTranscript={handleViewInTranscript}
           />
         </div>
+      )}
+
+      {activeTab === 'ownership' && (
+        <IntegrityPanel
+          summary={integritySummary}
+          loading={integrityLoading}
+          error={integrityError}
+        />
       )}
 
       {activeTab === 'transcript' && (

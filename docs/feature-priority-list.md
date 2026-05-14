@@ -48,7 +48,7 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P1-001: Add editable challenge settings after creation
 
-- Status: Proposed
+- Status: Implemented
 - Area: Recruiter dashboard / assessment management
 - Evidence: `apps/web/src/app/api/challenges/[id]/route.ts` only supports updating `starter_files`; allowed emails have a dedicated endpoint, but title, description, time limit, session limit, role, tech stack, seniority, focus areas, context, and active/link-window settings are not editable through one challenge settings screen.
 - Impact: Recruiters must recreate assessments to fix setup mistakes or change drive logistics, which fragments submissions across multiple challenge records.
@@ -104,13 +104,13 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: When challenge content changes over time, recruiters cannot compare cohorts reliably or tell which candidate received which version beyond the stored session workspace snapshot.
 - Suggested fix: Add challenge/template versions, record the version on each session, and show version history with diff/restore for description and starter files.
 
-### FEAT-P2-003: Add richer anti-cheating and session integrity signals
+### FEAT-P2-003: Add solution ownership and session integrity signals
 
-- Status: Proposed
-- Area: Candidate integrity / reporting
-- Evidence: The terminal and interaction logs capture activity, but reports focus on AI collaboration quality. There is no product surface for suspicious idle periods, copy/paste bursts, tab/window focus changes, repeated account/email anomalies, or duplicate workspace signatures.
-- Impact: Recruiters may want lightweight integrity flags before relying on scores for high-stakes hiring decisions.
-- Suggested fix: Capture and summarize integrity signals separately from score, with conservative labels and evidence so reviewers can inspect rather than blindly reject.
+- Status: V1 Implemented
+- Area: Candidate ownership / reporting
+- Evidence: ArcEval intentionally allows candidates to use AI assistants and external references such as Google, so the useful hiring signal is not whether outside help was used. The current reports assess AI collaboration quality, but there is no dedicated surface for whether the candidate appeared to understand, steer, verify, and own the final work. The terminal and interaction logs can show validation behavior, large late-stage code drops, long idle gaps, repeated reconnects, and workspace similarity, but those signals are not summarized for reviewers.
+- Impact: Recruiters need evidence about solution ownership without treating permitted AI or web research as misconduct. A candidate who uses AI well, tests the result, explains trade-offs, and iterates should be distinguished from a candidate who submits a large unverified solution with little interaction trail. Cohort-level similarity is also important when many candidates produce near-identical final workspaces.
+- Implementation notes: Added a deterministic "Solution Ownership" report tab backed by `/api/analysis/[sessionId]/integrity`. The summary uses existing terminal interactions, file-edit metadata, session timing, workspace snapshots, and same-challenge workspace comparison to surface neutral evidence: verification trail, large edits, late large changes without follow-up validation, long idle gaps, short completion, and workspace similarity. The UI explicitly frames these as context signals, not misconduct findings.
 
 ### FEAT-P2-004: Add operational notifications for analysis failures and pending work
 

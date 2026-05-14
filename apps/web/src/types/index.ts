@@ -152,6 +152,44 @@ export interface AnalysisResult {
   created_at: string;
 }
 
+export type IntegrityReviewLevel = 'low' | 'review' | 'limited_evidence' | 'insufficient_data';
+
+export type IntegritySignalTone = 'positive' | 'neutral' | 'review' | 'warning';
+
+export interface IntegritySignal {
+  id: string;
+  title: string;
+  description: string;
+  tone: IntegritySignalTone;
+  evidence: string[];
+}
+
+export interface IntegritySummary {
+  session_id: string;
+  review_level: IntegrityReviewLevel;
+  ownership_score: number;
+  summary: string;
+  metrics: {
+    interaction_count: number;
+    prompt_count: number;
+    command_count: number;
+    test_run_count: number;
+    file_edit_count: number;
+    large_file_edit_count: number;
+    large_late_change_count: number;
+    idle_gap_count: number;
+    max_idle_gap_minutes: number;
+    duration_minutes: number | null;
+  };
+  workspace_similarity: {
+    compared_sessions: number;
+    highest_similarity: number | null;
+    matching_session_id: string | null;
+    matching_candidate_name: string | null;
+  };
+  signals: IntegritySignal[];
+}
+
 export interface InteractionAnnotation {
   id: number;
   analysis_id: string;
