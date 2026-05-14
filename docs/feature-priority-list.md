@@ -13,7 +13,7 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P0-001: Assessment links should support a start and end validity window
 
-- Status: Proposed
+- Status: Implemented
 - Area: Assessment access / license control
 - Source: Customer request from Yash, 1PharmacyNetwork, on May 5, 2026: recruiting activity had ended, but a student later used the assessment link and consumed a LIC. Requested behavior: set start and end date, and the link is valid only during that interval.
 - Evidence: Public application currently fetches and creates sessions through `apps/web/src/app/api/challenges/[id]/apply/route.ts` with no time-window check. The `challenges` table has `is_active` and `created_at`, but no `starts_at` or `ends_at` fields in `database/migrations/001_pg_schema.sql`. The challenge creation and detail UI expose time limit, session limit, allowed emails, and starter files, but no link validity dates.
@@ -30,7 +30,7 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P0-003: Direct invite links should follow the same access rules as shareable apply links
 
-- Status: Proposed
+- Status: Implemented
 - Area: Assessment access / consistency
 - Evidence: `apps/web/src/app/api/challenges/[id]/invite/route.ts` creates a session directly and does not enforce allowed emails, challenge active state, plan quota, session limit, or any future link validity window. The public apply route enforces allowed emails, session limit, and plan quota.
 - Impact: Recruiters/admins may accidentally create usable candidate sessions after an assessment is closed, expired, or at capacity. Candidate access behavior depends on which invitation path was used.
