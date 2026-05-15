@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
 import type { Session, SessionWithChallenge } from '@/types';
@@ -61,6 +62,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     return NextResponse.json({ ...session, ...updated });
   } catch (error) {
     console.error('Error marking session ready:', error);
+    if (isDatabaseConnectionError(error)) return databaseUnavailableResponse();
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

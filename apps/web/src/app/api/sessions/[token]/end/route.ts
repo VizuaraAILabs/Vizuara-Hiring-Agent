@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
 import type { Session } from '@/types';
 
 type CandidateSession = Pick<
@@ -41,6 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error ending session:', error);
+    if (isDatabaseConnectionError(error)) return databaseUnavailableResponse();
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

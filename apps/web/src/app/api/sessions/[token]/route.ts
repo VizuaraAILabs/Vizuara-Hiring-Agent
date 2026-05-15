@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
 import type { SessionWithChallenge } from '@/types';
 
 type CandidateSessionWithChallenge = Omit<
@@ -28,6 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     return NextResponse.json(session);
   } catch (error) {
     console.error('Error fetching session:', error);
+    if (isDatabaseConnectionError(error)) return databaseUnavailableResponse();
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
 import { validateChallengeAccess } from '@/lib/challenge-access';
 import type { Session, SessionWithChallenge } from '@/types';
 
@@ -79,6 +80,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Error starting session:', error);
+    if (isDatabaseConnectionError(error)) return databaseUnavailableResponse();
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
