@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -163,6 +163,7 @@ export default function ChallengeDetailPage() {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
+  const [reviewPreviewSession, setReviewPreviewSession] = useState<Session | null>(null);
   const [closeAccessModalOpen, setCloseAccessModalOpen] = useState(false);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
@@ -1598,7 +1599,7 @@ export default function ChallengeDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-250 border-collapse text-sm">
+              <table className="w-full min-w-270 border-collapse text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
@@ -1608,7 +1609,7 @@ export default function ChallengeDetailPage() {
                     <th className="px-5 py-3 font-medium">Decision</th>
                     <th className="px-5 py-3 font-medium">Session Link</th>
                     <th className="px-5 py-3 font-medium">Invite Email</th>
-                    <th className="px-5 py-3 text-right font-medium">Action</th>
+                    <th className="px-5 py-3 font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1635,9 +1636,22 @@ export default function ChallengeDetailPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(session.decision_label)}`}>
-                            {getDecisionLabel(session.decision_label)}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(session.decision_label)}`}>
+                              {getDecisionLabel(session.decision_label)}
+                            </span>
+                            {session.recruiter_notes?.trim() && (
+                              <button
+                                type="button"
+                                onClick={() => setReviewPreviewSession(session)}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"
+                                title="View reviewer notes"
+                                aria-label="Reviewer notes saved"
+                              >
+                                <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4">
                           <button
@@ -1658,14 +1672,14 @@ export default function ChallengeDetailPage() {
                           </span>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex justify-end">
+                          <div className="flex justify-start">
                             {visibleStatus === 'analyzed' && (
                               <Link href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`} className="text-sm font-medium text-primary transition-colors hover:text-primary-light">
                                 View Report
                               </Link>
                             )}
                             {visibleStatus === 'queued' && (
-                              <span className="flex items-center gap-2 text-sm font-medium text-amber-300">
+                              <span className="flex items-center gap-2 text-sm font-medium text-amber-300 whitespace-nowrap">
                                 {isStartingAnalysis && (
                                   <ArcSpinner label="Queueing analysis" sizeClassName="h-4 w-4" />
                                 )}
@@ -1673,7 +1687,7 @@ export default function ChallengeDetailPage() {
                               </span>
                             )}
                             {visibleStatus === 'analyzing' && (
-                              <span className="flex items-center gap-2 text-sm font-medium text-violet-300">
+                              <span className="flex items-center gap-2 text-sm font-medium text-violet-300 whitespace-nowrap">
                                 <ArcSpinner label="Analyzing session" sizeClassName="h-4 w-4" />
                                 Analyzing...
                               </span>
@@ -1684,7 +1698,7 @@ export default function ChallengeDetailPage() {
                                 disabled={isStartingAnalysis}
                                 onClick={() => handleAnalyze(session.id)}
                                 title="The analysis could not finish. Candidate data is saved."
-                                className="flex items-center gap-2 text-sm font-medium text-red-300 hover:text-red-200 disabled:text-red-500"
+                                className="flex items-center gap-2 text-sm font-medium text-red-300 hover:text-red-200 disabled:text-red-500 whitespace-nowrap"
                               >
                                 Retry analysis
                               </button>
@@ -1694,7 +1708,7 @@ export default function ChallengeDetailPage() {
                                 type="button"
                                 disabled={isStartingAnalysis}
                                 onClick={() => handleAnalyze(session.id)}
-                                className="flex items-center gap-2 text-sm font-medium text-violet-400 hover:text-violet-300 disabled:text-violet-600"
+                                className="flex items-center gap-2 text-sm font-medium text-violet-400 hover:text-violet-300 disabled:text-violet-600 whitespace-nowrap"
                               >
                                 Analyze
                               </button>
@@ -1720,6 +1734,63 @@ export default function ChallengeDetailPage() {
         onConfirm={() => setModalMessage(null)}
         onClose={() => setModalMessage(null)}
       />
+
+      {reviewPreviewSession && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setReviewPreviewSession(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="review-preview-title"
+            className="flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl lg:w-[25vw] lg:min-w-90"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/5 px-5 py-4">
+              <div className="min-w-0">
+                <p id="review-preview-title" className="text-sm font-semibold text-white">
+                  Recruiter Review
+                </p>
+                <p className="mt-1 break-all text-xs text-neutral-500">
+                  {reviewPreviewSession.candidate_name} - {reviewPreviewSession.candidate_email}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewPreviewSession(null)}
+                className="rounded-lg p-2 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                aria-label="Close recruiter review"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto px-5 py-4">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-neutral-600">Decision</p>
+                <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(reviewPreviewSession.decision_label)}`}>
+                  {getDecisionLabel(reviewPreviewSession.decision_label)}
+                </span>
+              </div>
+
+              <div className="mt-5">
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-neutral-600">Private Notes</p>
+                <p className="whitespace-pre-wrap rounded-xl border border-white/5 bg-black/25 px-4 py-3 text-sm leading-6 text-neutral-300">
+                  {reviewPreviewSession.recruiter_notes?.trim() || 'No notes saved.'}
+                </p>
+              </div>
+
+              {reviewPreviewSession.reviewed_at && (
+                <p className="mt-4 text-xs text-neutral-600">
+                  Last saved by {reviewPreviewSession.reviewed_by_name || reviewPreviewSession.reviewed_by_email || 'reviewer'} on {formatDateTime(reviewPreviewSession.reviewed_at)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmationModal
         open={closeAccessModalOpen}
