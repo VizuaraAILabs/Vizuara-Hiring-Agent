@@ -17,7 +17,7 @@ interface ChallengeDetail extends Challenge {
   sessions: Session[];
 }
 
-type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'candidates' | 'settings';
+type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'invites' | 'candidates' | 'settings';
 
 type SettingsForm = {
   title: string;
@@ -128,6 +128,7 @@ export default function ChallengeDetailPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [analysisStartingIds, setAnalysisStartingIds] = useState<Set<string>>(new Set());
   const [copiedShareable, setCopiedShareable] = useState(false);
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
@@ -268,6 +269,7 @@ export default function ChallengeDetailPage() {
     { id: 'description' as const, label: 'Description', icon: FileText },
     { id: 'starter-files' as const, label: 'Starter Files', icon: FolderCode, badge: starterFileCount },
     { id: 'distribution' as const, label: 'Access Control', icon: Link2 },
+    { id: 'invites' as const, label: 'Invites', icon: MailPlus },
     { id: 'candidates' as const, label: 'Candidates', icon: Users, badge: challenge?.sessions.length ?? 0 },
     { id: 'settings' as const, label: 'Settings', icon: SettingsIcon },
   ];
@@ -539,6 +541,7 @@ export default function ChallengeDetailPage() {
       const data = await res.json();
       if (res.ok) {
         setInviteLink(`${window.location.origin}${data.invite_url}`);
+        setCopiedInviteLink(false);
         const normalizedEmail = inviteForm.email.trim().toLowerCase();
         setAllowedEmails((current) => current.includes(normalizedEmail) ? current : [...current, normalizedEmail]);
         setInviteForm({ name: '', email: '' });
@@ -776,8 +779,7 @@ export default function ChallengeDetailPage() {
       )}
 
       {activeTab === 'distribution' && (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="space-y-5">
+        <div className="space-y-5">
             <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
               <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
@@ -882,7 +884,7 @@ export default function ChallengeDetailPage() {
                   </div>
                   {!accessIsActive && (
                     <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-200/90">
-                      This assessment is staged to close. Save Rules to block new entries; candidates already inside an active workspace are not forcibly removed.
+                      This assessment is staged to close. Save Access Settings to block new entries; candidates already inside an active workspace are not forcibly removed.
                     </div>
                   )}
                 </div>
@@ -1041,83 +1043,97 @@ export default function ChallengeDetailPage() {
                 </div>
               </div>
             </div>
-          </div>
+        </div>
+      )}
 
-          <aside className="xl:sticky xl:top-32 xl:self-start">
-            <div className="rounded-2xl border border-white/5 bg-surface">
-              <div className="border-b border-white/5 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${canGenerateInvite ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
-                    }`}>
-                    {canGenerateInvite ? (
-                      <MailPlus className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <MailX className="h-4 w-4" aria-hidden="true" />
-                    )}
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
-                    <p className="mt-0.5 text-xs text-neutral-500">
-                      {inviteDisabledReason ?? 'Creates a candidate session link'}
-                    </p>
-                  </div>
+      {activeTab === 'invites' && (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-white/5 bg-surface">
+            <div className="border-b border-white/5 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${canGenerateInvite ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
+                  }`}>
+                  {canGenerateInvite ? (
+                    <MailPlus className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <MailX className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    {inviteDisabledReason ?? 'Creates a candidate session link'}
+                  </p>
                 </div>
               </div>
-
-              <form onSubmit={handleInvite} className="space-y-4 p-5">
-                <div>
-                  <label className="mb-1.5 block text-xs text-neutral-500">Name</label>
-                  <input
-                    type="text"
-                    value={inviteForm.name}
-                    onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                    disabled={!canGenerateInvite || inviteLoading}
-                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs text-neutral-500">Email</label>
-                  <input
-                    type="email"
-                    value={inviteForm.email}
-                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                    disabled={!canGenerateInvite || inviteLoading}
-                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={inviteLoading || !canGenerateInvite}
-                  className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {inviteLoading ? 'Generating...' : 'Generate Invite Link'}
-                </button>
-              </form>
             </div>
 
-            {inviteLink && (
-              <div className="mt-4 rounded-2xl border border-primary/20 bg-[#0f1210] p-4">
-                <p className="mb-2 text-xs font-medium text-white">Candidate Link</p>
-                <div className="flex gap-2">
+            <form onSubmit={handleInvite} className="space-y-4 p-5">
+              <div>
+                <label className="mb-1.5 block text-xs text-neutral-500">Name</label>
+                <input
+                  type="text"
+                  value={inviteForm.name}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+                  disabled={!canGenerateInvite || inviteLoading}
+                  className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-neutral-500">Email</label>
+                <input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                  disabled={!canGenerateInvite || inviteLoading}
+                  className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={inviteLoading || !canGenerateInvite}
+                className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {inviteLoading ? 'Generating...' : 'Generate Invite Link'}
+              </button>
+            </form>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-surface">
+            <div className="border-b border-white/5 px-5 py-4">
+              <p className="text-sm font-semibold text-white">Candidate Link</p>
+              <p className="mt-0.5 text-xs text-neutral-500">Generated invite links appear here for copying.</p>
+            </div>
+            <div className="p-5">
+              {inviteLink ? (
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <input
                     type="text"
                     value={inviteLink}
                     readOnly
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-2 text-xs font-mono text-primary"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-xs font-mono text-primary"
                   />
                   <button
                     type="button"
-                    onClick={() => navigator.clipboard.writeText(inviteLink)}
-                    className="rounded-xl bg-white/5 px-3 py-2 text-xs text-neutral-300 transition-colors hover:bg-white/10"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteLink);
+                      setCopiedInviteLink(true);
+                      setTimeout(() => setCopiedInviteLink(false), 2000);
+                    }}
+                    className="rounded-xl bg-white/5 px-4 py-3 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
                   >
-                    Copy
+                    {copiedInviteLink ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-              </div>
-            )}
-          </aside>
+              ) : (
+                <p className="rounded-xl border border-white/5 bg-black/25 px-4 py-6 text-center text-sm text-neutral-600">
+                  Generate a personalized invite to create a candidate-specific session link.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

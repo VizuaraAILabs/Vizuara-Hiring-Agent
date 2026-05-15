@@ -60,9 +60,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!user.companyId) {
-      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -72,7 +69,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.companyId) {
+    const userIsAdmin = isAdmin(user.email, user.role);
+    if (challenge.company_id !== user.companyId && !userIsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -158,7 +156,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         sessionsLimit != null &&
         sessionsLimit !== challenge.sessions_limit
       ) {
-        const limitError = await validateChallengeSessionLimit(user.companyId, sessionsLimit);
+        const limitError = await validateChallengeSessionLimit(challenge.company_id, sessionsLimit);
         if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
       }
 
