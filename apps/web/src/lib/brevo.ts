@@ -5,6 +5,15 @@ const SENDER = {
   email: 'hello@vizuara.com',
 };
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildEmailHtml(name: string, dayNumber: number): string {
   return `
 <!DOCTYPE html>
@@ -216,6 +225,83 @@ export async function sendBulkEmail({
     sent += chunk.length;
   }
   return { sent };
+}
+
+export async function sendInviteEmail({
+  to,
+  toName,
+  subject,
+  bodyText,
+  companyName,
+  assessmentLink,
+}: {
+  to: string;
+  toName: string;
+  subject: string;
+  bodyText: string;
+  companyName: string;
+  assessmentLink?: string;
+}): Promise<void> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+
+  const safeSubject = escapeHtml(subject);
+  const safeBody = escapeHtml(bodyText);
+  const safeCompanyName = escapeHtml(companyName);
+  const safeAssessmentLink = assessmentLink ? escapeHtml(assessmentLink) : null;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Figtree',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:#00a854;padding:32px 40px;">
+              <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">ArcEval</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px;">
+              <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${safeBody}</p>
+              ${safeAssessmentLink ? `<p style="margin:24px 0 0;"><a href="${safeAssessmentLink}" style="display:inline-block;background:#00a854;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 18px;border-radius:8px;">Open assessment</a></p>` : ''}
+              <p style="margin:32px 0 0;font-size:15px;color:#6b7280;">Sent by ${safeCompanyName}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">You're receiving this because you were invited to an ArcEval assessment.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: SENDER,
+      to: [{ email: to, name: toName }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API error ${res.status}: ${body}`);
+  }
 }
 
 export async function sendTrialFeedbackEmail(

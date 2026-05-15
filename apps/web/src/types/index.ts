@@ -34,6 +34,8 @@ export interface Challenge {
   focus_areas: string | null;
   context: string | null;
   cohort_label: string | null;
+  invite_email_subject?: string | null;
+  invite_email_body?: string | null;
   archived_at: string | null;
   created_at: string;
 }
@@ -77,6 +79,9 @@ export interface Session {
   reviewed_by_email: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;
+  invite_email_status?: 'not_sent' | 'sent' | 'failed' | null;
+  invite_email_sent_at?: string | null;
+  invite_email_error?: string | null;
 }
 
 export interface Interaction {

@@ -64,11 +64,9 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P1-005: Send personalized invite emails with custom company-authored message bodies
 
-- Status: Proposed
+- Status: Implemented
 - Area: Candidate communication / recruiter operations
-- Evidence: Personalized invites currently create a session token and return `/session/{token}` from `apps/web/src/app/api/challenges/[id]/invite/route.ts`, while the challenge detail UI only displays the generated link for manual copying. There is no recruiter-facing action to email the invite directly, and no company-authored email template/body for candidate instructions.
-- Impact: Recruiters must copy links into external email tools, which is slow, error-prone, and makes invite messaging inconsistent across candidates or drives.
-- Suggested fix: Add an optional "Send email" flow after personalized invite creation. Let companies write and save a default invite email body per assessment or company, with merge fields such as candidate name, challenge title, assessment link, time limit, start date, and end date. Send through the existing email provider, record delivery attempts/status on the invite/session, and keep the generated link visible for manual fallback.
+- Implementation notes: Added a saved per-challenge invite email subject/body, merge fields for candidate name, challenge title, assessment link, time limit, access window, and company name, and an optional send-email action in the Invites tab. Personalized invite creation still returns the manual fallback link, sends through the existing Brevo provider when requested, and records `not_sent`, `sent`, or `failed` delivery state on the session.
 
 ### FEAT-P1-003: Add candidate lifecycle controls
 

@@ -92,8 +92,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     ].some((key) =>
       hasOwn(body, key)
     );
+    const hasInviteTemplateSettings = ['invite_email_subject', 'invite_email_body'].some((key) =>
+      hasOwn(body, key)
+    );
 
-    if (!hasStarterFiles && !hasAccessSettings && !hasChallengeSettings) {
+    if (!hasStarterFiles && !hasAccessSettings && !hasChallengeSettings && !hasInviteTemplateSettings) {
       return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
     }
 
@@ -132,6 +135,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     let focusAreas = challenge.focus_areas;
     let context = challenge.context;
     let cohortLabel = challenge.cohort_label;
+    let inviteEmailSubject: string | null = challenge.invite_email_subject ?? null;
+    let inviteEmailBody: string | null = challenge.invite_email_body ?? null;
 
     if (hasAccessSettings) {
       if (hasOwn(body, 'is_active')) {
@@ -225,6 +230,22 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       if (hasOwn(body, 'cohort_label')) cohortLabel = normalizeOptionalString(body.cohort_label);
     }
 
+    if (hasInviteTemplateSettings) {
+      if (hasOwn(body, 'invite_email_subject')) {
+        inviteEmailSubject = normalizeOptionalString(body.invite_email_subject);
+        if (inviteEmailSubject && inviteEmailSubject.length > 160) {
+          return NextResponse.json({ error: 'Invite email subject must be 160 characters or fewer.' }, { status: 400 });
+        }
+      }
+
+      if (hasOwn(body, 'invite_email_body')) {
+        inviteEmailBody = normalizeOptionalString(body.invite_email_body);
+        if (inviteEmailBody && inviteEmailBody.length > 5000) {
+          return NextResponse.json({ error: 'Invite email body must be 5000 characters or fewer.' }, { status: 400 });
+        }
+      }
+    }
+
     const preservedStarterFiles = typeof challenge.starter_files === 'string'
       ? challenge.starter_files
       : challenge.starter_files
@@ -247,6 +268,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         focus_areas = ${focusAreas},
         context = ${context},
         cohort_label = ${cohortLabel},
+        invite_email_subject = ${inviteEmailSubject},
+        invite_email_body = ${inviteEmailBody},
         starter_files = ${nextStarterFiles},
         sessions_limit = ${sessionsLimit},
         starts_at = ${startsAt},

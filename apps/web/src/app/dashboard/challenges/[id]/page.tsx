@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, MailX, Power, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
+import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
+import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
@@ -126,6 +127,16 @@ export default function ChallengeDetailPage() {
   const [inviteForm, setInviteForm] = useState({ name: '', email: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
+  const [inviteLinkEmail, setInviteLinkEmail] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSendEmail, setInviteSendEmail] = useState(false);
+  const [inviteEmailStatus, setInviteEmailStatus] = useState<'not_sent' | 'sent' | 'failed' | ''>('');
+  const [inviteEmailError, setInviteEmailError] = useState('');
+  const [inviteEmailSubject, setInviteEmailSubject] = useState(DEFAULT_INVITE_EMAIL_SUBJECT);
+  const [inviteEmailBody, setInviteEmailBody] = useState(DEFAULT_INVITE_EMAIL_BODY);
+  const [inviteTemplateSaving, setInviteTemplateSaving] = useState(false);
+  const [inviteTemplateSaved, setInviteTemplateSaved] = useState(false);
+  const [inviteTemplateError, setInviteTemplateError] = useState('');
   const [analysisStartingIds, setAnalysisStartingIds] = useState<Set<string>>(new Set());
   const [copiedShareable, setCopiedShareable] = useState(false);
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
@@ -189,6 +200,8 @@ export default function ChallengeDetailPage() {
         setStarterFiles(files);
         setSavedStarterFiles(files);
         setSettingsForm(challengeToSettingsForm(data));
+        setInviteEmailSubject(data.invite_email_subject || DEFAULT_INVITE_EMAIL_SUBJECT);
+        setInviteEmailBody(data.invite_email_body || DEFAULT_INVITE_EMAIL_BODY);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -292,6 +305,18 @@ export default function ChallengeDetailPage() {
     analyzing: 'Analyzing',
     analyzed: 'Analyzed',
     'analysis failed': 'Analysis failed',
+  };
+
+  const inviteEmailStatusColors: Record<string, string> = {
+    sent: 'bg-primary/10 text-primary',
+    failed: 'bg-red-500/10 text-red-300',
+    not_sent: 'bg-neutral-800 text-neutral-400',
+  };
+
+  const inviteEmailStatusLabels: Record<string, string> = {
+    sent: 'Sent',
+    failed: 'Failed',
+    not_sent: 'Not sent',
   };
 
   function getAnalysisAlertLabel(session: Session) {
@@ -522,11 +547,46 @@ export default function ChallengeDetailPage() {
     }
   }
 
+  async function handleSaveInviteTemplate() {
+    setInviteTemplateSaving(true);
+    setInviteTemplateSaved(false);
+    setInviteTemplateError('');
+
+    try {
+      const res = await fetch(`/api/challenges/${challengeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invite_email_subject: inviteEmailSubject,
+          invite_email_body: inviteEmailBody,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to save invite email template');
+      }
+
+      setChallenge((current) => current ? { ...current, ...data } : current);
+      setInviteEmailSubject(data.invite_email_subject || DEFAULT_INVITE_EMAIL_SUBJECT);
+      setInviteEmailBody(data.invite_email_body || DEFAULT_INVITE_EMAIL_BODY);
+      setInviteTemplateSaved(true);
+      setTimeout(() => setInviteTemplateSaved(false), 2500);
+    } catch (err) {
+      setInviteTemplateError(err instanceof Error ? err.message : 'Failed to save invite email template');
+    } finally {
+      setInviteTemplateSaving(false);
+    }
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!canGenerateInvite) return;
 
     setInviteLoading(true);
+    setInviteError('');
+    setInviteEmailStatus('');
+    setInviteEmailError('');
 
     try {
       const res = await fetch(`/api/challenges/${challengeId}/invite`, {
@@ -535,24 +595,40 @@ export default function ChallengeDetailPage() {
         body: JSON.stringify({
           candidate_name: inviteForm.name,
           candidate_email: inviteForm.email,
+          send_email: inviteSendEmail,
+          email_subject: inviteEmailSubject,
+          email_body: inviteEmailBody,
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (res.ok) {
         setInviteLink(`${window.location.origin}${data.invite_url}`);
+        setInviteLinkEmail(inviteForm.email.trim().toLowerCase());
         setCopiedInviteLink(false);
+        setInviteEmailStatus(data.email_status ?? (inviteSendEmail ? 'failed' : 'not_sent'));
+        setInviteEmailError(data.email_error ?? '');
         const normalizedEmail = inviteForm.email.trim().toLowerCase();
         setAllowedEmails((current) => current.includes(normalizedEmail) ? current : [...current, normalizedEmail]);
         setInviteForm({ name: '', email: '' });
         setChallenge(await fetchChallengeDetail());
         await refreshSubscription();
+      } else {
+        throw new Error(data?.error || 'Failed to generate invite');
       }
     } catch (err) {
-      console.error(err);
+      setInviteError(err instanceof Error ? err.message : 'Failed to generate invite');
     } finally {
       setInviteLoading(false);
     }
+  }
+
+  function clearInviteResult() {
+    setInviteLink('');
+    setInviteLinkEmail('');
+    setCopiedInviteLink(false);
+    setInviteEmailStatus('');
+    setInviteEmailError('');
   }
 
   async function handleArchiveChallenge(close = false) {
@@ -1048,90 +1124,210 @@ export default function ChallengeDetailPage() {
 
       {activeTab === 'invites' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-white/5 bg-surface">
-            <div className="border-b border-white/5 px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${canGenerateInvite ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
-                  }`}>
-                  {canGenerateInvite ? (
-                    <MailPlus className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <MailX className="h-4 w-4" aria-hidden="true" />
-                  )}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-white/5 bg-surface">
+              <div className="border-b border-white/5 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${canGenerateInvite ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
+                    }`}>
+                    {canGenerateInvite ? (
+                      <MailPlus className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <MailX className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      {inviteDisabledReason ?? 'Create a session link and optionally email it'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleInvite} className="space-y-4 p-5">
+                <div>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Name</label>
+                  <input
+                    type="text"
+                    value={inviteForm.name}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+                    disabled={!canGenerateInvite || inviteLoading}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    required
+                  />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
-                  <p className="mt-0.5 text-xs text-neutral-500">
-                    {inviteDisabledReason ?? 'Creates a candidate session link'}
-                  </p>
+                  <label className="mb-1.5 block text-xs text-neutral-500">Email</label>
+                  <input
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                    disabled={!canGenerateInvite || inviteLoading}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    required
+                  />
                 </div>
-              </div>
+
+                <label className={`flex items-start gap-3 rounded-xl border px-3 py-3 ${inviteSendEmail ? 'border-primary/30 bg-primary/10' : 'border-white/10 bg-black/25'}`}>
+                  <input
+                    type="checkbox"
+                    checked={inviteSendEmail}
+                    onChange={(e) => setInviteSendEmail(e.target.checked)}
+                    disabled={!canGenerateInvite || inviteLoading}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-white">Send email now</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-neutral-500">
+                      Uses the template on this page. The link is still shown for manual fallback.
+                    </span>
+                  </span>
+                </label>
+
+                {inviteError && <p className="text-xs text-red-400">{inviteError}</p>}
+                <button
+                  type="submit"
+                  disabled={inviteLoading || !canGenerateInvite}
+                  className="btn-glow inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {inviteSendEmail ? <Send className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                  {inviteLoading ? 'Generating...' : inviteSendEmail ? 'Generate and Send Email' : 'Generate Invite Link'}
+                </button>
+              </form>
             </div>
 
-            <form onSubmit={handleInvite} className="space-y-4 p-5">
-              <div>
-                <label className="mb-1.5 block text-xs text-neutral-500">Name</label>
-                <input
-                  type="text"
-                  value={inviteForm.name}
-                  onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                  disabled={!canGenerateInvite || inviteLoading}
-                  className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs text-neutral-500">Email</label>
-                <input
-                  type="email"
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                  disabled={!canGenerateInvite || inviteLoading}
-                  className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={inviteLoading || !canGenerateInvite}
-                className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {inviteLoading ? 'Generating...' : 'Generate Invite Link'}
-              </button>
-            </form>
-          </div>
-
           <div className="rounded-2xl border border-white/5 bg-surface">
-            <div className="border-b border-white/5 px-5 py-4">
-              <p className="text-sm font-semibold text-white">Candidate Link</p>
-              <p className="mt-0.5 text-xs text-neutral-500">Generated invite links appear here for copying.</p>
+            <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Candidate Link</p>
+                <p className="mt-0.5 text-xs text-neutral-500">Generated invite links appear here for copying.</p>
+              </div>
+              {inviteLink && (
+                <button
+                  type="button"
+                  onClick={clearInviteResult}
+                  className="inline-flex w-fit items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-neutral-400 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Clear
+                </button>
+              )}
             </div>
             <div className="p-5">
               {inviteLink ? (
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    type="text"
-                    value={inviteLink}
-                    readOnly
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-xs font-mono text-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(inviteLink);
-                      setCopiedInviteLink(true);
-                      setTimeout(() => setCopiedInviteLink(false), 2000);
-                    }}
-                    className="rounded-xl bg-white/5 px-4 py-3 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
-                  >
-                    {copiedInviteLink ? 'Copied' : 'Copy'}
-                  </button>
+                <div className="space-y-3">
+                  {inviteLinkEmail && (
+                    <div className="rounded-xl border border-white/5 bg-black/25 px-3 py-2">
+                      <p className="text-xs text-neutral-500">Generated for</p>
+                      <p className="mt-0.5 break-all text-sm font-medium text-white">{inviteLinkEmail}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        type="text"
+                        value={inviteLink}
+                        readOnly
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-xs font-mono text-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteLink);
+                          setCopiedInviteLink(true);
+                          setTimeout(() => setCopiedInviteLink(false), 2000);
+                        }}
+                        className="rounded-xl bg-white/5 px-4 py-3 text-xs font-semibold text-neutral-300 transition-colors hover:bg-white/10"
+                      >
+                        {copiedInviteLink ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    {inviteEmailStatus === 'sent' && (
+                      <p className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                        <MailCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                        Email sent
+                      </p>
+                    )}
+                    {inviteEmailStatus === 'failed' && (
+                      <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-300">
+                        {inviteEmailError || 'Email could not be sent. The invite link is ready to copy.'}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-white/5 bg-black/25 px-4 py-6 text-center text-sm text-neutral-600">
+                    Generate a personalized invite to create a candidate-specific session link.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-surface">
+            <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Email Template</p>
+                <p className="mt-0.5 text-xs text-neutral-500">Saved as this challenge&apos;s default invite message.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {inviteTemplateSaved && <span className="text-xs text-primary">Saved</span>}
+                {inviteTemplateError && <span className="max-w-72 text-xs text-red-400">{inviteTemplateError}</span>}
+                <button
+                  type="button"
+                  onClick={handleSaveInviteTemplate}
+                  disabled={inviteTemplateSaving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+                >
+                  <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                  {inviteTemplateSaving ? 'Saving...' : 'Save Template'}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-5 p-5">
+              <div>
+                <label className="mb-1.5 block text-xs text-neutral-500">Subject</label>
+                <input
+                  type="text"
+                  value={inviteEmailSubject}
+                  onChange={(e) => {
+                    setInviteEmailSubject(e.target.value);
+                    setInviteTemplateSaved(false);
+                  }}
+                  maxLength={160}
+                  className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-neutral-500">Message Body</label>
+                <textarea
+                  value={inviteEmailBody}
+                  onChange={(e) => {
+                    setInviteEmailBody(e.target.value);
+                    setInviteTemplateSaved(false);
+                  }}
+                  rows={13}
+                  maxLength={5000}
+                  className="w-full resize-y rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm leading-6 text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-neutral-500">Merge Fields</p>
+                <div className="flex flex-wrap gap-2">
+                  {INVITE_EMAIL_MERGE_FIELDS.map((field) => (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => {
+                        setInviteEmailBody((body) => `${body}${body.endsWith('\n') || body.length === 0 ? '' : '\n'}${field}`);
+                        setInviteTemplateSaved(false);
+                      }}
+                      className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-mono text-neutral-400 transition-colors hover:border-primary/30 hover:text-primary"
+                    >
+                      {field}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <p className="rounded-xl border border-white/5 bg-black/25 px-4 py-6 text-center text-sm text-neutral-600">
-                  Generate a personalized invite to create a candidate-specific session link.
-                </p>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -1402,7 +1598,7 @@ export default function ChallengeDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-230 border-collapse text-sm">
+              <table className="w-full min-w-250 border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
@@ -1411,6 +1607,7 @@ export default function ChallengeDetailPage() {
                     <th className="px-5 py-3 font-medium">Status</th>
                     <th className="px-5 py-3 font-medium">Decision</th>
                     <th className="px-5 py-3 font-medium">Session Link</th>
+                    <th className="px-5 py-3 font-medium">Invite Email</th>
                     <th className="px-5 py-3 text-right font-medium">Action</th>
                   </tr>
                 </thead>
@@ -1452,6 +1649,13 @@ export default function ChallengeDetailPage() {
                             <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                             {copiedSessionId === session.id ? 'Copied' : 'Copy'}
                           </button>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${inviteEmailStatusColors[session.invite_email_status || 'not_sent']}`}
+                          >
+                            {inviteEmailStatusLabels[session.invite_email_status || 'not_sent']}
+                          </span>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex justify-end">

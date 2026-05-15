@@ -22,6 +22,8 @@ export async function getChallengeById(id: string): Promise<Challenge | undefine
       focus_areas,
       context,
       cohort_label,
+      invite_email_subject,
+      invite_email_body,
       archived_at,
       created_at
     FROM challenges
