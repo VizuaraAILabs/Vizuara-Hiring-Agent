@@ -114,7 +114,7 @@ export default function ApplyPage() {
 
       <main className="relative mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center">
         <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,500px)] lg:items-stretch">
-          <section className="flex min-h-[520px] flex-col justify-between p-7 md:p-10">
+          <section className="flex min-h-130 flex-col justify-between p-7 md:p-10">
             <div>
               <p className="mb-5 text-xs font-semibold uppercase tracking-[0.28em] text-primary">
                 Candidate Assessment

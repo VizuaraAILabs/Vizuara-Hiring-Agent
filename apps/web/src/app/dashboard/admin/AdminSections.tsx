@@ -199,7 +199,7 @@ function BulkEmailModal({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Email subject…"
-                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-[10px] px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors"
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-2.5 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors"
               />
             </div>
             <div>
@@ -209,7 +209,7 @@ function BulkEmailModal({
                 onChange={(e) => setBodyText(e.target.value)}
                 placeholder="Write your message…"
                 rows={7}
-                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-[10px] px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors resize-none"
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-2.5 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors resize-none"
               />
             </div>
             {error && <p className="text-xs text-red-400">{error}</p>}

@@ -17,7 +17,7 @@ export default function Header() {
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5">
-          <FPLLogo size={30} className="translate-y-[2px]" />
+          <FPLLogo size={30} className="translate-y-0.5" />
           <span className="text-lg font-semibold text-white">
             Arc<span className="text-primary">Eval</span>
           </span>

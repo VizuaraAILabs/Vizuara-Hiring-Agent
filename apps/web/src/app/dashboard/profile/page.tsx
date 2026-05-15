@@ -108,7 +108,7 @@ export default function ProfilePage() {
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="Acme Corp"
-            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-[10px] px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
+            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
           />
         </div>
 
@@ -124,7 +124,7 @@ export default function ProfilePage() {
             value={form.contactName}
             onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
             placeholder="Jane Smith"
-            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-[10px] px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
+            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
           />
           <p className="text-xs text-neutral-600">The person managing this account on behalf of the company.</p>
         </div>
@@ -137,7 +137,7 @@ export default function ProfilePage() {
           <select
             value={selectValue}
             onChange={(e) => handleSelectChange(e.target.value)}
-            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-[10px] px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
+            className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
           >
             <option value="">Select a title…</option>
             {PRESET_TITLES.map((t) => (
@@ -152,7 +152,7 @@ export default function ProfilePage() {
               onChange={(e) => setForm((f) => ({ ...f, contactTitle: e.target.value }))}
               placeholder="Enter your title"
               autoFocus
-              className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-[10px] px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
+              className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
             />
           )}
         </div>

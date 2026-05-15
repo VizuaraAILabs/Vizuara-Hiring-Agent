@@ -34,7 +34,7 @@ const levelCopy: Record<IntegrityReviewLevel, { label: string; className: string
 
 const signalToneClass: Record<IntegritySignalTone, string> = {
   positive: 'border-primary/20 bg-primary/5',
-  neutral: 'border-white/8 bg-white/[0.03]',
+  neutral: 'border-white/8 bg-white/3',
   review: 'border-amber-400/20 bg-amber-400/8',
   warning: 'border-red-400/20 bg-red-400/8',
 };

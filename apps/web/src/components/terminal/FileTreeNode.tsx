@@ -230,7 +230,7 @@ function ContextMenu({ x, y, items }: {
 }) {
   return (
     <div
-      className="fixed z-50 bg-surface-light border border-white/10 rounded-lg py-1 shadow-2xl min-w-[140px]"
+      className="fixed z-50 bg-surface-light border border-white/10 rounded-lg py-1 shadow-2xl min-w-35"
       style={{ left: x, top: y }}
       onClick={(e) => e.stopPropagation()}
     >

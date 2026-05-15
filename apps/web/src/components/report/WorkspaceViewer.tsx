@@ -217,7 +217,7 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
           onClick={handleDownloadZip}
           className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
             files.length === 0 || zipDownloading
-              ? 'cursor-not-allowed border-white/5 bg-white/[0.02] text-neutral-700'
+              ? 'cursor-not-allowed border-white/5 bg-white/2 text-neutral-700'
               : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'
           }`}
           disabled={files.length === 0 || zipDownloading}

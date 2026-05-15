@@ -140,7 +140,7 @@ export default function TranscriptViewer({
   if (!narrative) {
     return (
       <div className="bg-surface border border-white/5 rounded-2xl p-12 flex flex-col items-center gap-4 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-primary">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/3 text-primary">
           <FileText size={20} />
         </div>
         <div>

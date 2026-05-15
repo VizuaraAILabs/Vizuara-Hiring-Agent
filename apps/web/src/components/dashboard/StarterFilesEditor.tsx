@@ -815,7 +815,7 @@ export default function StarterFilesEditor({
     );
   }
 
-  const editorHeight = isFull ? 'h-full' : 'h-[400px]';
+  const editorHeight = isFull ? 'h-full' : 'h-100';
   const treeWidth = isFull ? 'w-64' : 'w-52';
 
   return (

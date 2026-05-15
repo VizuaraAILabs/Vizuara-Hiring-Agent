@@ -650,7 +650,7 @@ export default function ChallengeDetailPage() {
 
   return (
     <div>
-      <div className="sticky top-0 z-30 -mx-6 mb-6 border-b border-white/10 bg-[#0a0a0a]/95 px-6 pt-6 backdrop-blur supports-[backdrop-filter]:bg-[#0a0a0a]/85">
+      <div className="sticky top-0 z-30 -mx-6 mb-6 border-b border-white/10 bg-[#0a0a0a]/95 px-6 pt-6 backdrop-blur supports-backdrop-filter:bg-[#0a0a0a]/85">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -763,7 +763,7 @@ export default function ChallengeDetailPage() {
               </button>
             </div>
           </div>
-          <div className="h-[560px] min-h-0 rounded-2xl bg-surface">
+          <div className="h-140 min-h-0 rounded-2xl bg-surface">
             <StarterFilesEditor
               files={starterFiles}
               onChange={setStarterFiles}
@@ -1386,7 +1386,7 @@ export default function ChallengeDetailPage() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-[920px] border-collapse text-sm">
+              <table className="w-full min-w-230 border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
@@ -1405,7 +1405,7 @@ export default function ChallengeDetailPage() {
                     const analysisAlertLabel = getAnalysisAlertLabel(session);
 
                     return (
-                      <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                      <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/3">
                         <td className="px-5 py-4 font-medium text-white">{session.candidate_name}</td>
                         <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
                         <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>

@@ -103,12 +103,12 @@ export default function SessionPage() {
           <div className="p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-600">Ready Check</p>
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="rounded-xl border border-white/8 bg-white/3 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-neutral-600">Time</p>
                 <p className="mt-2 text-2xl font-semibold text-white">{session.time_limit_min}</p>
                 <p className="text-xs text-neutral-500">minutes</p>
               </div>
-              <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="rounded-xl border border-white/8 bg-white/3 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-neutral-600">Status</p>
                 <p className="mt-2 text-2xl font-semibold text-white">Pending</p>
                 <p className="text-xs text-neutral-500">not timed yet</p>

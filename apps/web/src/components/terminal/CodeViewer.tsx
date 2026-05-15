@@ -145,7 +145,7 @@ export default function CodeViewer({
           type="button"
           onClick={handleSave}
           disabled={!canEdit || !isDirty || saving}
-          className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 hover:text-primary-light disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/[0.02] disabled:text-neutral-700"
+          className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 hover:text-primary-light disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/2 disabled:text-neutral-700"
         >
           {saving ? 'Saving...' : isDirty ? 'Save' : 'Saved'}
         </button>
