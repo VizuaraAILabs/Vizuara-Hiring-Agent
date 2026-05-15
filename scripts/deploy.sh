@@ -12,8 +12,8 @@ echo ""
 # Check for .env.production
 if [ ! -f .env.production ]; then
   echo "ERROR: .env.production not found!"
-  echo "Copy .env.production.template and fill in your values:"
-  echo "  cp .env.production.template .env.production"
+  echo "Copy .env.example and fill in your values:"
+  echo "  cp .env.example .env.production"
   exit 1
 fi
 

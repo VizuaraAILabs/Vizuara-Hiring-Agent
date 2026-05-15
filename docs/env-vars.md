@@ -1,13 +1,13 @@
 # Environment Variables
 
-All variables go in `.env.production` at the project root. The deploy script (`scripts/deploy.sh`) sources this file before running.
+All variables go in `.env.production` at the project root. Start from `.env.example`, replace the placeholder values, and keep real secrets out of git. The deploy script (`scripts/deploy.sh`) passes this file to Docker Compose.
 
 ## Infrastructure
 
 | Variable | Value | Notes |
 |---|---|---|
 | `DOMAIN` | `hire.vizuara.ai` | Used by Caddy and for building public URLs |
-| `POSTGRES_PASSWORD` | *(set in environment)* | PostgreSQL password |
+| `DATABASE_URL` | *(set in environment)* | Postgres connection string used by web, terminal, analysis, migrations |
 | `NODE_ENV` | `production` | Set automatically in docker-compose |
 
 ## API Keys
@@ -16,6 +16,8 @@ All variables go in `.env.production` at the project root. The deploy script (`s
 |---|---|---|
 | `GEMINI_API_KEY` | *(set in environment)* | Challenge generation + analysis engine |
 | `ANTHROPIC_API_KEY` | *(set in environment)* | Terminal server AI features |
+| `BREVO_API_KEY` | *(set in environment)* | Invite and trial email delivery |
+| `CRON_SECRET` | *(set in environment)* | Bearer secret for scheduled email endpoints |
 
 ## Firebase (NEW - required)
 
@@ -46,12 +48,33 @@ Required for local email/password login in the web app.
 | `NEXT_PUBLIC_APP_CALLBACK_URL` | `https://hire.vizuara.ai/api/auth/session` | OAuth callback URL after Vizuara login |
 | `COOKIE_DOMAIN` | *(unset)* | Set to `.vizuara.ai` if you need cross-subdomain cookies |
 | `ARCEVAL_ENROLLMENT_ID` | *(empty)* | Vizuara course ID for subscription gating |
+| `ARCEVAL_PAYMENT_URL` | *(empty)* | Optional payment URL used by subscription checks |
+
+## Analysis Engine
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ANALYSIS_MAX_CONCURRENT` | `2` | Number of background analysis workers |
+| `ANALYSIS_QUEUE_POLL_SECONDS` | `2` | Poll interval when no analysis job is available |
+| `ANALYSIS_JOB_LEASE_SECONDS` | `300` | Durable queue lease/heartbeat window |
+| `GEMINI_REQUEST_TIMEOUT_MS` | `60000` | Hard timeout for each Gemini HTTP request |
+| `ANALYSIS_SESSION_TIMEOUT_SECONDS` | `240` | Total deadline for full two-pass analysis |
+| `ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS` | `75` | Deadline for dimension enrichment |
+| `ANALYSIS_NARRATIVE_TIMEOUT_SECONDS` | `105` | Deadline for transcript narrative generation |
+
+## Terminal/Sandbox
+
+| Variable | Default | Notes |
+|---|---|---|
+| `NEXT_APP_URL` | `http://web:3000` in Docker | Internal URL the terminal service uses to call web APIs |
+| `SANDBOX_MAX_CONCURRENT` | `5` | Maximum live sandbox containers |
+| `SANDBOX_IDLE_TTL_MS` | `900000` in Docker | Idle sandbox cleanup threshold |
+| `SANDBOX_QUEUE_TIMEOUT_MS` | `60000` | How long a session can wait for sandbox capacity |
 
 ## Derived (set automatically in docker-compose)
 
 These are constructed from the variables above in `docker-compose.yml` and do not need to be set manually:
 
-- `DATABASE_URL` - built from `POSTGRES_PASSWORD`
 - `NEXT_PUBLIC_TERMINAL_WS_URL` - built from `DOMAIN`
 - `NEXT_PUBLIC_TERMINAL_HTTP_URL` - built from `DOMAIN`
 - `ANALYSIS_ENGINE_URL` - hardcoded to `http://analysis:8000`

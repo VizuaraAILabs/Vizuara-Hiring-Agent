@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import socket
 
 from google import genai
 from google.genai import types
@@ -12,6 +14,61 @@ from ..prompts.dimension_rubrics import DIMENSION_RUBRICS
 from ..prompts.system_prompt import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
+
+
+class AnalysisTimeoutError(TimeoutError):
+    """Raised when analysis work exceeds a configured Gemini deadline."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        phase: str | None = None,
+        timeout_ms: int | None = None,
+        model: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.phase = phase
+        self.timeout_ms = timeout_ms
+        self.model = model
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return max(minimum, int(raw_value))
+    except ValueError:
+        logger.warning("Invalid %s=%r; defaulting to %d", name, raw_value, default)
+        return default
+
+
+def is_timeout_exception(exc: BaseException) -> bool:
+    """Return true for stdlib, asyncio, and HTTP-client timeout exceptions."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(
+            current,
+            (AnalysisTimeoutError, TimeoutError, asyncio.TimeoutError, socket.timeout),
+        ):
+            return True
+
+        class_name = current.__class__.__name__.lower()
+        module_name = current.__class__.__module__.lower()
+        if "timeout" in class_name and (
+            module_name.startswith("httpx")
+            or module_name.startswith("httpcore")
+            or module_name.startswith("aiohttp")
+            or module_name.startswith("google")
+        ):
+            return True
+
+        current = current.__cause__ or current.__context__
+
+    return False
 
 # ---------------------------------------------------------------------------
 # Pass 1 schema: extract factual observations from the transcript
@@ -212,6 +269,11 @@ class ClaudeAnalyzer:
 
     def __init__(self) -> None:
         self.api_keys = self._load_api_keys()
+        self.request_timeout_ms = _env_int(
+            "GEMINI_REQUEST_TIMEOUT_MS",
+            default=60_000,
+            minimum=1_000,
+        )
         if not self.api_keys:
             raise ValueError(
                 "GEMINI_API_KEY environment variable is not set. "
@@ -224,14 +286,24 @@ class ClaudeAnalyzer:
         google_api_key = os.environ.pop("GOOGLE_API_KEY", None)
         gemini_api_key = os.environ.pop("GEMINI_API_KEY", None)
         try:
-            self.clients = [genai.Client(api_key=api_key) for api_key in self.api_keys]
+            self.clients = [
+                genai.Client(
+                    api_key=api_key,
+                    http_options=types.HttpOptions(timeout=self.request_timeout_ms),
+                )
+                for api_key in self.api_keys
+            ]
         finally:
             if google_api_key is not None:
                 os.environ["GOOGLE_API_KEY"] = google_api_key
             if gemini_api_key is not None:
                 os.environ["GEMINI_API_KEY"] = gemini_api_key
         self.active_client_index = 0
-        logger.info("ClaudeAnalyzer initialized with %d Gemini API key(s)", len(self.api_keys))
+        logger.info(
+            "ClaudeAnalyzer initialized with %d Gemini API key(s), request_timeout_ms=%d",
+            len(self.api_keys),
+            self.request_timeout_ms,
+        )
 
     @staticmethod
     def _load_api_keys() -> list[str]:
@@ -323,6 +395,7 @@ Rules:
 
     def _generate_content_with_key_fallback(self, **kwargs) -> types.GenerateContentResponse:
         last_error: Exception | None = None
+        model = kwargs.get("model")
 
         for offset in range(len(self.clients)):
             client_index = (self.active_client_index + offset) % len(self.clients)
@@ -332,13 +405,21 @@ Rules:
                 self.active_client_index = client_index
                 return response
             except Exception as exc:
-                last_error = exc
+                if is_timeout_exception(exc):
+                    last_error = AnalysisTimeoutError(
+                        f"Gemini request timed out after {self.request_timeout_ms} ms",
+                        phase="gemini_generate_content",
+                        timeout_ms=self.request_timeout_ms,
+                        model=str(model) if model else None,
+                    )
+                else:
+                    last_error = exc
                 logger.warning(
                     "Gemini request failed with API key %s (%d/%d): %s",
                     self._redact_key(api_key),
                     offset + 1,
                     len(self.clients),
-                    exc,
+                    last_error,
                 )
 
         raise last_error or RuntimeError("Gemini request failed for all configured API keys")

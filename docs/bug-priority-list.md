@@ -13,11 +13,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P0-001: Gemini calls have no hard timeout or cancellation boundary
 
-- Status: Open
+- Status: Fixed
 - Area: Analysis engine / timeout handling
-- Evidence: `ClaudeAnalyzer._generate_content_with_key_fallback()` calls `models.generate_content()` directly with no deadline (`services/analysis-engine/src/services/claude_analyzer.py:324`, `services/analysis-engine/src/services/claude_analyzer.py:331`). The async router wraps analysis calls in `asyncio.to_thread()` without `asyncio.wait_for()` (`services/analysis-engine/src/routers/analysis.py:130`, `services/analysis-engine/src/routers/analysis.py:455`).
-- Impact: A slow or stuck Gemini request can occupy an analysis worker forever. Because the queue is bounded only by worker count, enough stuck calls can halt all future analysis jobs.
-- Suggested fix: Add explicit per-call and per-session deadlines, propagate timeout errors into a failed analysis state, and make stuck background work observable.
+- Original evidence: `ClaudeAnalyzer._generate_content_with_key_fallback()` called `models.generate_content()` directly with no deadline. The async router wrapped analysis calls in `asyncio.to_thread()` without `asyncio.wait_for()`.
+- Original impact: A slow or stuck Gemini request could occupy an analysis worker forever. Because the queue is bounded only by worker count, enough stuck calls could halt all future analysis jobs.
+- Resolution: Added a configurable Gemini SDK request timeout (`GEMINI_REQUEST_TIMEOUT_MS`, default 60s) through `types.HttpOptions`, plus operation-level deadlines for full analysis, dimension enrichment, and transcript narrative generation. Timeout failures now raise `AnalysisTimeoutError`, direct routes return `504`, and background jobs persist `analysis_timeout` diagnostics in `analysis_failures` before moving sessions to `analysis failed`.
 
 ### AE-P0-002: Web routes calling the analysis engine have no request timeout
 

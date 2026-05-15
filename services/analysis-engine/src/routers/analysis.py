@@ -11,7 +11,11 @@ import asyncpg
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import AnalyzeRequest
-from ..services.claude_analyzer import ClaudeAnalyzer
+from ..services.claude_analyzer import (
+    AnalysisTimeoutError,
+    ClaudeAnalyzer,
+    is_timeout_exception,
+)
 from ..services.evidence_verifier import EvidenceVerifier
 from ..services.report_generator import ReportGenerator
 from ..services.score_calculator import ScoreCalculator
@@ -67,6 +71,63 @@ def _analysis_lease_seconds() -> int:
             raw_value,
         )
         return 300
+
+
+def _env_timeout_seconds(name: str, default: float, minimum: float) -> float:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return max(minimum, float(raw_value))
+    except ValueError:
+        logger.warning("Invalid %s=%r; defaulting to %.1f", name, raw_value, default)
+        return default
+
+
+def _analysis_session_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_SESSION_TIMEOUT_SECONDS",
+        default=240.0,
+        minimum=10.0,
+    )
+
+
+def _analysis_enrichment_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS",
+        default=75.0,
+        minimum=10.0,
+    )
+
+
+def _analysis_narrative_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_NARRATIVE_TIMEOUT_SECONDS",
+        default=105.0,
+        minimum=10.0,
+    )
+
+
+async def _run_blocking_with_timeout(
+    func,
+    *,
+    timeout_seconds: float,
+    phase: str,
+    **kwargs,
+):
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, **kwargs),
+            timeout=timeout_seconds,
+        )
+    except AnalysisTimeoutError:
+        raise
+    except asyncio.TimeoutError as exc:
+        raise AnalysisTimeoutError(
+            f"{phase} timed out after {timeout_seconds:.1f} seconds",
+            phase=phase,
+            timeout_ms=int(timeout_seconds * 1000),
+        ) from exc
 
 
 async def _get_pool() -> asyncpg.Pool:
@@ -480,8 +541,10 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
         logger.info("Parsed transcript for enrichment: %d characters", len(transcript))
 
         analyzer = ClaudeAnalyzer()
-        enrichment = await asyncio.to_thread(
+        enrichment = await _run_blocking_with_timeout(
             analyzer.enrich_dimension_evidence,
+            timeout_seconds=_analysis_enrichment_timeout_seconds(),
+            phase="dimension_enrichment",
             transcript=transcript,
             challenge_description=challenge.get("description", ""),
             existing_dimension_details=dimension_details,
@@ -507,6 +570,14 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
 
         return {"dimension_details": dimension_details}
 
+    except AnalysisTimeoutError as exc:
+        logger.error(
+            "Dimension enrichment timed out for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=504, detail=str(exc))
     except Exception as exc:
         logger.error(
             "Failed to enrich dimensions for session %s: %s",
@@ -577,8 +648,10 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         }
 
         analyzer = ClaudeAnalyzer()
-        narrative = await asyncio.to_thread(
+        narrative = await _run_blocking_with_timeout(
             analyzer.generate_transcript_narrative,
+            timeout_seconds=_analysis_narrative_timeout_seconds(),
+            phase="transcript_narrative",
             cleaned_transcript=transcript,
             session_metadata=session_metadata,
         )
@@ -593,6 +666,14 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
 
         return {"transcript_narrative": narrative}
 
+    except AnalysisTimeoutError as exc:
+        logger.error(
+            "Transcript narrative timed out for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=504, detail=str(exc))
     except Exception as exc:
         logger.error(
             "Failed to generate transcript narrative for session %s: %s",
@@ -701,7 +782,7 @@ async def _mark_analysis_failed(
 ) -> None:
     error_code = "analysis_error"
     status_code = getattr(exc, "status_code", None)
-    if isinstance(exc, TimeoutError) or isinstance(exc, asyncio.TimeoutError):
+    if is_timeout_exception(exc):
         error_code = "analysis_timeout"
     elif status_code is not None:
         error_code = f"http_{status_code}"
@@ -721,13 +802,15 @@ async def _mark_analysis_failed(
         json.dumps({
             "exception_type": exc.__class__.__name__,
             "status_code": status_code,
+            "phase": getattr(exc, "phase", None),
+            "timeout_ms": getattr(exc, "timeout_ms", None),
         }),
     )
     await pool.execute(
         """
         UPDATE sessions
         SET status = 'analysis failed'
-        WHERE id = $1 AND status IN ('queued', 'analyzing')
+        WHERE id = $1 AND status IN ('completed', 'queued', 'analyzing', 'analysis failed')
         """,
         session_id,
     )
@@ -735,10 +818,22 @@ async def _mark_analysis_failed(
 
 @router.post("")
 async def analyze_session(request: AnalyzeRequest) -> dict:
-    return await _analyze_session_impl(
-        request.session_id,
-        allowed_statuses=("completed", "analysis failed"),
-    )
+    try:
+        return await _analyze_session_impl(
+            request.session_id,
+            allowed_statuses=("completed", "analysis failed"),
+        )
+    except AnalysisTimeoutError as exc:
+        try:
+            pool = await _get_pool()
+            if not await _analysis_result_exists(pool, request.session_id):
+                await _mark_analysis_failed(pool, request.session_id, exc)
+        except Exception:
+            logger.exception(
+                "Failed to record direct analysis timeout for session %s",
+                request.session_id,
+            )
+        raise HTTPException(status_code=504, detail=str(exc))
 
 
 async def _analyze_session_impl(
@@ -840,8 +935,10 @@ async def _analyze_session_impl(
             }
 
             analyzer = ClaudeAnalyzer()
-            raw_analysis = await asyncio.to_thread(
+            raw_analysis = await _run_blocking_with_timeout(
                 analyzer.analyze,
+                timeout_seconds=_analysis_session_timeout_seconds(),
+                phase="session_analysis",
                 challenge_description=challenge.get("description", ""),
                 session_metadata=session_metadata,
                 transcript=transcript,
@@ -918,6 +1015,9 @@ async def _analyze_session_impl(
 
         return response
 
+    except AnalysisTimeoutError as exc:
+        logger.error("Analysis timed out for session %s: %s", session_id, exc)
+        raise
     except ValueError as exc:
         logger.error("Analysis failed for session %s: %s", session_id, exc)
         raise HTTPException(status_code=502, detail=str(exc))
