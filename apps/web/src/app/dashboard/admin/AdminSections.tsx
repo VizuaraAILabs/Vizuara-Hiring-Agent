@@ -31,7 +31,9 @@ interface AdminChallenge {
   title: string;
   description: string;
   time_limit_min: number;
-  is_active: number;
+  is_active: boolean | number;
+  ends_at: string | null;
+  archived_at: string | null;
   created_at: string;
   company_name: string;
   candidate_count: number;
@@ -76,6 +78,19 @@ function fmtTokens(n: number) {
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getChallengeStatus(challenge: Pick<AdminChallenge, 'is_active' | 'ends_at' | 'archived_at'>) {
+  if (challenge.archived_at) {
+    return { label: 'Archived', className: 'bg-neutral-800 text-neutral-400' };
+  }
+  if (challenge.ends_at && new Date(challenge.ends_at).getTime() <= Date.now()) {
+    return { label: 'Expired', className: 'bg-amber-500/10 text-amber-300' };
+  }
+  if (challenge.is_active === true || challenge.is_active === 1) {
+    return { label: 'Open', className: 'bg-primary/10 text-primary' };
+  }
+  return { label: 'Closed', className: 'bg-neutral-800 text-neutral-400' };
 }
 
 const PLAN_COLORS: Record<string, string> = {
@@ -733,6 +748,7 @@ export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string 
             <tr className="border-b border-white/5 text-left">
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Challenge</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Status</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Assessments</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Duration</th>
               <th className="px-5 py-3 text-xs font-medium text-neutral-500">Created</th>
@@ -742,45 +758,53 @@ export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-5 py-6">
+                <td colSpan={7} className="px-5 py-6">
                   <ConcentricArcLoader label="Loading challenges" />
                 </td>
               </tr>
             ) : (
-              challenges.map((ch) => (
-                <tr key={ch.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-white">{ch.title}</p>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {ch.company_id === adminCompanyId ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-primary">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                        Platform
+              challenges.map((ch) => {
+                const status = getChallengeStatus(ch);
+                return (
+                  <tr key={ch.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-white">{ch.title}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {ch.company_id === adminCompanyId ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-primary">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
+                          Platform
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400">{ch.company_name}</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                        {status.label}
                       </span>
-                    ) : (
-                      <span className="text-neutral-400">{ch.company_name}</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <span className="text-neutral-200 font-medium">{ch.candidate_count}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-neutral-500">{ch.time_limit_min} min</td>
-                  <td className="px-5 py-3.5 text-neutral-500">{fmtDate(ch.created_at)}</td>
-                  <td className="px-5 py-3.5">
-                    <Link
-                      href={`/dashboard/admin/challenges/${ch.id}`}
-                      className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
-                    >
-                      Open
-                    </Link>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className="text-neutral-200 font-medium">{ch.candidate_count}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-neutral-500">{ch.time_limit_min} min</td>
+                    <td className="px-5 py-3.5 text-neutral-500">{fmtDate(ch.created_at)}</td>
+                    <td className="px-5 py-3.5">
+                      <Link
+                        href={`/dashboard/admin/challenges/${ch.id}`}
+                        className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })
             )}
             {!loading && challenges.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-neutral-600">
+                <td colSpan={7} className="px-5 py-12 text-center text-neutral-600">
                   No challenges found
                 </td>
               </tr>

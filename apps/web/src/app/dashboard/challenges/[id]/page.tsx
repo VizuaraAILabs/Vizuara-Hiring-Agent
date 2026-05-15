@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, Power, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
+import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, MailX, Power, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -234,6 +234,13 @@ export default function ChallengeDetailPage() {
   );
   const hasStartedSession = challenge?.sessions.some((session) => Boolean(session.started_at)) ?? false;
   const activeSessionCount = challenge?.sessions.filter((session) => session.status === 'active').length ?? 0;
+  const challengeIsOpen = Boolean(challenge?.is_active);
+  const canGenerateInvite = challengeIsOpen && accessIsActive;
+  const inviteDisabledReason = !challengeIsOpen
+    ? 'Invites are disabled while the challenge is closed. Open the challenge and save access settings before generating invites.'
+    : !accessIsActive
+      ? 'Invites are disabled while the challenge is staged to close. Save access settings or reopen it first.'
+      : null;
   const availableAssessmentCount = planStatus?.sessionsLimit === -1
     ? null
     : planStatus
@@ -515,6 +522,8 @@ export default function ChallengeDetailPage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
+    if (!canGenerateInvite) return;
+
     setInviteLoading(true);
 
     try {
@@ -575,11 +584,11 @@ export default function ChallengeDetailPage() {
   function updateSessionStatus(sessionId: string, status: Session['status']) {
     setChallenge((current) => current
       ? {
-          ...current,
-          sessions: current.sessions.map((session) => (
-            session.id === sessionId ? { ...session, status } : session
-          )),
-        }
+        ...current,
+        sessions: current.sessions.map((session) => (
+          session.id === sessionId ? { ...session, status } : session
+        )),
+      }
       : current
     );
   }
@@ -651,9 +660,8 @@ export default function ChallengeDetailPage() {
                   Archived
                 </span>
               )}
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-              }`}>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                }`}>
                 {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
               </span>
               {challenge.cohort_label && (
@@ -701,11 +709,10 @@ export default function ChallengeDetailPage() {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                    isActive
+                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${isActive
                       ? 'border-primary text-white'
                       : 'border-transparent text-neutral-500 hover:text-neutral-300'
-                  }`}
+                    }`}
                 >
                   <Icon className="h-4 w-4" aria-hidden="true" />
                   <span>{tab.label}</span>
@@ -774,9 +781,8 @@ export default function ChallengeDetailPage() {
             <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
               <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${
-                    Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                  }`}>
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                    }`}>
                     <Link2 className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div>
@@ -788,9 +794,8 @@ export default function ChallengeDetailPage() {
                     </p>
                   </div>
                 </div>
-                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
-                  Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                }`}>
+                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                  }`}>
                   {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
                 </span>
               </div>
@@ -823,21 +828,9 @@ export default function ChallengeDetailPage() {
                     <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-white">Entry Rules</p>
-                    <p className="mt-0.5 text-xs text-neutral-500">Shared by invites and the public link</p>
+                    <p className="text-sm font-semibold text-white">Access Rules</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">Applied to personalized invites and the public link</p>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  {accessSaved && <span className="text-xs text-primary">Saved</span>}
-                  {accessError && <span className="max-w-64 text-xs text-red-400">{accessError}</span>}
-                  <button
-                    type="button"
-                    onClick={handleSaveAccessSettings}
-                    disabled={accessSaving}
-                    className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
-                  >
-                    {accessSaving ? 'Saving...' : 'Save Rules'}
-                  </button>
                 </div>
               </div>
 
@@ -845,19 +838,18 @@ export default function ChallengeDetailPage() {
                 <div className="border-b border-white/5 p-5 lg:col-span-2">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
-                      <span className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg ${
-                        accessIsActive ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                      }`}>
+                      <span className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg ${accessIsActive ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                        }`}>
                         <Power className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <div>
                         <label htmlFor="challenge-open-toggle" className="block text-sm font-semibold text-white">
-                          Assessment Access
+                          Challenge Open / Closed
                         </label>
                         <p className="mt-1 text-xs leading-5 text-neutral-500">
                           {accessIsActive
-                            ? 'Candidates can enter when the window, allowlist, and capacity rules allow it.'
-                            : `New candidate registration, invite generation, and pending session starts are blocked. ${activeSessionCount > 0 ? `${activeSessionCount} active session${activeSessionCount !== 1 ? 's' : ''} can continue until submitted or timed out.` : 'Completed reports and existing candidate history stay available.'}`}
+                            ? 'Open. Candidates can enter when the window, allowlist, and capacity rules allow.'
+                            : `Closed. New entries and pending starts are blocked. ${activeSessionCount > 0 ? `${activeSessionCount} active session${activeSessionCount !== 1 ? 's' : ''} can finish.` : 'Completed reports and candidate history stay available.'}`}
                         </p>
                       </div>
                     </div>
@@ -874,18 +866,16 @@ export default function ChallengeDetailPage() {
                         setAccessIsActive(true);
                         setAccessSaved(false);
                       }}
-                      className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${
-                        accessIsActive
+                      className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${accessIsActive
                           ? 'border-primary/40 bg-primary/25'
                           : 'border-white/10 bg-white/5'
-                      }`}
+                        }`}
                     >
                       <span
-                        className={`absolute top-1 h-5 w-5 rounded-full transition-transform ${
-                          accessIsActive
-                            ? 'translate-x-7 bg-primary'
-                            : 'translate-x-1 bg-neutral-500'
-                        }`}
+                        className={`absolute top-1 h-5 w-5 rounded-full transition-[left,background-color] ${accessIsActive
+                            ? 'left-7 bg-primary'
+                            : 'left-1 bg-neutral-500'
+                          }`}
                       />
                       <span className="sr-only">{accessIsActive ? 'Close assessment' : 'Open assessment'}</span>
                     </button>
@@ -960,6 +950,20 @@ export default function ChallengeDetailPage() {
                   </div>
                   <p className="mt-3 text-xs text-neutral-500">The window controls entry. It does not end an already-started assessment.</p>
                 </div>
+              </div>
+              <div className="flex flex-col gap-3 border-t border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  {accessSaved && <span className="text-xs text-primary">Saved</span>}
+                  {accessError && <span className="text-xs text-red-400">{accessError}</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveAccessSettings}
+                  disabled={accessSaving}
+                  className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+                >
+                  {accessSaving ? 'Saving...' : 'Save Access Settings'}
+                </button>
               </div>
             </div>
 
@@ -1043,12 +1047,19 @@ export default function ChallengeDetailPage() {
             <div className="rounded-2xl border border-white/5 bg-surface">
               <div className="border-b border-white/5 px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <MailPlus className="h-4 w-4" aria-hidden="true" />
-                  </span>
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${canGenerateInvite ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-500'
+                    }`}>
+                    {canGenerateInvite ? (
+                      <MailPlus className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <MailX className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </div>
                   <div>
                     <h2 className="text-sm font-semibold text-white">Personalized Invite</h2>
-                    <p className="mt-0.5 text-xs text-neutral-500">Creates a candidate session link</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      {inviteDisabledReason ?? 'Creates a candidate session link'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1060,7 +1071,8 @@ export default function ChallengeDetailPage() {
                     type="text"
                     value={inviteForm.name}
                     onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    disabled={!canGenerateInvite || inviteLoading}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
                     required
                   />
                 </div>
@@ -1070,14 +1082,15 @@ export default function ChallengeDetailPage() {
                     type="email"
                     value={inviteForm.email}
                     onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    disabled={!canGenerateInvite || inviteLoading}
+                    className="w-full rounded-xl border border-white/10 bg-black/45 px-3 py-3 text-sm text-white transition-all focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
                     required
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={inviteLoading}
-                  className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:opacity-50"
+                  disabled={inviteLoading || !canGenerateInvite}
+                  className="btn-glow w-full rounded-xl bg-primary py-3 text-sm font-semibold text-black transition-all hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {inviteLoading ? 'Generating...' : 'Generate Invite Link'}
                 </button>
@@ -1221,11 +1234,10 @@ export default function ChallengeDetailPage() {
                             key={option.id}
                             type="button"
                             onClick={() => setSettingsForm((form) => ({ ...form, role: option.id }))}
-                            className={`rounded-xl border px-3 py-3 text-left transition-all ${
-                              selected
+                            className={`rounded-xl border px-3 py-3 text-left transition-all ${selected
                                 ? 'border-primary/50 bg-primary/10 text-primary'
                                 : 'border-white/10 bg-[#0a0a0a] text-neutral-400 hover:border-white/20 hover:text-white'
-                            }`}
+                              }`}
                           >
                             <span className="block text-sm font-medium">{option.name}</span>
                             <span className="mt-0.5 block text-xs opacity-70">{option.description}</span>
@@ -1337,11 +1349,10 @@ export default function ChallengeDetailPage() {
                             type="button"
                             onClick={() => toggleSettingsFocusArea(option.value)}
                             disabled={disabled}
-                            className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                              selected
+                            className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${selected
                                 ? 'border-primary/50 bg-primary/10 text-primary'
                                 : 'border-white/10 bg-[#0a0a0a] text-neutral-400 hover:border-white/20 hover:text-neutral-300'
-                            } disabled:cursor-not-allowed disabled:opacity-40`}
+                              } disabled:cursor-not-allowed disabled:opacity-40`}
                           >
                             {option.label}
                           </button>
@@ -1522,9 +1533,9 @@ export default function ChallengeDetailPage() {
         secondaryAction={
           !challenge.archived_at && Boolean(challenge.is_active)
             ? {
-                label: 'Close and Archive',
-                onClick: () => handleArchiveChallenge(true),
-              }
+              label: 'Close and Archive',
+              onClick: () => handleArchiveChallenge(true),
+            }
             : undefined
         }
       />

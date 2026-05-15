@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         ? await sql`
           SELECT
             ch.id, ch.company_id, ch.title, ch.description,
-            ch.time_limit_min, ch.is_active, ch.created_at,
+            ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at,
             co.name AS company_name,
             COUNT(s.id)::int AS candidate_count
           FROM challenges ch
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
           LEFT JOIN sessions s ON s.challenge_id = ch.id
           WHERE ch.company_id = ${user.companyId}
           GROUP BY ch.id, ch.company_id, ch.title, ch.description,
-                   ch.time_limit_min, ch.is_active, ch.created_at, co.name
+                   ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at, co.name
           ORDER BY ch.created_at DESC
         `
         : [];
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       challenges = await sql`
         SELECT
           ch.id, ch.company_id, ch.title, ch.description,
-          ch.time_limit_min, ch.is_active, ch.created_at,
+          ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at,
           co.name AS company_name,
           COUNT(s.id)::int AS candidate_count
         FROM challenges ch
@@ -44,21 +44,21 @@ export async function GET(request: Request) {
         LEFT JOIN sessions s ON s.challenge_id = ch.id
         WHERE ch.company_id = ${filterCompany}
         GROUP BY ch.id, ch.company_id, ch.title, ch.description,
-                 ch.time_limit_min, ch.is_active, ch.created_at, co.name
+                 ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at, co.name
         ORDER BY ch.created_at DESC
       `;
     } else {
       challenges = await sql`
         SELECT
           ch.id, ch.company_id, ch.title, ch.description,
-          ch.time_limit_min, ch.is_active, ch.created_at,
+          ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at,
           co.name AS company_name,
           COUNT(s.id)::int AS candidate_count
         FROM challenges ch
         JOIN companies co ON co.id = ch.company_id
         LEFT JOIN sessions s ON s.challenge_id = ch.id
         GROUP BY ch.id, ch.company_id, ch.title, ch.description,
-                 ch.time_limit_min, ch.is_active, ch.created_at, co.name
+                 ch.time_limit_min, ch.is_active, ch.ends_at, ch.archived_at, ch.created_at, co.name
         ORDER BY ch.created_at DESC
       `;
     }
