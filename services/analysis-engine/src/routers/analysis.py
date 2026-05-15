@@ -37,6 +37,42 @@ _analysis_workers: list[asyncio.Task] = []
 _WORKER_INSTANCE_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
 
+def _error_payload(
+    code: str,
+    message: str,
+    *,
+    retryable: bool = False,
+    metadata: dict | None = None,
+) -> dict:
+    payload = {
+        "code": code,
+        "message": message,
+        "retryable": retryable,
+    }
+    if metadata:
+        payload["metadata"] = metadata
+    return {"error": payload}
+
+
+def _raise_analysis_error(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    retryable: bool = False,
+    metadata: dict | None = None,
+) -> None:
+    raise HTTPException(
+        status_code=status_code,
+        detail=_error_payload(
+            code,
+            message,
+            retryable=retryable,
+            metadata=metadata,
+        ),
+    )
+
+
 def _analysis_max_concurrent() -> int:
     raw_value = os.environ.get("ANALYSIS_MAX_CONCURRENT", "2")
     try:
@@ -498,9 +534,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
         session_id,
     )
     if not existing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        _raise_analysis_error(
+            404,
+            "analysis_not_found",
+            "No analysis report exists for this session yet.",
+            retryable=False,
         )
 
     import json as _json
@@ -530,9 +568,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to enrich.",
+            retryable=False,
         )
 
     try:
@@ -577,7 +617,18 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=504, detail=str(exc))
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Detailed evidence generation timed out. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "dimension_enrichment"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Failed to enrich dimensions for session %s: %s",
@@ -585,7 +636,14 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "dimension_enrichment_error",
+                "Detailed evidence generation failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )
 
 
 @router.post("/transcript-narrative")
@@ -606,9 +664,11 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         session_id,
     )
     if not existing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        _raise_analysis_error(
+            404,
+            "analysis_not_found",
+            "No analysis report exists for this session yet.",
+            retryable=False,
         )
     if existing["transcript_narrative"]:
         logger.info("Returning cached transcript narrative for session %s", session_id)
@@ -620,9 +680,11 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to summarize.",
+            retryable=False,
         )
 
     try:
@@ -673,7 +735,18 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=504, detail=str(exc))
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Transcript narrative generation timed out. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "transcript_narrative"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Failed to generate transcript narrative for session %s: %s",
@@ -681,7 +754,14 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "transcript_narrative_error",
+                "Transcript narrative generation failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )
 
 
 @router.post("/start")
@@ -717,12 +797,12 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         }
 
     if session["status"] not in ("completed", "analysis failed"):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Session '{session_id}' has status '{session['status']}'. "
-                "Only 'completed' or 'analysis failed' sessions can be analyzed."
-            ),
+        _raise_analysis_error(
+            400,
+            "invalid_session_status",
+            "This session is not ready for analysis.",
+            retryable=False,
+            metadata={"status": session["status"]},
         )
 
     updated = await pool.fetchrow(
@@ -781,11 +861,23 @@ async def _mark_analysis_failed(
     exc: Exception,
 ) -> None:
     error_code = "analysis_error"
+    error_message = str(exc)
+    extra_metadata: dict = {}
     status_code = getattr(exc, "status_code", None)
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        detail_error = detail.get("error")
+        if isinstance(detail_error, dict):
+            error_code = str(detail_error.get("code") or error_code)
+            error_message = str(detail_error.get("message") or error_message)
+            detail_metadata = detail_error.get("metadata")
+            if isinstance(detail_metadata, dict):
+                extra_metadata.update(detail_metadata)
+
     if is_timeout_exception(exc):
         error_code = "analysis_timeout"
     elif status_code is not None:
-        error_code = f"http_{status_code}"
+        error_code = error_code if error_code != "analysis_error" else f"http_{status_code}"
 
     await pool.execute(
         """
@@ -798,12 +890,13 @@ async def _mark_analysis_failed(
         """,
         session_id,
         error_code,
-        str(exc),
+        error_message,
         json.dumps({
             "exception_type": exc.__class__.__name__,
             "status_code": status_code,
             "phase": getattr(exc, "phase", None),
             "timeout_ms": getattr(exc, "timeout_ms", None),
+            **extra_metadata,
         }),
     )
     await pool.execute(
@@ -833,7 +926,18 @@ async def analyze_session(request: AnalyzeRequest) -> dict:
                 "Failed to record direct analysis timeout for session %s",
                 request.session_id,
             )
-        raise HTTPException(status_code=504, detail=str(exc))
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Analysis timed out while generating the report. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "session_analysis"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
 
 
 async def _analyze_session_impl(
@@ -861,12 +965,15 @@ async def _analyze_session_impl(
 
     # Verify session is in a valid state for analysis
     if session["status"] not in allowed_statuses:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Session '{session_id}' has status '{session['status']}'. "
-                f"Only {', '.join(repr(s) for s in allowed_statuses)} sessions can be analyzed."
-            ),
+        _raise_analysis_error(
+            400,
+            "invalid_session_status",
+            "This session is not ready for analysis.",
+            retryable=False,
+            metadata={
+                "status": session["status"],
+                "allowed_statuses": list(allowed_statuses),
+            },
         )
 
     # Check if already analyzed
@@ -874,21 +981,23 @@ async def _analyze_session_impl(
         "SELECT id FROM analysis_results WHERE session_id = $1", session_id
     )
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Session '{session_id}' has already been analyzed. "
-                f"Analysis ID: {existing['id']}"
-            ),
+        _raise_analysis_error(
+            409,
+            "already_analyzed",
+            "This session has already been analyzed.",
+            retryable=False,
+            metadata={"analysis_id": str(existing["id"])},
         )
 
     challenge = await _fetch_challenge(pool, session["challenge_id"])
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to analyze.",
+            retryable=False,
         )
 
     logger.info(
@@ -1020,7 +1129,14 @@ async def _analyze_session_impl(
         raise
     except ValueError as exc:
         logger.error("Analysis failed for session %s: %s", session_id, exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=_error_payload(
+                "model_response_invalid",
+                "The analysis provider returned an invalid response. Please retry.",
+                retryable=True,
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Unexpected error during analysis of session %s: %s",
@@ -1028,4 +1144,11 @@ async def _analyze_session_impl(
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "analysis_error",
+                "Analysis failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )

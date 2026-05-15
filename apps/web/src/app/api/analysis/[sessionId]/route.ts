@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { recordAnalysisFailure } from '@/lib/analysis-failure-log';
+import {
+  analysisErrorResponse,
+  logAnalysisEngineError,
+  parseAnalysisEngineError,
+} from '@/lib/analysis-engine-errors';
 import { getChallengeById } from '@/lib/challenge-queries';
 import type { AnalysisResult, Session } from '@/types';
 
@@ -96,7 +101,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
           'Analysis engine timed out while starting analysis',
           { timeout_ms: ANALYSIS_START_TIMEOUT_MS },
         );
-        return NextResponse.json({ error: 'Analysis engine timed out while starting analysis' }, { status: 504 });
+        return NextResponse.json(
+          {
+            error: 'Analysis took too long to start. Please retry.',
+            code: 'analysis_start_timeout',
+            retryable: true,
+          },
+          { status: 504 },
+        );
       }
       throw error;
     } finally {
@@ -105,8 +117,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
 
     if (!analysisResponse.ok) {
       const errorBody = await analysisResponse.text();
-      console.error('Analysis engine error:', errorBody);
-      return NextResponse.json({ error: 'Analysis engine failed' }, { status: 502 });
+      const engineError = parseAnalysisEngineError(analysisResponse.status, errorBody);
+      logAnalysisEngineError('Analysis engine start error', engineError, { sessionId });
+      return analysisErrorResponse(engineError);
     }
 
     const analysisData = await analysisResponse.json();

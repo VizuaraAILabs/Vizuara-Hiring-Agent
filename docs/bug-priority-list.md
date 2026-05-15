@@ -129,11 +129,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P2-001: Analysis engine error details are swallowed by web API responses
 
-- Status: Open
+- Status: Fixed
 - Area: Web API / operator UX
-- Evidence: The web route logs the engine body but returns a generic `Analysis engine failed` (`apps/web/src/app/api/analysis/[sessionId]/route.ts:73`, `apps/web/src/app/api/analysis/[sessionId]/route.ts:76`). Enrichment and narrative routes similarly return generic failures (`apps/web/src/app/api/analysis/[sessionId]/enrich-dimensions/route.ts:38`, `apps/web/src/app/api/analysis/[sessionId]/transcript-narrative/route.ts:61`).
-- Impact: The UI cannot distinguish timeout, invalid status, missing analysis, provider failure, or malformed response. Users and support staff lose actionable context.
-- Suggested fix: Return normalized error codes and safe messages from the engine, and map them to user-facing states in the web API.
+- Original evidence: The web route logged the engine body but returned a generic `Analysis engine failed`. Enrichment and narrative routes similarly returned generic failures.
+- Original impact: The UI could not distinguish timeout, invalid status, missing analysis, provider failure, or malformed response. Users and support staff lost actionable context.
+- Resolution: Added normalized analysis-engine error payloads with safe `code`, `message`, and `retryable` fields, plus structured server-side logging and durable `analysis_failures` rows for diagnostics. Web analysis routes now preserve safe error categories for callers while keeping raw engine responses in backend logs/metadata only.
 
 ### AE-P2-002: Cost tracking uses hard-coded Gemini rates instead of configured cost settings
 

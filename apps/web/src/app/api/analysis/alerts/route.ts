@@ -43,6 +43,7 @@ export async function GET() {
       WITH latest_failures AS (
         SELECT DISTINCT ON (session_id)
           session_id,
+          error_code,
           error_message,
           created_at
         FROM analysis_failures
@@ -58,7 +59,25 @@ export async function GET() {
           s.status AS session_status,
           aj.status AS analysis_job_status,
           aj.attempt_count AS analysis_job_attempt_count,
-          COALESCE(aj.last_error, lf.error_message) AS last_error,
+          CASE
+            WHEN lf.error_code IN ('analysis_timeout', 'analysis_start_timeout', 'enrich_dimensions_timeout', 'transcript_narrative_timeout')
+              THEN 'Analysis took too long. Please retry.'
+            WHEN lf.error_code = 'invalid_session_status'
+              THEN 'This session is not ready for analysis.'
+            WHEN lf.error_code = 'analysis_not_found'
+              THEN 'The analysis report could not be found.'
+            WHEN lf.error_code = 'no_interactions'
+              THEN 'No session activity was found to analyze.'
+            WHEN lf.error_code = 'model_response_invalid'
+              THEN 'The analysis provider returned an invalid response. Please retry.'
+            WHEN s.status = 'analysis failed'
+              THEN 'Analysis failed. Please retry or contact support.'
+            WHEN s.status = 'queued'
+              THEN 'Analysis has been queued longer than expected.'
+            WHEN s.status = 'analyzing'
+              THEN 'Analysis has been running longer than expected.'
+            ELSE NULL
+          END AS last_error,
           CASE
             WHEN s.status = 'analysis failed' THEN 'analysis_failed'
             WHEN s.status = 'queued'

@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { recordAnalysisFailure } from '@/lib/analysis-failure-log';
+import {
+  analysisErrorResponse,
+  logAnalysisEngineError,
+  parseAnalysisEngineError,
+} from '@/lib/analysis-engine-errors';
 import { getChallengeById } from '@/lib/challenge-queries';
 import type { Session } from '@/types';
 
@@ -50,7 +55,14 @@ export async function POST(
           'Detailed evidence generation timed out',
           { timeout_ms: ENRICH_DIMENSIONS_TIMEOUT_MS },
         );
-        return NextResponse.json({ error: 'Detailed evidence generation timed out' }, { status: 504 });
+        return NextResponse.json(
+          {
+            error: 'Detailed evidence generation timed out. Please retry.',
+            code: 'enrich_dimensions_timeout',
+            retryable: true,
+          },
+          { status: 504 },
+        );
       }
       throw error;
     } finally {
@@ -59,8 +71,9 @@ export async function POST(
 
     if (!res.ok) {
       const errorBody = await res.text();
-      console.error('Analysis engine error:', errorBody);
-      return NextResponse.json({ error: 'Failed to enrich dimensions' }, { status: 502 });
+      const engineError = parseAnalysisEngineError(res.status, errorBody);
+      logAnalysisEngineError('Analysis engine enrichment error', engineError, { sessionId });
+      return analysisErrorResponse(engineError);
     }
 
     const data = await res.json();
