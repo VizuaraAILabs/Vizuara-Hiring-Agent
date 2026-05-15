@@ -662,9 +662,8 @@ export function CompaniesTab({
 
 export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
   const [challenges, setChallenges] = useState<AdminChallenge[]>([]);
-  const [adminCompanyId, setAdminCompanyId] = useState<string>('');
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
-  const [filterOwner, setFilterOwner] = useState<'all' | 'admin' | string>(
+  const [filterOwner, setFilterOwner] = useState<'all' | string>(
     initialCompanyId ?? 'all'
   );
   const [loading, setLoading] = useState(true);
@@ -684,15 +683,13 @@ export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string 
     });
 
     let url = '/api/admin/challenges';
-    if (filterOwner === 'admin') url += '?owner=admin';
-    else if (filterOwner !== 'all') url += `?company_id=${filterOwner}`;
+    if (filterOwner !== 'all') url += `?company_id=${filterOwner}`;
 
     fetch(url)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
         setChallenges(d.challenges ?? []);
-        setAdminCompanyId(d.adminCompanyId ?? '');
       })
       .catch(console.error)
       .finally(() => {
@@ -709,21 +706,19 @@ export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string 
       <div className="flex items-center justify-between gap-4">
         {/* Filter controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {(['all', 'admin'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilterOwner(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                filterOwner === f
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : 'text-neutral-500 bg-white/5 border border-white/5 hover:text-white'
-              }`}
-            >
-              {f === 'all' ? 'All companies' : 'Platform (Admin)'}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setFilterOwner('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              filterOwner === 'all'
+                ? 'bg-primary/10 text-primary border border-primary/20'
+                : 'text-neutral-500 bg-white/5 border border-white/5 hover:text-white'
+            }`}
+          >
+            All companies
+          </button>
           <Dropdown
-            value={filterOwner !== 'all' && filterOwner !== 'admin' ? filterOwner : ''}
+            value={filterOwner !== 'all' ? filterOwner : ''}
             options={[
               { value: '', label: 'Filter by company...' },
               ...companies.map((company) => ({ value: company.id, label: company.name })),
@@ -771,14 +766,7 @@ export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string 
                       <p className="font-medium text-white">{ch.title}</p>
                     </td>
                     <td className="px-5 py-3.5">
-                      {ch.company_id === adminCompanyId ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-primary">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-                          Platform
-                        </span>
-                      ) : (
-                        <span className="text-neutral-400">{ch.company_name}</span>
-                      )}
+                      <span className="text-neutral-400">{ch.company_name}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
@@ -991,7 +979,7 @@ export function ChallengesAdminPage({ initialCompanyId }: { initialCompanyId?: s
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-serif italic text-white">Challenges</h1>
-        <p className="text-neutral-500 mt-1">Review platform and company assessments</p>
+        <p className="text-neutral-500 mt-1">Review company assessments</p>
       </div>
 
       <ChallengesTab initialCompanyId={initialCompanyId} />
