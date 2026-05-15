@@ -22,11 +22,11 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P0-002: Recruiters should be able to pause or close an assessment link
 
-- Status: Proposed
+- Status: Implemented
 - Area: Assessment access / recruiter control
 - Evidence: Schema includes `challenges.is_active`, but public apply GET/POST does not check it in `apps/web/src/app/api/challenges/[id]/apply/route.ts`, and the dashboard detail page has no active/inactive control.
 - Impact: Recruiters cannot immediately stop future candidate access without changing code/data manually. This is the manual escape hatch needed alongside date-based expiry.
-- Suggested fix: Add an "Open/Closed" control on challenge detail pages, enforce `is_active` in public apply and invite/session-start flows, and display status next to the shareable link.
+- Implementation notes: Added an Open/Closed assessment access control on challenge detail pages with an explicit close-confirmation warning. Closing blocks new candidate registration, recruiter invite generation, and pending session starts through shared `is_active` enforcement, while active sessions can continue and completed reports remain available. The shareable link and challenge header show the current open/closed state.
 
 ### FEAT-P0-003: Direct invite links should follow the same access rules as shareable apply links
 

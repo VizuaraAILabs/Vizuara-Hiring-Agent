@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
+import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailPlus, Power, RotateCcw, Settings as SettingsIcon, ShieldCheck, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -133,6 +133,7 @@ export default function ChallengeDetailPage() {
   const [emailDraft, setEmailDraft] = useState('');
   const [allowedEmailsSaving, setAllowedEmailsSaving] = useState(false);
   const [allowedEmailsSaved, setAllowedEmailsSaved] = useState(false);
+  const [accessIsActive, setAccessIsActive] = useState(true);
   const [accessStartsAt, setAccessStartsAt] = useState('');
   const [accessEndsAt, setAccessEndsAt] = useState('');
   const [accessSessionsLimit, setAccessSessionsLimit] = useState('');
@@ -150,6 +151,7 @@ export default function ChallengeDetailPage() {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [modalMessage, setModalMessage] = useState<{ title: string; description: string } | null>(null);
+  const [closeAccessModalOpen, setCloseAccessModalOpen] = useState(false);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
@@ -179,6 +181,7 @@ export default function ChallengeDetailPage() {
         const files = parseStarterFiles(data.starter_files);
         setChallenge(data);
         setAllowedEmails(data.allowed_emails ?? []);
+        setAccessIsActive(data.is_active === true || data.is_active === 1);
         setAccessStartsAt(toDateTimeLocal(data.starts_at));
         setAccessEndsAt(toDateTimeLocal(data.ends_at));
         setAccessSessionsLimit(data.sessions_limit != null ? String(data.sessions_limit) : '');
@@ -230,6 +233,7 @@ export default function ChallengeDetailPage() {
     [starterFiles, savedStarterFiles]
   );
   const hasStartedSession = challenge?.sessions.some((session) => Boolean(session.started_at)) ?? false;
+  const activeSessionCount = challenge?.sessions.filter((session) => session.status === 'active').length ?? 0;
   const availableAssessmentCount = planStatus?.sessionsLimit === -1
     ? null
     : planStatus
@@ -411,6 +415,7 @@ export default function ChallengeDetailPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          is_active: accessIsActive,
           sessions_limit: accessSessionsLimit ? parseInt(accessSessionsLimit) : null,
           starts_at: accessStartsAt ? new Date(accessStartsAt).toISOString() : null,
           ends_at: accessEndsAt ? new Date(accessEndsAt).toISOString() : null,
@@ -423,6 +428,7 @@ export default function ChallengeDetailPage() {
       }
 
       setChallenge((current) => current ? { ...current, ...data } : current);
+      setAccessIsActive(data.is_active === true || data.is_active === 1);
       setAccessSaved(true);
       setTimeout(() => setAccessSaved(false), 2500);
     } catch (err) {
@@ -645,6 +651,11 @@ export default function ChallengeDetailPage() {
                   Archived
                 </span>
               )}
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+              }`}>
+                {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
+              </span>
               {challenge.cohort_label && (
                 <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-neutral-400">
                   {challenge.cohort_label}
@@ -761,16 +772,27 @@ export default function ChallengeDetailPage() {
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-5">
             <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
-              <div className="border-b border-white/5 px-5 py-4">
+              <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                    Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                  }`}>
                     <Link2 className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-white">Shareable Link</p>
-                    <p className="mt-0.5 text-xs text-neutral-500">Public registration path</p>
+                    <p className="mt-0.5 text-xs text-neutral-500">
+                      {Boolean(challenge.is_active)
+                        ? 'Public registration path'
+                        : 'New candidates cannot enter while this assessment is closed'}
+                    </p>
                   </div>
                 </div>
+                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
+                  Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                }`}>
+                  {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
+                </span>
               </div>
               <div className="flex flex-col gap-3 p-5 lg:flex-row">
                 <input
@@ -820,6 +842,61 @@ export default function ChallengeDetailPage() {
               </div>
 
               <div className="grid gap-0 lg:grid-cols-[minmax(240px,0.9fr)_minmax(0,1.1fr)]">
+                <div className="border-b border-white/5 p-5 lg:col-span-2">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <span className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg ${
+                        accessIsActive ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
+                      }`}>
+                        <Power className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <label htmlFor="challenge-open-toggle" className="block text-sm font-semibold text-white">
+                          Assessment Access
+                        </label>
+                        <p className="mt-1 text-xs leading-5 text-neutral-500">
+                          {accessIsActive
+                            ? 'Candidates can enter when the window, allowlist, and capacity rules allow it.'
+                            : `New candidate registration, invite generation, and pending session starts are blocked. ${activeSessionCount > 0 ? `${activeSessionCount} active session${activeSessionCount !== 1 ? 's' : ''} can continue until submitted or timed out.` : 'Completed reports and existing candidate history stay available.'}`}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      id="challenge-open-toggle"
+                      type="button"
+                      role="switch"
+                      aria-checked={accessIsActive}
+                      onClick={() => {
+                        if (accessIsActive) {
+                          setCloseAccessModalOpen(true);
+                          return;
+                        }
+                        setAccessIsActive(true);
+                        setAccessSaved(false);
+                      }}
+                      className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors ${
+                        accessIsActive
+                          ? 'border-primary/40 bg-primary/25'
+                          : 'border-white/10 bg-white/5'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-1 h-5 w-5 rounded-full transition-transform ${
+                          accessIsActive
+                            ? 'translate-x-7 bg-primary'
+                            : 'translate-x-1 bg-neutral-500'
+                        }`}
+                      />
+                      <span className="sr-only">{accessIsActive ? 'Close assessment' : 'Open assessment'}</span>
+                    </button>
+                  </div>
+                  {!accessIsActive && (
+                    <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-200/90">
+                      This assessment is staged to close. Save Rules to block new entries; candidates already inside an active workspace are not forcibly removed.
+                    </div>
+                  )}
+                </div>
+
                 <div className="border-b border-white/5 p-5 lg:border-b-0 lg:border-r lg:border-white/5">
                   <label className="block text-xs font-medium uppercase tracking-[0.16em] text-primary">Session Limit</label>
                   <div className="mt-3 flex items-end gap-3">
@@ -1411,6 +1488,21 @@ export default function ChallengeDetailPage() {
         cancelLabel="Close"
         onConfirm={() => setModalMessage(null)}
         onClose={() => setModalMessage(null)}
+      />
+
+      <ConfirmationModal
+        open={closeAccessModalOpen}
+        title="Close Assessment?"
+        description="Closing blocks new candidate registration, recruiter invite generation, and pending candidates from starting. Active sessions are not ended automatically, and completed reports remain available."
+        confirmLabel="Stage Close"
+        cancelLabel="Keep Open"
+        variant="danger"
+        onConfirm={() => {
+          setAccessIsActive(false);
+          setAccessSaved(false);
+          setCloseAccessModalOpen(false);
+        }}
+        onClose={() => setCloseAccessModalOpen(false)}
       />
 
       <ConfirmationModal

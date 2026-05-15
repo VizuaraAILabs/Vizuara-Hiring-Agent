@@ -78,7 +78,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const body = await request.json() as Record<string, unknown>;
     const hasStarterFiles = hasOwn(body, 'starter_files');
-    const hasAccessSettings = ['sessions_limit', 'starts_at', 'ends_at'].some((key) =>
+    const hasAccessSettings = ['is_active', 'sessions_limit', 'starts_at', 'ends_at'].some((key) =>
       hasOwn(body, key)
     );
     const hasChallengeSettings = [
@@ -124,6 +124,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     let sessionsLimit = challenge.sessions_limit;
     let startsAt = challenge.starts_at;
     let endsAt = challenge.ends_at;
+    let isActive = challenge.is_active === true || challenge.is_active === 1;
     let title = challenge.title;
     let description = challenge.description;
     let timeLimitMin = challenge.time_limit_min;
@@ -135,35 +136,52 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     let cohortLabel = challenge.cohort_label;
 
     if (hasAccessSettings) {
-      if (body.sessions_limit != null && body.sessions_limit !== '') {
+      if (hasOwn(body, 'is_active')) {
+        if (typeof body.is_active !== 'boolean') {
+          return NextResponse.json({ error: 'is_active must be a boolean' }, { status: 400 });
+        }
+        isActive = body.is_active;
+      }
+
+      if (hasOwn(body, 'sessions_limit') && body.sessions_limit != null && body.sessions_limit !== '') {
         const parsedSessionsLimit = Number(body.sessions_limit);
         if (!Number.isFinite(parsedSessionsLimit) || parsedSessionsLimit < 0) {
           return NextResponse.json({ error: 'Session limit must be zero or greater.' }, { status: 400 });
         }
         sessionsLimit = Math.floor(parsedSessionsLimit);
-      } else {
+      } else if (hasOwn(body, 'sessions_limit')) {
         sessionsLimit = null;
       }
 
-      if (sessionsLimit != null) {
+      if (
+        hasOwn(body, 'sessions_limit') &&
+        sessionsLimit != null &&
+        sessionsLimit !== challenge.sessions_limit
+      ) {
         const limitError = await validateChallengeSessionLimit(user.companyId, sessionsLimit);
         if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
       }
 
-      const parsedStartsAt = body.starts_at ? new Date(String(body.starts_at)) : null;
-      const parsedEndsAt = body.ends_at ? new Date(String(body.ends_at)) : null;
+      const parsedStartsAt = hasOwn(body, 'starts_at') && body.starts_at ? new Date(String(body.starts_at)) : null;
+      const parsedEndsAt = hasOwn(body, 'ends_at') && body.ends_at ? new Date(String(body.ends_at)) : null;
       if (
         (parsedStartsAt && Number.isNaN(parsedStartsAt.getTime())) ||
         (parsedEndsAt && Number.isNaN(parsedEndsAt.getTime()))
       ) {
         return NextResponse.json({ error: 'Invalid assessment window date.' }, { status: 400 });
       }
-      if (parsedStartsAt && parsedEndsAt && parsedStartsAt >= parsedEndsAt) {
-        return NextResponse.json({ error: 'Assessment end time must be after the start time.' }, { status: 400 });
+      if (hasOwn(body, 'starts_at')) {
+        startsAt = parsedStartsAt ? parsedStartsAt.toISOString() : null;
+      }
+      if (hasOwn(body, 'ends_at')) {
+        endsAt = parsedEndsAt ? parsedEndsAt.toISOString() : null;
       }
 
-      startsAt = parsedStartsAt ? parsedStartsAt.toISOString() : null;
-      endsAt = parsedEndsAt ? parsedEndsAt.toISOString() : null;
+      const nextStartsAt = startsAt ? new Date(startsAt) : null;
+      const nextEndsAt = endsAt ? new Date(endsAt) : null;
+      if (nextStartsAt && nextEndsAt && nextStartsAt >= nextEndsAt) {
+        return NextResponse.json({ error: 'Assessment end time must be after the start time.' }, { status: 400 });
+      }
     }
 
     if (hasChallengeSettings) {
@@ -224,6 +242,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         title = ${title},
         description = ${description},
         time_limit_min = ${timeLimitMin},
+        is_active = ${isActive},
         role = ${role},
         tech_stack = ${techStack},
         seniority = ${seniority},
