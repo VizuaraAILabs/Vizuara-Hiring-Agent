@@ -111,11 +111,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-008: Evidence verification ignores `observed_points`
 
-- Status: Open
+- Status: Fixed
 - Area: Evidence verification / dimension details
-- Evidence: `EvidenceVerifier.verify()` only iterates `dim_data["evidence"]` (`services/analysis-engine/src/services/evidence_verifier.py:98`). The richer `observed_points[].transcript_quote` fields are generated and saved but not verified.
-- Impact: The UI may display detailed observed points that contain fabricated or inaccurate transcript quotes, even when the simpler evidence list was checked.
-- Suggested fix: Verify every `observed_points[].transcript_quote` and annotate/drop unverified observed points before saving.
+- Original evidence: `EvidenceVerifier.verify()` only iterated `dim_data["evidence"]`. The richer `observed_points[].transcript_quote` fields were generated and saved but not verified.
+- Original impact: The UI could display detailed observed points that contain fabricated or inaccurate transcript quotes, even when the simpler evidence list was checked.
+- Resolution: `EvidenceVerifier` now checks every `observed_points[].transcript_quote`, annotates each point with `quote_verified` and `quote_similarity`, prefixes unverified quotes with `[UNVERIFIED]`, includes observed-point counts/rates in verification metadata, and runs on both full analysis and post-hoc dimension enrichment before saving.
 
 ### AE-P1-009: Missing DB connection timeout and pool cleanup
 

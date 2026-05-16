@@ -99,6 +99,8 @@ export interface ObservedPoint {
   transcript_quote: string;
   observation: string;
   comparison: string;
+  quote_verified?: boolean;
+  quote_similarity?: number;
 }
 
 export interface DimensionDetail {

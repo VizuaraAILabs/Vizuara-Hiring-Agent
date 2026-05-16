@@ -667,6 +667,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
                 dimension_details[dim]["observed_points"] = enrichment[dim].get("observed_points", [])
                 dimension_details[dim]["expected_standard"] = enrichment[dim].get("expected_standard", "")
 
+        verified_details = EvidenceVerifier(transcript).verify(
+            {"dimensions": dimension_details}
+        )
+        dimension_details = verified_details.get("dimensions", dimension_details)
+
         await pool.execute(
             "UPDATE analysis_results SET dimension_details = $1::jsonb WHERE session_id = $2",
             _json.dumps(dimension_details),
