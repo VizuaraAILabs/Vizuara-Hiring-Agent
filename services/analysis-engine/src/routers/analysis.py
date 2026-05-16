@@ -1185,7 +1185,11 @@ async def _analyze_session_impl(
 
         # -- Step 7: Persist to database --
         report_gen = ReportGenerator(pool)
-        analysis_id = await report_gen.save(session_id=session_id, analysis=analysis)
+        analysis_id = await report_gen.save(
+            session_id=session_id,
+            analysis=analysis,
+            parsed_turns=parsed_transcript.turns,
+        )
         logger.info("Analysis saved with ID: %s", analysis_id)
 
         # -- Step 7b: Record Gemini cost event --

@@ -153,11 +153,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P2-004: Key moment annotation lookup likely confuses model index with interaction sequence number
 
-- Status: Open
+- Status: Fixed
 - Area: Report persistence
-- Evidence: `interaction_index` from model output is used directly as `interactions.sequence_num` (`services/analysis-engine/src/services/report_generator.py:128`, `services/analysis-engine/src/services/report_generator.py:137`). The transcript parser renumbers formatted segments from `1` after collapsing/truncation (`services/analysis-engine/src/services/transcript_parser.py:486`).
-- Impact: Key moment annotations can attach to the wrong raw interaction or fail to attach at all.
-- Suggested fix: Preserve raw interaction IDs or sequence ranges in parsed transcript segments and require the model to cite those stable IDs.
+- Original evidence: `interaction_index` from model output was used directly as `interactions.sequence_num`. The transcript parser renumbers formatted segments from `1` after collapsing/truncation.
+- Original impact: Key moment annotations could attach to the wrong raw interaction or fail to attach at all.
+- Resolution: Parsed transcript turns now carry their model-visible `transcript_index` plus source raw sequence numbers. Report persistence resolves key-moment `interaction_index` through that parsed-turn mapping before looking up the raw interaction row, with fallback behavior for older callers.
 
 ### AE-P2-005: Health check reports only API-key presence, not dependency readiness
 

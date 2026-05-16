@@ -340,11 +340,13 @@ class TranscriptParser:
                 "content": p_text,
                 "timestamp": p_ts,
                 "sequence_num": p_seq,
+                "_source_sequence_nums": [p_seq],
             })
 
             # Find AI response blocks between this prompt and the next
             next_seq = clean_prompts[p_idx + 1][0] if p_idx + 1 < len(clean_prompts) else float("inf")
             parts = []
+            part_seqs = []
 
             while ai_idx < len(ai_blocks):
                 a_seq, a_text, a_ts = ai_blocks[ai_idx]
@@ -354,6 +356,7 @@ class TranscriptParser:
                 if a_seq >= next_seq:
                     break
                 parts.append(a_text)
+                part_seqs.append(a_seq)
                 ai_idx += 1
 
             if parts:
@@ -370,6 +373,7 @@ class TranscriptParser:
                     "content": combined,
                     "timestamp": p_ts,
                     "sequence_num": p_seq + 1,
+                    "_source_sequence_nums": part_seqs,
                 })
 
         return turns
@@ -395,6 +399,8 @@ class TranscriptParser:
         collapsed: list[dict] = []
         current = dict(interactions[0])
         current["content"] = self._clean_text(current.get("content", ""))
+        current["_source_sequence_nums"] = [current.get("sequence_num")]
+        current["_source_interaction_ids"] = [current.get("id")]
 
         for interaction in interactions[1:]:
             cleaned_content = self._clean_text(interaction.get("content", ""))
@@ -404,10 +410,14 @@ class TranscriptParser:
             ):
                 sep = "" if current.get("direction") == "input" else "\n"
                 current["content"] += sep + cleaned_content
+                current["_source_sequence_nums"].append(interaction.get("sequence_num"))
+                current["_source_interaction_ids"].append(interaction.get("id"))
             else:
                 collapsed.append(current)
                 current = dict(interaction)
                 current["content"] = cleaned_content
+                current["_source_sequence_nums"] = [current.get("sequence_num")]
+                current["_source_interaction_ids"] = [current.get("id")]
 
         collapsed.append(current)
 
@@ -555,10 +565,9 @@ class TranscriptParser:
         else:
             segments = self._collapse_consecutive(terminal_interactions)
 
+        indexed_segments: list[dict] = []
         segments = [s for s in segments if s.get("content", "").strip()]
         segments = self._truncate_ai_responses(segments)
-        parsed_turns = [dict(segment) for segment in segments]
-
         parts: list[str] = [
             "=" * 60,
             "CANDIDATE SESSION TRANSCRIPT",
@@ -570,6 +579,9 @@ class TranscriptParser:
             formatted = self._format_segment(segment, i)
             if formatted:
                 parts.append(formatted)
+                parsed_turn = dict(segment)
+                parsed_turn["transcript_index"] = i
+                indexed_segments.append(parsed_turn)
 
         parts.append("=" * 60)
         parts.append("END OF TRANSCRIPT")
@@ -578,13 +590,5 @@ class TranscriptParser:
         # Append interview dialogue section if present
         if interview_interactions:
             parts.append(self._render_interview_section(interview_interactions))
-            parsed_turns.extend(
-                dict(entry)
-                for entry in sorted(
-                    interview_interactions,
-                    key=lambda x: x.get("sequence_num", 0),
-                )
-                if entry.get("content", "").strip()
-            )
 
-        return ParsedTranscript(transcript="\n".join(parts), turns=parsed_turns)
+        return ParsedTranscript(transcript="\n".join(parts), turns=indexed_segments)

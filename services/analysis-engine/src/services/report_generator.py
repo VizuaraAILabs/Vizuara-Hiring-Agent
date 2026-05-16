@@ -22,6 +22,63 @@ _DIMENSION_COLUMNS = [
 ]
 
 
+def _first_int(values: object) -> int | None:
+    if isinstance(values, list):
+        for value in values:
+            try:
+                if value is not None:
+                    return int(value)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _source_for_interaction_index(
+    interaction_index: object,
+    parsed_turns: list[dict] | None,
+) -> tuple[str, int] | None:
+    """Resolve a model transcript segment index to a raw interaction source."""
+    try:
+        index = int(interaction_index)
+    except (TypeError, ValueError):
+        return None
+
+    if parsed_turns is not None:
+        for turn in parsed_turns:
+            if turn.get("transcript_index") != index:
+                continue
+
+            source_id = _first_int(turn.get("_source_interaction_ids"))
+            if source_id is not None:
+                return "id", source_id
+
+            source_sequence = _first_int(turn.get("_source_sequence_nums"))
+            if source_sequence is not None:
+                return "sequence_num", source_sequence
+
+            sequence_num = turn.get("sequence_num")
+            if sequence_num is not None:
+                try:
+                    return "sequence_num", int(sequence_num)
+                except (TypeError, ValueError):
+                    return None
+
+        return None
+
+    return "sequence_num", index
+
+
+def _sequence_num_for_interaction_index(
+    interaction_index: object,
+    parsed_turns: list[dict] | None,
+) -> int | None:
+    """Resolve a model transcript segment index to a raw sequence number."""
+    source = _source_for_interaction_index(interaction_index, parsed_turns)
+    if source is None or source[0] != "sequence_num":
+        return None
+    return source[1]
+
+
 class ReportGenerator:
     """Persists analysis results to the PostgreSQL database."""
 
@@ -29,7 +86,12 @@ class ReportGenerator:
         self.pool = pool
         logger.info("ReportGenerator initialized with asyncpg pool")
 
-    async def save(self, session_id: str, analysis: dict) -> str:
+    async def save(
+        self,
+        session_id: str,
+        analysis: dict,
+        parsed_turns: list[dict] | None = None,
+    ) -> str:
         """Save the analysis results to the database.
 
         Args:
@@ -127,15 +189,37 @@ class ReportGenerator:
                 for moment in key_moments:
                     interaction_index = moment.get("interaction_index")
                     if interaction_index is not None:
-                        # Look up the actual interaction ID by sequence number
-                        row = await conn.fetchrow(
-                            """
-                            SELECT id FROM interactions
-                            WHERE session_id = $1 AND sequence_num = $2
-                            """,
-                            session_id,
+                        source = _source_for_interaction_index(
                             interaction_index,
+                            parsed_turns,
                         )
+                        if source is None:
+                            logger.debug(
+                                "Skipping key moment annotation with invalid "
+                                "interaction_index=%r",
+                                interaction_index,
+                            )
+                            continue
+
+                        source_column, source_value = source
+                        if source_column == "id":
+                            row = await conn.fetchrow(
+                                """
+                                SELECT id FROM interactions
+                                WHERE session_id = $1 AND id = $2
+                                """,
+                                session_id,
+                                source_value,
+                            )
+                        else:
+                            row = await conn.fetchrow(
+                                """
+                                SELECT id FROM interactions
+                                WHERE session_id = $1 AND sequence_num = $2
+                                """,
+                                session_id,
+                                source_value,
+                            )
 
                         if row:
                             annotation_type = moment.get("type", "insight")
