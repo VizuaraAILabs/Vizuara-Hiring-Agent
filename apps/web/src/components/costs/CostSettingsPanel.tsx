@@ -64,7 +64,8 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
               <label className="block text-xs text-neutral-500 mb-1">Anthropic Input ($/M tokens)</label>
               <input
                 type="number"
-                step="0.01"
+                min="0"
+                step="0.0001"
                 value={anthropicIn}
                 onChange={(e) => setAnthropicIn(parseFloat(e.target.value) || 0)}
                 className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
@@ -74,7 +75,8 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
               <label className="block text-xs text-neutral-500 mb-1">Anthropic Output ($/M tokens)</label>
               <input
                 type="number"
-                step="0.01"
+                min="0"
+                step="0.0001"
                 value={anthropicOut}
                 onChange={(e) => setAnthropicOut(parseFloat(e.target.value) || 0)}
                 className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
@@ -87,7 +89,8 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
               <label className="block text-xs text-neutral-500 mb-1">Gemini Input ($/M tokens)</label>
               <input
                 type="number"
-                step="0.01"
+                min="0"
+                step="0.0001"
                 value={geminiIn}
                 onChange={(e) => setGeminiIn(parseFloat(e.target.value) || 0)}
                 className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"
@@ -97,7 +100,8 @@ export default function CostSettingsPanel({ settings, onSave }: CostSettingsPane
               <label className="block text-xs text-neutral-500 mb-1">Gemini Output ($/M tokens)</label>
               <input
                 type="number"
-                step="0.01"
+                min="0"
+                step="0.0001"
                 value={geminiOut}
                 onChange={(e) => setGeminiOut(parseFloat(e.target.value) || 0)}
                 className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary/50 focus:outline-none"

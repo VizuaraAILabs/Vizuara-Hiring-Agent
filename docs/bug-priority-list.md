@@ -137,11 +137,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P2-002: Cost tracking uses hard-coded Gemini rates instead of configured cost settings
 
-- Status: Open
+- Status: Fixed
 - Area: Cost tracking
-- Evidence: `_analyze_session_impl()` computes cost with literal `$0.15` and `$0.60` per million tokens (`services/analysis-engine/src/routers/analysis.py:627`), while `cost_settings` exists for configurable rates (`database/migrations/003_cost_tracking.sql:13`).
-- Impact: Cost reports drift if pricing or company-specific settings change.
-- Suggested fix: Read configured rates, cache them safely, and fall back to defaults only when settings are absent.
+- Original evidence: `_analyze_session_impl()` computed cost with literal `$0.15` and `$0.60` per million tokens, while `cost_settings` exists for configurable rates.
+- Original impact: Cost reports could drift if pricing or company-specific settings changed.
+- Resolution: Gemini analysis cost events now read company `cost_settings.gemini_input_rate` and `gemini_output_rate`, fall back to defaults only when settings are absent, and store the rates/source used in usage metadata. The admin cost-settings UI supports fine-grained token-rate updates.
 
 ### AE-P2-003: Canned insufficient-data dimensions omit newer dimension fields
 

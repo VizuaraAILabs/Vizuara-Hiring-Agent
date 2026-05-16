@@ -6,6 +6,7 @@ import logging
 import os
 import socket
 import uuid
+from decimal import Decimal
 
 import asyncpg
 from fastapi import APIRouter, HTTPException
@@ -36,6 +37,9 @@ _pool: asyncpg.Pool | None = None
 _pool_lock = asyncio.Lock()
 _analysis_workers: list[asyncio.Task] = []
 _WORKER_INSTANCE_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+_DEFAULT_GEMINI_INPUT_RATE = Decimal("0.15")
+_DEFAULT_GEMINI_OUTPUT_RATE = Decimal("0.60")
+_TOKENS_PER_MILLION = Decimal("1000000")
 
 
 def _error_payload(
@@ -553,6 +557,32 @@ async def _fetch_challenge(pool: asyncpg.Pool, challenge_id: str) -> dict:
             detail=f"Challenge '{challenge_id}' not found for this session",
         )
     return dict(row)
+
+
+async def _fetch_gemini_cost_rates(
+    pool: asyncpg.Pool,
+    company_id: str | None,
+) -> tuple[Decimal, Decimal, str]:
+    """Fetch Gemini token rates in USD per million tokens for a company."""
+    if not company_id:
+        return _DEFAULT_GEMINI_INPUT_RATE, _DEFAULT_GEMINI_OUTPUT_RATE, "default"
+
+    row = await pool.fetchrow(
+        """
+        SELECT gemini_input_rate, gemini_output_rate
+        FROM cost_settings
+        WHERE company_id = $1
+        """,
+        company_id,
+    )
+    if not row:
+        return _DEFAULT_GEMINI_INPUT_RATE, _DEFAULT_GEMINI_OUTPUT_RATE, "default"
+
+    return (
+        Decimal(str(row["gemini_input_rate"])),
+        Decimal(str(row["gemini_output_rate"])),
+        "company",
+    )
 
 
 async def _fetch_interactions(pool: asyncpg.Pool, session_id: str) -> list[dict]:
@@ -1164,8 +1194,15 @@ async def _analyze_session_impl(
             company_id = challenge.get("company_id")
             input_tokens = gemini_usage.get("input_tokens", 0)
             output_tokens = gemini_usage.get("output_tokens", 0)
-            cost_usd = (input_tokens / 1_000_000) * 0.15 + (output_tokens / 1_000_000) * 0.60
             try:
+                input_rate, output_rate, rate_source = await _fetch_gemini_cost_rates(
+                    pool,
+                    company_id,
+                )
+                cost_usd = (
+                    Decimal(input_tokens) / _TOKENS_PER_MILLION * input_rate
+                    + Decimal(output_tokens) / _TOKENS_PER_MILLION * output_rate
+                )
                 await pool.execute(
                     """
                     INSERT INTO usage_events
@@ -1184,11 +1221,14 @@ async def _analyze_session_impl(
                         "pass1_output": gemini_usage.get("pass1_output", 0),
                         "pass2_input": gemini_usage.get("pass2_input", 0),
                         "pass2_output": gemini_usage.get("pass2_output", 0),
+                        "input_rate_per_million": float(input_rate),
+                        "output_rate_per_million": float(output_rate),
+                        "cost_settings_source": rate_source,
                     }),
                 )
                 logger.info(
                     "Recorded Gemini cost event: $%.6f (%d in / %d out tokens)",
-                    cost_usd, input_tokens, output_tokens,
+                    float(cost_usd), input_tokens, output_tokens,
                 )
             except Exception as cost_err:
                 logger.warning("Failed to record Gemini cost event: %s", cost_err)
