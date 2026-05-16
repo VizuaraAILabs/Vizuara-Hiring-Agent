@@ -79,11 +79,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-004: TUI extraction can drop short but meaningful candidate actions
 
-- Status: Open
+- Status: Fixed
 - Area: Transcript parsing / candidate evidence
-- Evidence: `_extract_tui_conversation()` ignores prompt-marker text under 30 chars and input prompt records under 40 chars (`services/analysis-engine/src/services/transcript_parser.py:140`). `_clean_tui_text()` also strips isolated single letters (`services/analysis-engine/src/services/transcript_parser.py:96`).
-- Impact: Commands like `ls`, `pwd`, `npm test`, `git diff`, `pytest`, or short diagnostic prompts may disappear from the transcript. This directly affects scoring for debugging, iteration, and efficiency.
-- Suggested fix: Preserve short commands and known shell/tool patterns; apply length thresholds only after classifying likely noise.
+- Original evidence: `_extract_tui_conversation()` ignored prompt-marker text under 30 chars and input prompt records under 40 chars. `_clean_tui_text()` also stripped isolated single letters.
+- Original impact: Commands like `ls`, `pwd`, `npm test`, `git diff`, `pytest`, or short diagnostic prompts could disappear from the transcript. This directly affected scoring for debugging, iteration, and efficiency.
+- Resolution: TUI extraction now classifies likely candidate commands before applying generic length thresholds, preserving short shell/tool actions while still dropping short noise. Parser tests cover short command preservation and short-noise rejection.
 
 ### AE-P1-005: Quality gate assesses raw interactions instead of parsed candidate turns
 

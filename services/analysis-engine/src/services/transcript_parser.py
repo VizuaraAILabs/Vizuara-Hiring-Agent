@@ -82,6 +82,18 @@ class TranscriptParser:
     # Maximum transcript length
     _MAX_TRANSCRIPT_LENGTH = 80_000
 
+    _SHELL_COMMAND_RE = re.compile(
+        r"^\s*(?:"
+        r"ls|ll|la|pwd|cd|cat|less|head|tail|grep|rg|find|tree|wc|"
+        r"git|npm|pnpm|yarn|bun|node|npx|python|python3|pip|pip3|"
+        r"pytest|ruff|mypy|uv|poetry|cargo|go|java|javac|mvn|gradle|"
+        r"make|tsc|tsx|deno|docker|docker-compose|kubectl|curl|wget|psql|mysql|sqlite3|"
+        r"vim|vi|nano|sed|awk|sort|uniq|xargs|chmod|chown|mkdir|touch|"
+        r"cp|mv|rm|echo|env|export|source"
+        r")(?:\s|$|[;&|])",
+        re.I,
+    )
+
     _LABELS = {
         "prompt": "[CANDIDATE PROMPT]",
         "command": "[CANDIDATE COMMAND]",
@@ -129,6 +141,23 @@ class TranscriptParser:
         alpha = re.sub(r"[^a-zA-Z0-9]", "", text)
         return len(alpha) > 10
 
+    def _is_likely_candidate_action(self, text: str) -> bool:
+        """Return true for short commands/prompts that are meaningful evidence."""
+        cleaned = re.sub(r"\s+", " ", text).strip()
+        if not cleaned:
+            return False
+
+        if self._SHELL_COMMAND_RE.match(cleaned):
+            return True
+
+        if re.match(r"^\s*(?:\.\/|\.\.\/|/|~\/)\S+", cleaned):
+            return True
+
+        if re.search(r"\b(?:test|debug|fix|inspect|check|run|open|create|update)\b", cleaned, re.I):
+            return len(re.sub(r"[^a-zA-Z0-9]", "", cleaned)) >= 8
+
+        return False
+
     # ── TUI detection ─────────────────────────────────────────────────
 
     def _is_tui_session(self, interactions: list[dict]) -> bool:
@@ -167,8 +196,10 @@ class TranscriptParser:
 
             for match in re.finditer(r"❯\s+(.+?)(?=\s*❯|\s*$)", cleaned, re.DOTALL):
                 prompt_text = self._clean_tui_text(match.group(1).strip())
-                # Require substantial content (filters keystroke echo noise)
-                if len(prompt_text) > 30 and self._is_meaningful_text(prompt_text):
+                # Keep short real commands; require length only for unknown text.
+                if self._is_likely_candidate_action(prompt_text) or (
+                    len(prompt_text) > 30 and self._is_meaningful_text(prompt_text)
+                ):
                     prompt_marker_hits.append((seq, prompt_text, ts))
 
         # ── Step 2: Collect input/prompt records (supplementary) ──────
@@ -178,8 +209,8 @@ class TranscriptParser:
                 continue
             raw = self._strip_ansi(interaction.get("content", ""))
             raw = re.sub(r"\s+", " ", raw).strip()
-            # Only keep substantial input records
-            if len(raw) > 40:
+            # Keep short real commands; require length only for unknown text.
+            if self._is_likely_candidate_action(raw) or len(raw) > 40:
                 input_prompts.append((
                     interaction.get("sequence_num", 0),
                     raw,
@@ -226,9 +257,11 @@ class TranscriptParser:
         for seq, text, ts in merged:
             text = self._clean_tui_text(text)
 
-            # Must be substantial (filters fragments and noise)
+            is_candidate_action = self._is_likely_candidate_action(text)
+
+            # Unknown text must be substantial; known short commands are evidence.
             alpha_only = re.sub(r"[^a-zA-Z]", "", text)
-            if len(alpha_only) < 20:
+            if not is_candidate_action and len(alpha_only) < 20:
                 continue
 
             # Skip known TUI/system interactions
