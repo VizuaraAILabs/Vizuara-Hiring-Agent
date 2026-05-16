@@ -16,6 +16,7 @@ All variables go in `.env.production` at the project root. The deploy script (`s
 |---|---|---|
 | `GEMINI_API_KEY` | *(set in environment)* | Challenge generation + analysis engine |
 | `ANTHROPIC_API_KEY` | *(set in environment)* | Terminal server AI features |
+| `CANDIDATE_ANALYSIS_API_KEY` | *(set in environment)* | Bearer key for `/api/public/candidate-analysis` |
 
 ## Firebase (NEW - required)
 
