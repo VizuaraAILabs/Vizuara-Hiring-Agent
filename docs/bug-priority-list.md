@@ -169,11 +169,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### WEB-P2-001: Public challenge apply flow cannot identify role-claim admin challenge owners
 
-- Status: Open
+- Status: Obsolete
 - Area: Web API / admin challenge quotas
 - Evidence: The candidate apply route determines whether a challenge is admin-created by loading the owner company email and calling `isAdmin(company.email)` without access to the owner's Firebase role claim (`apps/web/src/app/api/challenges/[id]/apply/route.ts:63`).
 - Impact: A challenge created by a role-claim admin can be treated as a regular company challenge during candidate application, so plan/trial quota checks may apply instead of the admin challenge `sessions_limit` behavior.
-- Suggested fix: Persist admin ownership on the company or challenge at creation time, then have the apply route check that stored ownership flag instead of trying to infer admin status from email.
+- Resolution: No longer valid as written. Admin users resolve to `companyId: null` and company challenge creation/duplication routes require a company workspace, so role-claim admins cannot create company-owned challenges through the current flow. The stale `isAdmin(company.email)` exemption in challenge-access remains a possible cleanup item, but it is not an active P2 bug while admin-owned challenges are unsupported.
 
 ## P3
 
