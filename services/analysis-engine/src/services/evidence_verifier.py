@@ -6,8 +6,9 @@ from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
-# Minimum similarity ratio (0-1) for a fuzzy match to count as verified
-_MIN_SIMILARITY = 0.4
+# Minimum similarity ratio (0-1) for a fuzzy match to count as verified.
+_MIN_SIMILARITY = 0.6
+_MIN_SEGMENT_SIMILARITY = 0.55
 
 # Phrases that indicate the model honestly reported no evidence
 _HONEST_NO_EVIDENCE = [
@@ -37,18 +38,33 @@ class EvidenceVerifier:
         self.transcript_lower = transcript.lower()
         # Extract all text segments for chunk-level matching
         self._chunks = self._extract_chunks(transcript)
+        self._segments = self._extract_numbered_segments(transcript)
 
     @staticmethod
     def _extract_chunks(transcript: str) -> list[str]:
         """Split transcript into meaningful chunks for matching."""
-        # Split on segment headers
-        segments = re.split(r"---\s*\[.*?\].*?---", transcript)
+        # Split on formatted transcript and interview dialogue headers.
+        segments = re.split(r"^---\s+.*?---\s*$", transcript, flags=re.MULTILINE)
         chunks: list[str] = []
         for seg in segments:
             seg = seg.strip()
             if seg and len(seg) > 10:
                 chunks.append(seg.lower())
         return chunks
+
+    @staticmethod
+    def _extract_numbered_segments(transcript: str) -> dict[str, str]:
+        """Map formatted transcript segment numbers to their segment body."""
+        pattern = re.compile(
+            r"---\s+.*?\(#(?P<num>\d+)\).*?---\s*\n(?P<body>.*?)(?=\n---\s+.*?\(#\d+\).*?---|\n=+\n|$)",
+            re.DOTALL,
+        )
+        segments: dict[str, str] = {}
+        for match in pattern.finditer(transcript):
+            body = match.group("body").strip().lower()
+            if body:
+                segments[match.group("num")] = body
+        return segments
 
     def _is_honest_no_evidence(self, evidence: str) -> bool:
         """Check if the evidence string honestly says there's no evidence."""
@@ -61,12 +77,59 @@ class EvidenceVerifier:
             return text
         return f"{_UNVERIFIED_PREFIX} {text}"
 
+    @staticmethod
+    def _strip_segment_refs(text: str) -> str:
+        text = re.sub(r"\b(segment|interaction)\s*#\d+\b", " ", text, flags=re.I)
+        text = re.sub(r"#\d+\b", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _best_similarity(needle: str, haystacks: list[str]) -> float:
+        if not needle:
+            return 0.0
+        needle = needle.lower().strip()
+        best_score = 0.0
+        for haystack in haystacks:
+            haystack = haystack.lower()
+            if needle in haystack:
+                return 1.0
+            ratio = SequenceMatcher(None, needle[:200], haystack[:500]).ratio()
+            best_score = max(best_score, ratio)
+        return best_score
+
+    def _match_segment_refs(self, evidence: str, refs: list[str]) -> tuple[bool, float]:
+        """Verify referenced segments by matching claim text against segment bodies."""
+        segment_bodies = [
+            self._segments[ref]
+            for ref in refs
+            if ref in self._segments
+        ]
+        if not segment_bodies:
+            return False, 0.0
+
+        quoted = re.findall(r"['\"]([^'\"]{5,})['\"]", evidence)
+        quote_score = max(
+            (self._best_similarity(quote, segment_bodies) for quote in quoted),
+            default=0.0,
+        )
+        if quote_score >= _MIN_SEGMENT_SIMILARITY:
+            return True, quote_score
+
+        claim = self._strip_segment_refs(evidence)
+        claim_score = self._best_similarity(claim, segment_bodies)
+        return claim_score >= _MIN_SEGMENT_SIMILARITY, claim_score
+
     def _fuzzy_match(self, evidence: str) -> tuple[bool, float]:
         """Check if evidence string fuzzy-matches any part of the transcript.
 
         Returns (is_verified, best_similarity_score).
         """
         evidence_lower = evidence.lower().strip()
+
+        # Segment-cited evidence must be supported by the cited segment itself.
+        seg_refs = re.findall(r"#(\d+)", evidence)
+        if seg_refs:
+            return self._match_segment_refs(evidence, seg_refs)
 
         # Quick exact substring check
         if evidence_lower in self.transcript_lower:
@@ -78,25 +141,12 @@ class EvidenceVerifier:
             if quote.lower() in self.transcript_lower:
                 return True, 1.0
 
-        # Check for segment references like "#5", "segment #5", "interaction #5"
-        seg_refs = re.findall(r"#(\d+)", evidence)
-        if seg_refs:
-            # If the evidence references a segment number that exists, partial match
-            for ref in seg_refs:
-                pattern = f"(#{ref})"
-                if pattern in self.transcript:
-                    return True, 0.7
-
         # Fuzzy match against transcript chunks
         best_score = 0.0
         for chunk in self._chunks:
             # Use SequenceMatcher on shorter evidence vs longer chunk
             # Only compare first 200 chars of each to keep it fast
-            ratio = SequenceMatcher(
-                None,
-                evidence_lower[:200],
-                chunk[:500],
-            ).ratio()
+            ratio = SequenceMatcher(None, evidence_lower[:200], chunk[:500]).ratio()
             best_score = max(best_score, ratio)
             if ratio >= _MIN_SIMILARITY:
                 return True, ratio

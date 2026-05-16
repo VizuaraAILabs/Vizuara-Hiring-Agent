@@ -103,11 +103,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-007: Evidence verification can mark fabricated citations as verified by segment reference alone
 
-- Status: Open
+- Status: Fixed
 - Area: Evidence verification / hiring output accuracy
-- Evidence: `_fuzzy_match()` returns verified if an evidence item includes any existing `#N` segment reference (`services/analysis-engine/src/services/evidence_verifier.py:74`). It also uses a low global similarity threshold of `0.4` (`services/analysis-engine/src/services/evidence_verifier.py:10`, `services/analysis-engine/src/services/evidence_verifier.py:87`).
-- Impact: A model can cite a real segment number while fabricating the claim, and the verifier will still bless it. This undermines the anti-hallucination guardrail.
-- Suggested fix: Verify quoted substrings against the referenced segment content, and treat bare segment references as insufficient.
+- Original evidence: `_fuzzy_match()` returned verified if an evidence item included any existing `#N` segment reference. It also used a low global similarity threshold of `0.4`.
+- Original impact: A model could cite a real segment number while fabricating the claim, and the verifier would still bless it. This undermined the anti-hallucination guardrail.
+- Resolution: Evidence verification now extracts numbered transcript segments and requires cited claims or quoted text to match the referenced segment body. Bare segment references are insufficient, and the general fuzzy threshold was raised from `0.4` to `0.6`.
 
 ### AE-P1-008: Evidence verification ignores `observed_points`
 
