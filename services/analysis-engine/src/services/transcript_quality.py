@@ -10,6 +10,12 @@ MIN_CANDIDATE_CONTENT_CHARS = 50  # At least 50 chars of candidate input content
 MIN_TOTAL_INTERACTIONS = 5        # At least 5 total interactions
 MIN_TRANSCRIPT_CHARS = 200        # At least 200 chars of cleaned transcript
 
+_CANDIDATE_CONTENT_TYPES = {
+    "prompt",
+    "command",
+    "interview_response",
+}
+
 
 class TranscriptQualityGate:
     """Assesses whether a transcript has enough meaningful content for analysis.
@@ -19,21 +25,34 @@ class TranscriptQualityGate:
     return a pre-built "insufficient data" result instead.
     """
 
-    def assess(self, interactions: list[dict], transcript: str) -> dict | None:
+    @staticmethod
+    def _is_candidate_turn(turn: dict) -> bool:
+        return (
+            turn.get("direction") == "input"
+            or turn.get("content_type") in _CANDIDATE_CONTENT_TYPES
+        ) and bool(turn.get("content", "").strip())
+
+    def assess(
+        self,
+        interactions: list[dict],
+        transcript: str,
+        parsed_turns: list[dict] | None = None,
+    ) -> dict | None:
         """Check transcript quality and return an insufficient-data result if too low.
 
         Args:
             interactions: Raw interaction records from the database.
             transcript: The cleaned, formatted transcript string.
+            parsed_turns: Cleaned turns produced by TranscriptParser. When provided,
+                these are the quality source because they match what the analyzer sees.
 
         Returns:
             None if quality is sufficient (proceed with analysis).
             A pre-built AnalysisResponse dict if quality is insufficient.
         """
+        quality_turns = parsed_turns if parsed_turns is not None else interactions
         candidate_inputs = [
-            i for i in interactions
-            if i.get("direction") == "input"
-            and i.get("content", "").strip()
+            turn for turn in quality_turns if self._is_candidate_turn(turn)
         ]
 
         candidate_content_len = sum(
@@ -42,9 +61,12 @@ class TranscriptQualityGate:
 
         issues: list[str] = []
 
-        if len(interactions) < MIN_TOTAL_INTERACTIONS:
+        if (
+            len(quality_turns) < MIN_TOTAL_INTERACTIONS
+            and len(candidate_inputs) < MIN_CANDIDATE_INPUTS
+        ):
             issues.append(
-                f"Only {len(interactions)} total interactions "
+                f"Only {len(quality_turns)} parsed turns "
                 f"(minimum: {MIN_TOTAL_INTERACTIONS})"
             )
 
@@ -68,8 +90,10 @@ class TranscriptQualityGate:
 
         if not issues:
             logger.info(
-                "Transcript quality OK: %d interactions, %d candidate inputs, "
-                "%d chars candidate content, %d chars transcript",
+                "Transcript quality OK: %d parsed turns, %d raw interactions, "
+                "%d candidate inputs, %d chars candidate content, "
+                "%d chars transcript",
+                len(quality_turns),
                 len(interactions),
                 len(candidate_inputs),
                 candidate_content_len,

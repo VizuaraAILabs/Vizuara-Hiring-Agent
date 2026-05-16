@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
+
+
+@dataclass(frozen=True)
+class ParsedTranscript:
+    transcript: str
+    turns: list[dict]
 
 
 class TranscriptParser:
@@ -485,8 +492,15 @@ class TranscriptParser:
 
     def parse(self, interactions: list[dict]) -> str:
         """Parse raw interaction records into a clean, formatted transcript string."""
+        return self.parse_with_turns(interactions).transcript
+
+    def parse_with_turns(self, interactions: list[dict]) -> ParsedTranscript:
+        """Parse raw interaction records into a transcript plus parsed turns."""
         if not interactions:
-            return "[EMPTY TRANSCRIPT — no interactions recorded]"
+            return ParsedTranscript(
+                transcript="[EMPTY TRANSCRIPT - no interactions recorded]",
+                turns=[],
+            )
 
         sorted_interactions = sorted(
             interactions, key=lambda x: x.get("sequence_num", 0)
@@ -510,6 +524,7 @@ class TranscriptParser:
 
         segments = [s for s in segments if s.get("content", "").strip()]
         segments = self._truncate_ai_responses(segments)
+        parsed_turns = [dict(segment) for segment in segments]
 
         parts: list[str] = [
             "=" * 60,
@@ -530,5 +545,13 @@ class TranscriptParser:
         # Append interview dialogue section if present
         if interview_interactions:
             parts.append(self._render_interview_section(interview_interactions))
+            parsed_turns.extend(
+                dict(entry)
+                for entry in sorted(
+                    interview_interactions,
+                    key=lambda x: x.get("sequence_num", 0),
+                )
+                if entry.get("content", "").strip()
+            )
 
-        return "\n".join(parts)
+        return ParsedTranscript(transcript="\n".join(parts), turns=parsed_turns)

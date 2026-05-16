@@ -87,11 +87,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-005: Quality gate assesses raw interactions instead of parsed candidate turns
 
-- Status: Open
+- Status: Fixed
 - Area: Quality gate / scoring reliability
-- Evidence: `TranscriptQualityGate.assess()` counts raw `direction == "input"` records (`services/analysis-engine/src/services/transcript_quality.py:33`) even though the parser may reconstruct, collapse, drop, or append interview turns before analysis (`services/analysis-engine/src/services/transcript_parser.py:486`).
-- Impact: A noisy raw session can pass the quality gate even if parsed candidate content is empty or badly truncated. Conversely, meaningful reconstructed TUI prompts may fail if raw input records are sparse.
-- Suggested fix: Have the parser return structured parsed turns and run quality checks on those turns, not the raw rows.
+- Original evidence: `TranscriptQualityGate.assess()` counted raw `direction == "input"` records even though the parser may reconstruct, collapse, drop, or append interview turns before analysis.
+- Original impact: A noisy raw session could pass the quality gate even if parsed candidate content was empty or badly truncated. Conversely, meaningful reconstructed TUI prompts could fail if raw input records were sparse.
+- Resolution: `TranscriptParser` now exposes `parse_with_turns()`, returning the final transcript plus the cleaned parsed turns used to build it. The main analysis path passes those turns into `TranscriptQualityGate`, which now counts parsed candidate turns instead of raw database rows.
 
 ### AE-P1-006: Transcript truncation can exceed the configured max length when candidate content alone is large
 

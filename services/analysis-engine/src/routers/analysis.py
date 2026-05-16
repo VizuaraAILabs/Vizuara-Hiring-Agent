@@ -1081,12 +1081,17 @@ async def _analyze_session_impl(
     try:
         # -- Step 2: Parse transcript --
         parser = TranscriptParser()
-        transcript = parser.parse(interactions)
+        parsed_transcript = parser.parse_with_turns(interactions)
+        transcript = parsed_transcript.transcript
         logger.info("Parsed transcript: %d characters", len(transcript))
 
         # -- Step 3: Quality gate --
         quality_gate = TranscriptQualityGate()
-        insufficient_result = quality_gate.assess(interactions, transcript)
+        insufficient_result = quality_gate.assess(
+            interactions,
+            transcript,
+            parsed_turns=parsed_transcript.turns,
+        )
 
         if insufficient_result is not None:
             logger.warning(
