@@ -105,26 +105,35 @@ class TranscriptQualityGate:
         reason = "; ".join(issues)
         logger.warning("Transcript quality INSUFFICIENT: %s", reason)
 
-        insufficient_dim = {
-            "score": 0.0,
-            "narrative": (
-                "Insufficient transcript data to evaluate this dimension. "
-                f"Reason: {reason}"
-            ),
-            "evidence": [],
-        }
+        insufficient_narrative = (
+            "Insufficient transcript data to evaluate this dimension. "
+            f"Reason: {reason}"
+        )
+        insufficient_expected_standard = (
+            "Insufficient transcript data to establish an expected standard "
+            "for this dimension."
+        )
+
+        def insufficient_dim() -> dict:
+            return {
+                "score": 0.0,
+                "narrative": insufficient_narrative,
+                "evidence": [],
+                "observed_points": [],
+                "expected_standard": insufficient_expected_standard,
+            }
 
         return {
             "overall_score": 0.0,
             "dimensions": {
-                "problem_decomposition": dict(insufficient_dim),
-                "first_principles": dict(insufficient_dim),
-                "creativity": dict(insufficient_dim),
-                "iteration_quality": dict(insufficient_dim),
-                "debugging_approach": dict(insufficient_dim),
-                "architecture_thinking": dict(insufficient_dim),
-                "communication_clarity": dict(insufficient_dim),
-                "efficiency": dict(insufficient_dim),
+                "problem_decomposition": insufficient_dim(),
+                "first_principles": insufficient_dim(),
+                "creativity": insufficient_dim(),
+                "iteration_quality": insufficient_dim(),
+                "debugging_approach": insufficient_dim(),
+                "architecture_thinking": insufficient_dim(),
+                "communication_clarity": insufficient_dim(),
+                "efficiency": insufficient_dim(),
             },
             "key_moments": [],
             "timeline_data": [],

@@ -145,11 +145,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P2-003: Canned insufficient-data dimensions omit newer dimension fields
 
-- Status: Open
+- Status: Fixed
 - Area: Schema consistency
-- Evidence: `TranscriptQualityGate` returns dimensions with `score`, `narrative`, and `evidence`, but omits `observed_points` and `expected_standard` (`services/analysis-engine/src/services/transcript_quality.py:84`, `services/analysis-engine/src/models/schemas.py:24`).
-- Impact: Consumers that assume the newer dimension shape can render inconsistent or empty states for quality-gated sessions.
-- Suggested fix: Include `observed_points: []` and an `expected_standard` message in canned dimensions.
+- Original evidence: `TranscriptQualityGate` returned dimensions with `score`, `narrative`, and `evidence`, but omitted `observed_points` and `expected_standard`.
+- Original impact: Consumers that assume the newer dimension shape could render inconsistent or empty states for quality-gated sessions.
+- Resolution: Canned insufficient-data dimensions now include `observed_points: []` and an explanatory `expected_standard`, with test coverage for the richer fallback shape.
 
 ### AE-P2-004: Key moment annotation lookup likely confuses model index with interaction sequence number
 
