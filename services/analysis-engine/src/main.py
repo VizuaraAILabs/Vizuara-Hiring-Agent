@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Import the router after loading env so that env vars are available
 from .routers.analysis import (  # noqa: E402
+    close_analysis_pool,
     router as analysis_router,
     start_analysis_queue_workers,
     stop_analysis_queue_workers,
@@ -59,6 +60,7 @@ async def startup_event() -> None:
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     await stop_analysis_queue_workers()
+    await close_analysis_pool()
 
 
 @app.get("/")

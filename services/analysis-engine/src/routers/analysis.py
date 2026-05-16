@@ -33,6 +33,7 @@ DATABASE_URL = os.environ.get(
 
 # Connection pool — initialized lazily
 _pool: asyncpg.Pool | None = None
+_pool_lock = asyncio.Lock()
 _analysis_workers: list[asyncio.Task] = []
 _WORKER_INSTANCE_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
 
@@ -109,6 +110,30 @@ def _analysis_lease_seconds() -> int:
         return 300
 
 
+def _analysis_db_connect_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_CONNECT_TIMEOUT_SECONDS",
+        default=10.0,
+        minimum=1.0,
+    )
+
+
+def _analysis_db_command_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_COMMAND_TIMEOUT_SECONDS",
+        default=30.0,
+        minimum=1.0,
+    )
+
+
+def _analysis_db_close_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_CLOSE_TIMEOUT_SECONDS",
+        default=10.0,
+        minimum=1.0,
+    )
+
+
 def _env_timeout_seconds(name: str, default: float, minimum: float) -> float:
     raw_value = os.environ.get(name)
     if raw_value is None:
@@ -169,9 +194,50 @@ async def _run_blocking_with_timeout(
 async def _get_pool() -> asyncpg.Pool:
     """Get or create the asyncpg connection pool."""
     global _pool
-    if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    if _pool is not None:
+        return _pool
+
+    async with _pool_lock:
+        if _pool is not None:
+            return _pool
+
+        connect_timeout = _analysis_db_connect_timeout_seconds()
+        command_timeout = _analysis_db_command_timeout_seconds()
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            timeout=connect_timeout,
+            command_timeout=command_timeout,
+        )
+        logger.info(
+            "Created analysis DB pool with connect_timeout=%.1fs command_timeout=%.1fs",
+            connect_timeout,
+            command_timeout,
+        )
     return _pool
+
+
+async def close_analysis_pool() -> None:
+    """Close the asyncpg pool during application shutdown."""
+    global _pool
+    async with _pool_lock:
+        if _pool is None:
+            return
+
+        pool = _pool
+        _pool = None
+
+    close_timeout = _analysis_db_close_timeout_seconds()
+    try:
+        await asyncio.wait_for(pool.close(), timeout=close_timeout)
+        logger.info("Closed analysis DB pool")
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Timed out after %.1fs while closing analysis DB pool; terminating connections",
+            close_timeout,
+        )
+        pool.terminate()
 
 
 async def start_analysis_queue_workers() -> None:

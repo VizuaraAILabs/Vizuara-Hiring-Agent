@@ -57,6 +57,9 @@ Required for local email/password login in the web app.
 | `ANALYSIS_MAX_CONCURRENT` | `2` | Number of background analysis workers |
 | `ANALYSIS_QUEUE_POLL_SECONDS` | `2` | Poll interval when no analysis job is available |
 | `ANALYSIS_JOB_LEASE_SECONDS` | `300` | Durable queue lease/heartbeat window |
+| `ANALYSIS_DB_CONNECT_TIMEOUT_SECONDS` | `10` | Timeout for opening analysis-engine DB connections |
+| `ANALYSIS_DB_COMMAND_TIMEOUT_SECONDS` | `30` | Default timeout for analysis-engine DB commands |
+| `ANALYSIS_DB_CLOSE_TIMEOUT_SECONDS` | `10` | Graceful shutdown timeout before terminating DB connections |
 | `GEMINI_REQUEST_TIMEOUT_MS` | `60000` | Hard timeout for each Gemini HTTP request |
 | `ANALYSIS_SESSION_TIMEOUT_SECONDS` | `240` | Total deadline for full two-pass analysis |
 | `ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS` | `75` | Deadline for dimension enrichment |

@@ -119,11 +119,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-009: Missing DB connection timeout and pool cleanup
 
-- Status: Open
+- Status: Fixed
 - Area: Database reliability
-- Evidence: `_get_pool()` creates an asyncpg pool with only `min_size` and `max_size` (`services/analysis-engine/src/routers/analysis.py:51`). Shutdown stops workers but does not close `_pool` (`services/analysis-engine/src/routers/analysis.py:70`).
-- Impact: Startup or query paths can hang on database connectivity issues, and shutdown can leave connections to be cleaned up by process termination.
-- Suggested fix: Configure connect/command timeouts and close the pool during shutdown.
+- Original evidence: `_get_pool()` created an asyncpg pool with only `min_size` and `max_size`. Shutdown stopped workers but did not close `_pool`.
+- Original impact: Startup or query paths could hang on database connectivity issues, and shutdown could leave connections to be cleaned up by process termination.
+- Resolution: Added configurable asyncpg connection, command, and close timeouts (`ANALYSIS_DB_CONNECT_TIMEOUT_SECONDS`, default 10s; `ANALYSIS_DB_COMMAND_TIMEOUT_SECONDS`, default 30s; `ANALYSIS_DB_CLOSE_TIMEOUT_SECONDS`, default 10s), passed them through Docker/env docs, and close the analysis DB pool during FastAPI shutdown after queue workers stop. If graceful close times out, the pool is terminated.
 
 ## P2
 
