@@ -244,6 +244,69 @@ async def close_analysis_pool() -> None:
         pool.terminate()
 
 
+def _analysis_worker_readiness() -> dict:
+    expected = _analysis_max_concurrent()
+    running = sum(1 for worker in _analysis_workers if not worker.done())
+    failed = sum(
+        1
+        for worker in _analysis_workers
+        if worker.done() and not worker.cancelled()
+    )
+    return {
+        "status": "ready" if running >= expected else "not_ready",
+        "expected": expected,
+        "running": running,
+        "failed": failed,
+    }
+
+
+async def get_analysis_readiness() -> dict:
+    """Return dependency readiness checks for the analysis engine."""
+    checks = {
+        "database": {"status": "unknown"},
+        "workers": _analysis_worker_readiness(),
+        "gemini": {
+            "status": (
+                "configured"
+                if os.environ.get("GEMINI_API_KEY")
+                else "not_configured"
+            )
+        },
+        "queue": {"status": "unknown"},
+    }
+
+    try:
+        pool = await _get_pool()
+        await pool.fetchval("SELECT 1")
+        checks["database"] = {"status": "ready"}
+
+        queue_stats = await pool.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE status = 'queued') AS queued,
+                COUNT(*) FILTER (WHERE status = 'running') AS running
+            FROM analysis_jobs
+            """
+        )
+        checks["queue"] = {
+            "status": "ready",
+            "queued": int(queue_stats["queued"] or 0),
+            "running": int(queue_stats["running"] or 0),
+        }
+    except Exception as exc:  # pragma: no cover - exact DB failure varies by driver
+        logger.warning("Analysis readiness database check failed: %s", exc)
+        checks["database"] = {"status": "not_ready", "error": type(exc).__name__}
+        checks["queue"] = {"status": "not_ready", "error": type(exc).__name__}
+
+    ready = (
+        checks["database"]["status"] == "ready"
+        and checks["workers"]["status"] == "ready"
+        and checks["gemini"]["status"] == "configured"
+        and checks["queue"]["status"] == "ready"
+    )
+    return {"status": "ready" if ready else "not_ready", "checks": checks}
+
+
 async def start_analysis_queue_workers() -> None:
     """Start bounded workers for the Postgres-backed analysis queue."""
     if _analysis_workers:

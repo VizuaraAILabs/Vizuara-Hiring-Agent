@@ -161,11 +161,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P2-005: Health check reports only API-key presence, not dependency readiness
 
-- Status: Open
+- Status: Fixed
 - Area: Operations
 - Evidence: `/health` returns `status: healthy` plus `gemini_key_set` only (`services/analysis-engine/src/main.py:80`).
 - Impact: Load balancers or monitoring may treat the engine as healthy even when the database is unreachable, workers failed to start, or provider calls are failing.
-- Suggested fix: Split liveness and readiness; readiness should check DB connectivity, worker count, queue depth, and provider configuration.
+- Resolution: `/health` is now a liveness-only endpoint, and `/ready` returns `200` or `503` based on database connectivity, queue table access/depth, analysis worker readiness, and Gemini API key configuration.
 
 ### WEB-P2-001: Public challenge apply flow cannot identify role-claim admin challenge owners
 
