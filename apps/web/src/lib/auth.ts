@@ -95,8 +95,7 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
 
 export function isAdmin(_email: string, role?: string | null): boolean {
   const normalizedRole = role?.trim().toUpperCase();
-  return normalizedRole === 'ADMIN'
-    || normalizedRole === 'SUPER ADMIN'
+  return normalizedRole === 'SUPER ADMIN'
     || normalizedRole === 'SUPER_ADMIN';
 }
 
