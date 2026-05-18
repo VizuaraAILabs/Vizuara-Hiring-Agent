@@ -9,4 +9,5 @@ __pycache__/
 dist/
 .claude/
 .vscode/
-services/analysis-engine/tests/fixtures/interactions/
+services/analysis-engine/tests/fixtures/interactions/*
+!services/analysis-engine/tests/fixtures/interactions/c44952b5-8c8a-4b30-a3da-ea10ec1476f9.json

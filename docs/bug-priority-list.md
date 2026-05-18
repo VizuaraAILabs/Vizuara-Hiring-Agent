@@ -71,11 +71,17 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-003: Transcript parser contains mojibake patterns that likely do not match real terminal glyphs
 
-- Status: Deferred
+- Status: V1 Done
 - Area: Transcript parsing / analysis accuracy
-- Evidence: The parser comments and regexes include mojibake/corrupted representations of box-drawing, prompt-marker, spinner, and separator glyphs in TUI stripping/detection (`services/analysis-engine/src/services/transcript_parser.py:33`, `services/analysis-engine/src/services/transcript_parser.py:127`, `services/analysis-engine/src/services/transcript_parser.py:140`).
-- Impact: If actual stored terminal output contains proper Unicode glyphs, TUI detection and cleanup will miss them. If stored output is mojibake, the code is accidentally coupled to that corruption. Either way, parsing is fragile and analysis can be based on noisy or missing transcript turns.
-- Suggested fix: Add fixture-based parser tests with raw stored interactions, normalize encoding once, and make regexes target the real stored representation deliberately.
+- Original evidence: The parser comments and regexes included mojibake/corrupted representations of box-drawing, prompt-marker, spinner, and separator glyphs in TUI stripping/detection (`services/analysis-engine/src/services/transcript_parser.py`).
+- Original impact: If actual stored terminal output contained proper Unicode glyphs, TUI detection and cleanup could miss them. If stored output was mojibake, the code was accidentally coupled to that corruption. Either way, parsing was fragile and analysis could be based on noisy or missing transcript turns.
+- V1 resolution: Added a real Claude Code TUI interaction fixture and regression tests for preserving candidate prompts, preserving useful AI responses, removing `bypasspermissionson`/`bypass permissions on`, removing spinner/status fragments, removing raw prompt/status chrome, and ensuring real AI responses are not truncated. `TranscriptParser` now normalizes TUI redraw/control artifacts before extraction, handles replacement characters deliberately, strips Claude Code status phrases including smashed variants, removes spinner fragments more aggressively, extracts prompt-marker text line-by-line, and only truncates raw terminal output rather than candidate prompts or AI responses.
+- Remaining limitation: The cleaned transcript can still contain some smashed or duplicated prose from terminal redraw artifacts, such as missing spaces inside AI response text. This is much less damaging than the removed TUI chrome, but it is still not ideal for readability and evidence quotes.
+- Next phases:
+  - V2: Add more real fixtures from different Claude Code sessions, including longer sessions, multiple prompts, failed commands, file edits, and high-output terminal blocks.
+  - V2: Improve readability normalization for smashed words and duplicated AI prose without inventing text or changing the factual transcript.
+  - V2: Add parser quality metrics, such as counts of removed chrome lines, retained candidate turns, retained AI turns, and transcript truncation markers.
+  - V3: Consider storing a structured transcript alongside the rendered text so analysis can consume candidate prompts, AI responses, commands, terminal output, and interview dialogue separately.
 
 ### AE-P1-004: TUI extraction can drop short but meaningful candidate actions
 
