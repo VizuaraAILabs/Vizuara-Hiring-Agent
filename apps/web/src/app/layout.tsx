@@ -39,6 +39,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
+        // Browser extensions such as Grammarly inject body attributes before
+        // hydration; suppress that harmless root-level mismatch in dev.
+        suppressHydrationWarning
         className={`${figtree.className} ${figtree.variable} ${instrumentSerif.variable} ${geistMono.variable} antialiased bg-[#0a0a0a] text-white`}
       >
         <AuthProvider>
