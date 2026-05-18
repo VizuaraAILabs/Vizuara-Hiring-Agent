@@ -1644,7 +1644,7 @@ export default function ChallengeDetailPage() {
                               <button
                                 type="button"
                                 onClick={() => setReviewPreviewSession(session)}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"
+                                className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"
                                 title="View reviewer notes"
                                 aria-label="Reviewer notes saved"
                               >
