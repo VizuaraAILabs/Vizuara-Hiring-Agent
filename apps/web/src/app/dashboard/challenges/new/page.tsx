@@ -25,7 +25,7 @@ export default function NewChallengePage() {
       <div className="inline-flex bg-surface border border-white/10 rounded-xl p-1 mb-8">
         <button
           onClick={() => setActiveTab('ai')}
-          className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`cursor-pointer px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'ai'
               ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'
@@ -35,7 +35,7 @@ export default function NewChallengePage() {
         </button>
         <button
           onClick={() => setActiveTab('template')}
-          className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`cursor-pointer px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'template'
               ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'
@@ -45,7 +45,7 @@ export default function NewChallengePage() {
         </button>
         <button
           onClick={() => setActiveTab('manual')}
-          className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`cursor-pointer px-5 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === 'manual'
               ? 'bg-primary text-black'
               : 'text-neutral-400 hover:text-white'

@@ -416,10 +416,10 @@ export default function StarterFilesEditor({
     setExpandedDirs(dirs);
   }, [tree]);
 
-  // Click outside tree panel to deselect
+  // Click outside the starter-file editor to deselect.
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
-      if (treeRef.current && !treeRef.current.contains(e.target as Node)) {
+      if (dropZoneRef.current && !dropZoneRef.current.contains(e.target as Node)) {
         setSelectedPath(null);
       }
     }

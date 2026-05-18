@@ -272,7 +272,7 @@ export default function ReportPage() {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => handleTabChange(tab.key)}
-                  className={`border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                  className={`cursor-pointer border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
                     isActive
                       ? 'border-primary text-white'
                       : 'border-transparent text-neutral-600 hover:text-neutral-300'

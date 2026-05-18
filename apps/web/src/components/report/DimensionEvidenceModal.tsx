@@ -85,7 +85,7 @@ export default function DimensionEvidenceModal({
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  className={`flex cursor-pointer items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                     isActive
                       ? 'border-primary text-white'
                       : 'border-transparent text-neutral-500 hover:text-neutral-300'
