@@ -21,17 +21,27 @@ body {
 }
 
 button:not(:disabled),
+button:not(:disabled) *,
 input[type="button"]:not(:disabled),
+input[type="button"]:not(:disabled) *,
 input[type="submit"]:not(:disabled),
+input[type="submit"]:not(:disabled) *,
 input[type="reset"]:not(:disabled),
+input[type="reset"]:not(:disabled) *,
 a[href],
+a[href] *,
 label[for],
+label[for] *,
 select:not(:disabled),
 summary,
 [role="button"]:not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]) *,
 [role="link"]:not([aria-disabled="true"]),
+[role="link"]:not([aria-disabled="true"]) *,
 [role="tab"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]) *,
 [role="menuitem"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]) *,
 [tabindex]:not([tabindex="-1"]):not([aria-disabled="true"]) {
   cursor: pointer !important;
 }
