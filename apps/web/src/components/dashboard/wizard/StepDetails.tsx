@@ -9,6 +9,7 @@ const techSuggestions: Record<RoleType, string[]> = {
   'full-stack': ['React', 'Next.js', 'Node.js', 'TypeScript', 'Python', 'PostgreSQL', 'MongoDB', 'Redis', 'Express', 'Tailwind CSS', 'GraphQL'],
   'data-ml': ['Python', 'pandas', 'scikit-learn', 'SQL', 'Spark', 'PyTorch', 'TensorFlow'],
   devops: ['Docker', 'Kubernetes', 'Terraform', 'AWS', 'GCP', 'Bash', 'Ansible'],
+  'agentic-ai': ['Python', 'TypeScript', 'OpenAI', 'Claude', 'Gemini', 'MCP', 'RAG', 'Vector DBs', 'Structured Outputs', 'Inference Engineering', 'Evaluation Harnesses'],
 };
 
 const seniorityOptions: { value: SeniorityLevel; label: string }[] = [
@@ -31,11 +32,12 @@ const focusOptions: { value: FocusArea; label: string }[] = [
 
 interface StepDetailsProps {
   role: RoleType;
+  roleDescription: string;
   onBack: () => void;
   onSubmit: (inputs: WizardInputs) => void;
 }
 
-export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps) {
+export default function StepDetails({ role, roleDescription, onBack, onSubmit }: StepDetailsProps) {
   const [techStack, setTechStack] = useState<string[]>([]);
   const [customTech, setCustomTech] = useState('');
   const [seniority, setSeniority] = useState<SeniorityLevel>('mid');
@@ -76,7 +78,7 @@ export default function StepDetails({ role, onBack, onSubmit }: StepDetailsProps
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSubmit({ role, techStack, seniority, focusAreas, context, time_limit_min: timeLimitMin });
+    onSubmit({ role, roleDescription, techStack, seniority, focusAreas, context, time_limit_min: timeLimitMin });
   }
 
   const canSubmit = techStack.length > 0 && focusAreas.length > 0;

@@ -1,4 +1,4 @@
-export type RoleType = 'full-stack' | 'backend' | 'frontend' | 'data-ml' | 'devops';
+export type RoleType = 'full-stack' | 'backend' | 'frontend' | 'data-ml' | 'devops' | 'agentic-ai';
 
 export type SeniorityLevel = 'junior' | 'mid' | 'senior' | 'staff';
 
@@ -14,6 +14,7 @@ export type FocusArea =
 
 export interface WizardInputs {
   role: RoleType;
+  roleDescription: string;
   techStack: string[];
   seniority: SeniorityLevel;
   focusAreas: FocusArea[];

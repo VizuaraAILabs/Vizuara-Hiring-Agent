@@ -12,12 +12,14 @@ const stepLabels = ['Role', 'Details', 'Generating', 'Results'];
 export default function WizardContainer() {
   const [step, setStep] = useState(1);
   const [role, setRole] = useState<RoleType | null>(null);
+  const [roleDescription, setRoleDescription] = useState('');
   const [wizardInputs, setWizardInputs] = useState<WizardInputs | null>(null);
   const [challenges, setChallenges] = useState<GeneratedChallenge[]>([]);
   const [error, setError] = useState('');
 
-  function handleRoleSelect(selectedRole: RoleType) {
+  function handleRoleSelect(selectedRole: RoleType, description: string) {
     setRole(selectedRole);
+    setRoleDescription(description);
     setStep(2);
   }
 
@@ -32,6 +34,7 @@ export default function WizardContainer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           role: inputs.role,
+          role_description: inputs.roleDescription,
           tech_stack: inputs.techStack,
           seniority: inputs.seniority,
           focus_areas: inputs.focusAreas,
@@ -124,6 +127,7 @@ export default function WizardContainer() {
       {step === 2 && role && (
         <StepDetails
           role={role}
+          roleDescription={roleDescription}
           onBack={() => setStep(1)}
           onSubmit={handleDetailsSubmit}
         />
