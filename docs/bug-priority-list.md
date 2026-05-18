@@ -71,7 +71,7 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-003: Transcript parser contains mojibake patterns that likely do not match real terminal glyphs
 
-- Status: Open
+- Status: Deferred
 - Area: Transcript parsing / analysis accuracy
 - Evidence: The parser comments and regexes include mojibake/corrupted representations of box-drawing, prompt-marker, spinner, and separator glyphs in TUI stripping/detection (`services/analysis-engine/src/services/transcript_parser.py:33`, `services/analysis-engine/src/services/transcript_parser.py:127`, `services/analysis-engine/src/services/transcript_parser.py:140`).
 - Impact: If actual stored terminal output contains proper Unicode glyphs, TUI detection and cleanup will miss them. If stored output is mojibake, the code is accidentally coupled to that corruption. Either way, parsing is fragile and analysis can be based on noisy or missing transcript turns.
@@ -95,7 +95,7 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### AE-P1-006: Transcript truncation can exceed the configured max length when candidate content alone is large
 
-- Status: Open
+- Status: Fixed
 - Area: Transcript sizing / model reliability
 - Evidence: `_truncate_ai_responses()` subtracts candidate length from `_MAX_TRANSCRIPT_LENGTH`, but if candidate content already exceeds the limit, `remaining` becomes negative and the method still keeps all candidate content (`services/analysis-engine/src/services/transcript_parser.py:385`, `services/analysis-engine/src/services/transcript_parser.py:403`).
 - Impact: Large candidate prompts or pasted code can push requests beyond intended model/token budgets, increasing latency, cost, and failure risk.
@@ -183,12 +183,18 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Area: Maintainability
 - Evidence: Service class is `ClaudeAnalyzer`, raw response field is named `raw_claude_response`, and comments mention Claude, while the implementation uses Gemini (`services/analysis-engine/src/services/claude_analyzer.py:206`, `services/analysis-engine/src/services/report_generator.py:56`).
 - Impact: Naming increases confusion during debugging and cost analysis.
-- Suggested fix: Rename code and DB-facing aliases carefully, or add compatibility comments while migrating.
+- Deferral note: Leave this cleanup for a future coordinated migration. In
+  particular, `raw_claude_response` is a persisted database column, so renaming
+  it during the current staging-to-main catch-up could break older code paths or
+  external consumers that still expect the legacy column name.
+- Suggested future fix: Rename code-facing analyzer identifiers and migrate
+  DB-facing aliases carefully, or add compatibility comments while migrating.
 
 ### AE-P3-002: Root service metadata does not list current background-analysis endpoints
 
-- Status: Open
+- Status: Fixed
 - Area: API discoverability
 - Evidence: `/` lists `POST /analyze` and `GET /health`, but not `/analyze/start`, `/analyze/enrich-dimensions`, or `/analyze/transcript-narrative` (`services/analysis-engine/src/main.py:55`).
 - Impact: Developers may discover or test the wrong endpoint.
-- Suggested fix: Update endpoint metadata or expose OpenAPI docs as the source of truth.
+- Resolution: Root service metadata now lists the background-analysis endpoints
+  alongside `/analyze`, `/health`, and `/ready`.

@@ -74,6 +74,9 @@ async def root() -> dict:
         "description": "Candidate transcript analysis powered by Gemini",
         "endpoints": {
             "POST /analyze": "Analyze a candidate session",
+            "POST /analyze/start": "Queue background analysis for a candidate session",
+            "POST /analyze/enrich-dimensions": "Enrich stored dimension evidence",
+            "POST /analyze/transcript-narrative": "Generate transcript narrative",
             "GET /health": "Liveness check",
             "GET /ready": "Readiness check",
         },
