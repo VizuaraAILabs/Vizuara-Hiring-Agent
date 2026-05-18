@@ -260,21 +260,29 @@ export default function ReportPage() {
       <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
 
       {/* Tabs */}
-      <div className="sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 py-3">
-        <div className="grid grid-cols-3 gap-1 bg-surface rounded-2xl p-1 border border-white/5 sm:grid-cols-7">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={`min-w-0 truncate py-2.5 px-1 rounded-xl text-xs sm:text-sm font-medium transition-all ${
-                activeTab === tab.key
-                  ? 'bg-white/5 text-white'
-                  : 'text-neutral-600 hover:text-neutral-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 pt-3">
+        <div className="overflow-x-auto border-b border-white/10" role="tablist" aria-label="Submission report sections">
+          <div className="flex min-w-max gap-6 sm:gap-8">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                    isActive
+                      ? 'border-primary text-white'
+                      : 'border-transparent text-neutral-600 hover:text-neutral-300'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

@@ -125,6 +125,30 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Original impact: Startup or query paths could hang on database connectivity issues, and shutdown could leave connections to be cleaned up by process termination.
 - Resolution: Added configurable asyncpg connection, command, and close timeouts (`ANALYSIS_DB_CONNECT_TIMEOUT_SECONDS`, default 10s; `ANALYSIS_DB_COMMAND_TIMEOUT_SECONDS`, default 30s; `ANALYSIS_DB_CLOSE_TIMEOUT_SECONDS`, default 10s), passed them through Docker/env docs, and close the analysis DB pool during FastAPI shutdown after queue workers stop. If graceful close times out, the pool is terminated.
 
+### WEB-P1-001: Paid companies without `firebase_uid` bypass subscription verification
+
+- Status: Open
+- Area: Subscription quota enforcement
+- Evidence: `checkEnrollmentStatus()` verifies Firestore subscription state only inside the `if (company.firebase_uid)` branch. If a company row has `plan != 'trial'` but no `firebase_uid`, the function falls through to `checkPaidPlan(company.plan, sessionsUsed, null)` and allows session creation based only on the local plan column (`apps/web/src/lib/enrollment.ts:100`, `apps/web/src/lib/enrollment.ts:123`).
+- Impact: A manually edited, imported, or corrupted company row can receive paid-plan quota without an active subscription record. This can bypass billing/enrollment enforcement for creating candidate sessions.
+- Suggested fix: Require an active subscription for every non-trial company unless an explicit admin/internal override flag exists. Treat missing `firebase_uid` on paid plans as `subscription_lapsed` or `not_enrolled`, and add a regression test for paid-plan rows with null Firebase UID.
+
+### WEB-P1-002: Active subscriptions are trusted without checking `currentPeriodEnd`
+
+- Status: Open
+- Area: Subscription lifecycle / quota reset
+- Evidence: `readActiveSubscription()` reads both `currentPeriodStart` and `currentPeriodEnd`, but `checkEnrollmentStatus()` only uses `currentPeriodStart` as the quota anchor. The Firestore query accepts any document with `status == 'ACTIVE'` and never verifies that `currentPeriodEnd` is still in the future (`apps/web/src/lib/enrollment.ts:119`, `apps/web/src/lib/enrollment.ts:204`).
+- Impact: If a webhook or manual sync fails to flip an expired subscription away from `ACTIVE`, the platform may continue allowing paid-plan session creation after the billing period has ended. Conversely, stale period dates can make quota windows drift from the actual subscription state.
+- Suggested fix: Validate `currentPeriodEnd` against the current time before treating a subscription as active, and decide a safe fallback when period dates are missing or malformed. Log/report malformed active subscription documents.
+
+### WEB-P1-003: Subscription plan tier can drift from purchased plan
+
+- Status: Open
+- Area: Subscription quota enforcement
+- Evidence: When a trial company has an active subscription, `checkEnrollmentStatus()` unconditionally updates the company to `starter`. Existing paid companies use `companies.plan` for quota limits rather than reading or reconciling the active subscription's purchased tier (`apps/web/src/lib/enrollment.ts:55`, `apps/web/src/lib/enrollment.ts:119`).
+- Impact: A growth or enterprise purchase can be under-allocated as starter, or a downgraded/cancelled tier can continue receiving the old local quota. Remaining-session calculations and candidate admission can diverge from what the customer actually paid for.
+- Suggested fix: Store the purchased plan tier from the billing/subscription source of truth and reconcile `companies.plan` on every subscription status check or webhook. Avoid defaulting paid trial upgrades to starter unless the subscription explicitly says starter.
+
 ## P2
 
 ### AE-P2-001: Analysis engine error details are swallowed by web API responses
@@ -175,6 +199,46 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: A challenge created by a role-claim admin can be treated as a regular company challenge during candidate application, so plan/trial quota checks may apply instead of the admin challenge `sessions_limit` behavior.
 - Resolution: No longer valid as written. Admin users resolve to `companyId: null` and company challenge creation/duplication routes require a company workspace, so role-claim admins cannot create company-owned challenges through the current flow. The stale `isAdmin(company.email)` exemption in challenge-access remains a possible cleanup item, but it is not an active P2 bug while admin-owned challenges are unsupported.
 
+### WEB-P2-002: Challenge session-limit validation compares total cap to remaining plan quota
+
+- Status: Open
+- Area: Challenge access settings / quota UX
+- Evidence: `validateChallengeSessionLimit()` accepts only `companyId` and the requested `sessionsLimit`, then rejects when `sessionsLimit > planStatus.sessionsLimit - planStatus.sessionsUsed`. It does not know whether this is a new challenge, an existing challenge, or how many sessions already belong to that challenge (`apps/web/src/lib/challenge-settings.ts:3`, `apps/web/src/app/api/challenges/[id]/route.ts:160`).
+- Impact: Editing an existing challenge can be blocked even when the requested cap is sensible for that challenge. For example, a company with 49 used of 50 cannot set an existing challenge's cap to 50, even if most of those 49 sessions are already on that challenge and the edit would only allow one more candidate.
+- Suggested fix: For updates, validate incremental capacity using the existing challenge's session count/current cap, or stop treating per-challenge caps as plan quota reservations. Add tests for changing a limit on a challenge that already has sessions.
+
+### WEB-P2-003: Public apply page can show an assessment as available when quota/capacity is exhausted
+
+- Status: Open
+- Area: Candidate apply UX / quota enforcement
+- Evidence: The public apply `GET` route calls `validateChallengeAccess(challenge)` without `enforceCapacity` or `enforcePlanQuota`, while the apply `POST` route performs the stricter transactional check with both flags before creating a session (`apps/web/src/app/api/challenges/[id]/apply/route.ts:134`, `apps/web/src/app/api/challenges/[id]/apply/route.ts:91`).
+- Impact: Candidates can see an assessment page as available, fill in their details, and only then be rejected because the challenge cap or company plan quota is exhausted. That creates a poor candidate experience and unnecessary support burden for companies.
+- Suggested fix: Include capacity and plan availability in the public availability check, using customer-safe messages that do not expose internal billing details. Keep the transactional `POST` check as the final source of truth.
+
+### WEB-P2-004: Pending invitations consume plan quota even if candidates never start
+
+- Status: Open
+- Area: Subscription quota accounting
+- Evidence: `countSessionsSince()` counts every row in `sessions` for a company, regardless of status or `started_at`. Invite and apply flows create `pending` sessions before a workspace starts, so unused invitations count against trial/plan limits (`apps/web/src/lib/enrollment.ts:164`, `apps/web/src/app/api/challenges/[id]/invite/route.ts:139`, `apps/web/src/app/api/challenges/[id]/apply/route.ts:99`).
+- Impact: Companies can exhaust paid or trial assessment quota through no-shows, mistaken invites, or candidates who register but never start. Trial quota is especially sticky because trial usage is counted all-time.
+- Suggested fix: Decide the intended billing unit. If quota should mean started assessments, count only sessions with `started_at IS NOT NULL` or terminal/completion statuses. If invitations should reserve quota, add explicit expiry/cancel/reclaim behavior for unused pending sessions.
+
+### WEB-P2-005: Missing `currentPeriodStart` makes paid quota fall back to all-time usage
+
+- Status: Open
+- Area: Subscription quota reset
+- Evidence: `readActiveSubscription()` can return an active subscription with `currentPeriodStart: null`, and `checkEnrollmentStatus()` passes that value to `countSessionsSince()`. A null anchor makes the counter count all company sessions instead of only the billing period (`apps/web/src/lib/enrollment.ts:119`, `apps/web/src/lib/enrollment.ts:164`).
+- Impact: A malformed active subscription document can prevent quota reset on renewal and incorrectly block paid customers after historical usage exceeds the plan limit.
+- Suggested fix: Treat active subscription documents without a valid `currentPeriodStart` as malformed. Either block with a clear operator-visible diagnostic or fall back to a deliberate provider-derived anchor, but do not silently count all-time paid usage.
+
+### WEB-P2-006: Lapsed subscription usage is displayed as all-time usage
+
+- Status: Open
+- Area: Subscription UX / billing accuracy
+- Evidence: In the `subscription_lapsed` branch, `checkEnrollmentStatus()` calls `countSessionsSince(companyId, null)` but dashboard copy says "this period" for lapsed subscriptions (`apps/web/src/lib/enrollment.ts:107`, `apps/web/src/app/dashboard/page.tsx:126`).
+- Impact: Lapsed customers can see inflated or misleading usage numbers, especially long-lived accounts that have many historical sessions. The account is blocked either way, but the displayed explanation can be wrong.
+- Suggested fix: Preserve the last known billing-period anchor/end on the company or subscription record and use that for lapsed-period usage display, or change the copy to avoid saying "this period" when only all-time usage is available.
+
 ## P3
 
 ### AE-P3-001: Analysis engine naming still says Claude while implementation uses Gemini
@@ -198,3 +262,11 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: Developers may discover or test the wrong endpoint.
 - Resolution: Root service metadata now lists the background-analysis endpoints
   alongside `/analyze`, `/health`, and `/ready`.
+
+### WEB-P3-001: Upgrade/payment links are sourced inconsistently across plan states
+
+- Status: Open
+- Area: Subscription UX
+- Evidence: Trial and missing-company paths use `ARCEVAL_PAYMENT_URL`, while paid quota-exceeded paths build a `/pricing` URL from `NEXT_PUBLIC_VIZUARA_URL` (`apps/web/src/lib/enrollment.ts:5`, `apps/web/src/lib/enrollment.ts:133`).
+- Impact: Different quota failure states can send customers to different upgrade or renewal destinations. This is low risk functionally, but confusing if the intended billing checkout URL differs from the marketing pricing page.
+- Suggested fix: Centralize the billing/upgrade URL decision and return the same configured destination for equivalent upgrade states, with separate renewal links only when intentionally different.
