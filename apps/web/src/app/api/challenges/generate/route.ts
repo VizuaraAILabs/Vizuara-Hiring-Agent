@@ -96,6 +96,7 @@ Each challenge object must have:
 
 function buildUserPrompt(body: {
   role: string;
+  role_description?: string;
   tech_stack: string[];
   seniority: string;
   focus_areas: string[];
@@ -112,6 +113,7 @@ function buildUserPrompt(body: {
 
   let prompt = `Generate 3-5 coding challenges for a ${info.label} ${body.role} engineer.
 
+Role description: ${body.role_description || 'No additional role description provided.'}
 Tech stack: ${body.tech_stack.join(', ')}
 Focus areas: ${body.focus_areas.join(', ')}
 Target difficulty: ${info.difficulty}
@@ -194,7 +196,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { role, tech_stack, seniority, focus_areas, context } = body;
+    const { role, role_description, tech_stack, seniority, focus_areas, context } = body;
 
     if (!role || !tech_stack?.length || !seniority || !focus_areas?.length) {
       return NextResponse.json(
@@ -203,7 +205,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userPrompt = buildUserPrompt({ role, tech_stack, seniority, focus_areas, context });
+    const userPrompt = buildUserPrompt({ role, role_description, tech_stack, seniority, focus_areas, context });
     const result = await callGemini(userPrompt);
 
     return NextResponse.json({

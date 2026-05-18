@@ -8,10 +8,11 @@ const roles: { id: RoleType; icon: string; name: string; description: string }[]
   { id: 'frontend', icon: '[]', name: 'Frontend', description: 'User interfaces, components, and client-side apps' },
   { id: 'data-ml', icon: 'f(x)', name: 'Data & ML', description: 'Data pipelines, analysis, and machine learning' },
   { id: 'devops', icon: '>/>', name: 'DevOps', description: 'Infrastructure, CI/CD, containers, and cloud' },
+  { id: 'agentic-ai', icon: 'AI', name: 'Agentic AI', description: 'Agentic systems, MCP tools, memory, inference engineering, evals, and cited knowledge' },
 ];
 
 interface StepRoleSelectProps {
-  onSelect: (role: RoleType) => void;
+  onSelect: (role: RoleType, description: string) => void;
 }
 
 export default function StepRoleSelect({ onSelect }: StepRoleSelectProps) {
@@ -24,7 +25,7 @@ export default function StepRoleSelect({ onSelect }: StepRoleSelectProps) {
         {roles.map((role) => (
           <button
             key={role.id}
-            onClick={() => onSelect(role.id)}
+            onClick={() => onSelect(role.id, role.description)}
             className="group flex flex-col items-center gap-3 p-6 bg-surface border border-white/10 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-all text-left cursor-pointer"
           >
             <span className="text-2xl font-mono text-primary group-hover:scale-110 transition-transform">
