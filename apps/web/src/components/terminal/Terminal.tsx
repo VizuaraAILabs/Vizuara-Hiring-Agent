@@ -55,7 +55,7 @@ export default function TerminalComponent({
                 <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-red-500/25 bg-red-500/10 text-red-300">
                   !
                 </div>
-                <p className="text-sm font-semibold text-white">Terminal could not start</p>
+                <p className="text-sm font-semibold text-white">Workspace could not start</p>
                 <p className="mt-2 text-sm leading-6 text-neutral-400">{terminalError}</p>
               </>
             ) : (

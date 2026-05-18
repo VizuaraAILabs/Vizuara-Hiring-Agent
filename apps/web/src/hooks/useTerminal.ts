@@ -9,6 +9,28 @@ interface UseTerminalOptions {
   onExit?: () => void;
 }
 
+const CUSTOMER_SAFE_TERMINAL_ERROR =
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+
+function toCustomerSafeTerminalError(message: unknown): string {
+  if (typeof message !== 'string' || !message.trim()) {
+    return CUSTOMER_SAFE_TERMINAL_ERROR;
+  }
+
+  const lowerMessage = message.toLowerCase();
+  const containsInternalDetail = [
+    'docker',
+    'container',
+    'sandbox',
+    'terminal server',
+    'image',
+    'logs',
+    'session token',
+  ].some((term) => lowerMessage.includes(term));
+
+  return containsInternalDetail ? CUSTOMER_SAFE_TERMINAL_ERROR : message;
+}
+
 export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -79,9 +101,10 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
             break;
           case 'error':
             fatalErrorRef.current = true;
-            setTerminalError(msg.message || 'Failed to start terminal');
-            terminalRef.current?.write(`\r\nError: ${msg.message || 'Failed to start terminal'}\r\n`);
-            console.error('[Terminal]', msg.message);
+            const safeMessage = toCustomerSafeTerminalError(msg.message);
+            setTerminalError(safeMessage);
+            terminalRef.current?.write(`\r\nError: ${safeMessage}\r\n`);
+            console.error('[Terminal] Workspace startup failed');
             break;
         }
       } catch {

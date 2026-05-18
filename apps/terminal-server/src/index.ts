@@ -22,6 +22,8 @@ const NEXT_APP_URL = process.env.NEXT_APP_URL || 'http://localhost:3000';
 const TERMINAL_SERVER_ID = process.env.TERMINAL_SERVER_ID || `${os.hostname()}:${PORT}`;
 const TERMINAL_RUNTIME_LEASE_SECONDS = parseInt(process.env.TERMINAL_RUNTIME_LEASE_SECONDS || '90');
 const TERMINAL_RUNTIME_HEARTBEAT_MS = Math.max(5_000, Math.floor((TERMINAL_RUNTIME_LEASE_SECONDS * 1000) / 3));
+const CUSTOMER_SAFE_TERMINAL_ERROR =
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
 
 // Initialize postgres connection
 const sql = postgres(DATABASE_URL, {
@@ -515,21 +517,21 @@ const server = http.createServer(async (req, res) => {
     const token = url.searchParams.get('token');
     if (!token) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'No token provided' }));
+      res.end(JSON.stringify({ error: 'This assessment link is missing required access information.' }));
       return;
     }
 
     const sessionInfo = await validateSessionToken(token, sql);
     if (!sessionInfo) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid or expired session token' }));
+      res.end(JSON.stringify({ error: 'This assessment link is invalid or expired.' }));
       return;
     }
 
     const session = dockerManager.getSession(sessionInfo.sessionId);
     if (!session) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Session not found — terminal may not be started yet' }));
+      res.end(JSON.stringify({ error: 'Workspace files are not available yet. Please refresh and try again.' }));
       return;
     }
 
@@ -687,7 +689,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
   const token = url.searchParams.get('token');
 
   if (!token) {
-    ws.send(JSON.stringify({ type: 'error', message: 'No session token provided' }));
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'This assessment link is missing required access information. Please reopen the link from your invitation.',
+    }));
     ws.close();
     return;
   }
@@ -695,7 +700,10 @@ wss.on('connection', async (ws: WebSocket, req) => {
   // Validate session token
   const sessionInfo = await validateSessionToken(token, sql);
   if (!sessionInfo) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Invalid or expired session token' }));
+    ws.send(JSON.stringify({
+      type: 'error',
+      message: 'This assessment link is invalid or expired. Please request a new link from your assessment administrator.',
+    }));
     ws.close();
     return;
   }
@@ -730,7 +738,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     } else if (recoveryStatus === 'busy') {
       ws.send(JSON.stringify({
         type: 'error',
-        message: 'This terminal session is active on another terminal server. Please reconnect in a moment.',
+        message: 'This workspace is already active elsewhere. Please reconnect in a moment.',
       }));
       ws.close();
       return;
@@ -746,7 +754,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
       console.error(`[Terminal] Failed to reserve runtime for session ${sessionId}:`, err);
       ws.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to start terminal',
+        message: CUSTOMER_SAFE_TERMINAL_ERROR,
       }));
       ws.close();
       return;
@@ -755,7 +763,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     if (!reserved) {
       ws.send(JSON.stringify({
         type: 'error',
-        message: 'This terminal session is starting on another terminal server. Please reconnect in a moment.',
+        message: 'This workspace is already starting elsewhere. Please reconnect in a moment.',
       }));
       ws.close();
       return;
@@ -813,12 +821,12 @@ wss.on('connection', async (ws: WebSocket, req) => {
       ws.send(JSON.stringify({
         type: 'error',
         message: isQueueTimeout
-          ? 'Server is busy, please try again in a few minutes'
+          ? 'Workspaces are busy right now. Please try again in a few minutes.'
           : isDockerUnavailable
-            ? 'Docker is not reachable from the terminal server. Start Docker Desktop and confirm the sandbox image is built, then refresh this session.'
+            ? CUSTOMER_SAFE_TERMINAL_ERROR
           : isSandboxExited
-            ? 'The sandbox container exited during startup. Rebuild the sandbox image and check terminal-server logs for the container output.'
-          : 'Failed to start terminal',
+            ? CUSTOMER_SAFE_TERMINAL_ERROR
+          : CUSTOMER_SAFE_TERMINAL_ERROR,
       }));
       ws.close();
       return;
