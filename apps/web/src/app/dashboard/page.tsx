@@ -261,22 +261,29 @@ export default function DashboardPage() {
 
       <AnalysisAlertsPanel />
 
-      <div className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/5 bg-surface p-1">
-        {challengeViews.map((challengeView) => (
-          <button
-            key={challengeView.id}
-            type="button"
-              onClick={() => setView(challengeView.id)}
-              disabled={loading}
-              className={`rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors sm:text-sm ${
-                view === challengeView.id
-                  ? 'bg-white/5 text-white'
-                : 'text-neutral-600 hover:text-neutral-300 disabled:hover:text-neutral-600'
-              }`}
-            >
-            {challengeView.label}
-          </button>
-        ))}
+      <div className="mb-6 overflow-x-auto border-b border-white/10" role="tablist" aria-label="Challenge status">
+        <div className="flex min-w-max gap-8 sm:gap-12">
+          {challengeViews.map((challengeView) => {
+            const isActive = view === challengeView.id;
+            return (
+              <button
+                key={challengeView.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setView(challengeView.id)}
+                disabled={loading}
+                className={`border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                  isActive
+                    ? 'border-primary text-white'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-300 disabled:hover:text-neutral-600'
+                }`}
+              >
+                {challengeView.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {loading ? (
