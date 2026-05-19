@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, ChevronDown, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Archive, Ban, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, UserMinus, UserX, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -150,6 +150,7 @@ export default function ChallengeDetailPage() {
   const [copiedShareable, setCopiedShareable] = useState(false);
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
+  const [copyingSessionId, setCopyingSessionId] = useState<string | null>(null);
   const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
   const [allowedEmailsSaving, setAllowedEmailsSaving] = useState(false);
@@ -179,7 +180,7 @@ export default function ChallengeDetailPage() {
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
-  const [openManageMenuId, setOpenManageMenuId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -347,6 +348,8 @@ export default function ChallengeDetailPage() {
     withdrawn: 'Withdrawn',
     disqualified: 'Disqualified',
   };
+
+  const activeCandidateStatusClass = 'border-primary/20 bg-primary/10 text-primary';
 
   function getAnalysisAlertLabel(session: Session) {
     const referenceTime = new Date(session.ended_at ?? session.created_at).getTime();
@@ -738,11 +741,16 @@ export default function ChallengeDetailPage() {
     }
   }
 
-  function copySessionLink(session: Session) {
+  async function copySessionLink(session: Session) {
     const url = `${window.location.origin}/session/${session.token}`;
-    navigator.clipboard.writeText(url);
-    setCopiedSessionId(session.id);
-    setTimeout(() => setCopiedSessionId(null), 2000);
+    setCopyingSessionId(session.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedSessionId(session.id);
+      setTimeout(() => setCopiedSessionId(null), 2000);
+    } finally {
+      setCopyingSessionId(null);
+    }
   }
 
   function updateSession(updatedSession: Session) {
@@ -810,7 +818,6 @@ export default function ChallengeDetailPage() {
 
   function handleLifecycleSelect(session: Session, value: string) {
     if (!value) return;
-    setOpenManageMenuId(null);
     void handleLifecycleAction(session, value as LifecycleAction);
   }
 
@@ -824,6 +831,28 @@ export default function ChallengeDetailPage() {
   }
 
   if (!challenge) return <p className="text-neutral-500">Challenge not found</p>;
+
+  const selectedCandidate = selectedCandidateId
+    ? challenge.sessions.find((session) => session.id === selectedCandidateId) ?? null
+    : null;
+  const selectedVisibleStatus = selectedCandidate
+    ? analysisStartingIds.has(selectedCandidate.id) ? 'queued' : selectedCandidate.status
+    : null;
+  const selectedCanUsePendingActions = selectedCandidate ? canManagePendingInvite(selectedCandidate) : false;
+  const selectedSendBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'send_invite_email')) : false;
+  const selectedRegenerateBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'regenerate_link')) : false;
+  const selectedRevokeBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'revoke')) : false;
+  const selectedNoShowBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'mark_no_show')) : false;
+  const selectedWithdrawnBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'mark_withdrawn')) : false;
+  const selectedDisqualifiedBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'mark_disqualified')) : false;
+  const selectedClearBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'clear_lifecycle')) : false;
+  const selectedAnalyzeBusy = selectedCandidate ? analysisStartingIds.has(selectedCandidate.id) : false;
+  const selectedCopyBusy = selectedCandidate ? copyingSessionId === selectedCandidate.id : false;
+  const selectedCandidateStatus = selectedCandidate?.candidate_lifecycle_status ?? null;
+  const selectedCanMarkNoShow = selectedCandidate ? selectedCandidate.status === 'pending' && !selectedCandidate.started_at : false;
+  const selectedCanCopyInviteLink = selectedCandidate ? !selectedCandidate.candidate_lifecycle_status : false;
+
+  const selectedActionButtonClass = 'inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-neutral-600';
 
   return (
     <div>
@@ -1694,24 +1723,234 @@ export default function ChallengeDetailPage() {
             <p className="max-w-3xl text-sm text-neutral-500">
               Unstarted candidates marked revoked, no-show, withdrawn, or disqualified do not count against assessment usage or capacity. Started sessions still count.
             </p>
+            <p className="text-sm text-primary">Click a candidate row to view actions.</p>
           </div>
           {challenge.sessions.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-surface p-8 text-center">
               <p className="text-neutral-600">No candidates invited yet</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-              <table className="w-full min-w-270 border-collapse text-left text-sm whitespace-nowrap">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-white/5 bg-surface px-4 py-3">
+                {selectedCandidate ? (
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{selectedCandidate.candidate_name}</p>
+                      <p className="truncate text-xs text-neutral-500">{selectedCandidate.candidate_email}</p>
+                      {lifecycleMessage?.sessionId === selectedCandidate.id && (
+                        <p className={`mt-1 text-xs ${lifecycleMessage.tone === 'error' ? 'text-red-300' : 'text-primary'}`}>
+                          {lifecycleMessage.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedVisibleStatus === 'analyzed' && (
+                        <Link
+                          href={`/dashboard/challenges/${challenge.id}/submissions/${selectedCandidate.id}`}
+                          className={selectedActionButtonClass}
+                        >
+                          <FileText className="h-4 w-4" aria-hidden="true" />
+                          View Report
+                        </Link>
+                      )}
+                      {(selectedVisibleStatus === 'completed' || selectedAnalyzeBusy) && (
+                        <button
+                          type="button"
+                          disabled={selectedAnalyzeBusy}
+                          onClick={() => handleAnalyze(selectedCandidate.id)}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedAnalyzeBusy ? (
+                            <>
+                              <ArcSpinner label="Analyzing session" sizeClassName="h-4 w-4" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                              Analyze
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCanUsePendingActions && (
+                        <button
+                          type="button"
+                          disabled={selectedSendBusy}
+                          onClick={() => handleLifecycleAction(selectedCandidate, 'send_invite_email')}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedSendBusy ? (
+                            <>
+                              <ArcSpinner label="Sending invite email" sizeClassName="h-4 w-4" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4" aria-hidden="true" />
+                              Send invite email
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCanCopyInviteLink && (
+                        <button
+                          type="button"
+                          disabled={selectedCopyBusy}
+                          onClick={() => void copySessionLink(selectedCandidate)}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedCopyBusy ? (
+                            <>
+                              <ArcSpinner label="Copying invite link" sizeClassName="h-4 w-4" />
+                              Copying...
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" aria-hidden="true" />
+                              {copiedSessionId === selectedCandidate.id ? 'Copied invite link' : 'Copy invite link'}
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCanUsePendingActions && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={selectedRegenerateBusy}
+                            onClick={() => handleLifecycleAction(selectedCandidate, 'regenerate_link')}
+                            className={selectedActionButtonClass}
+                          >
+                            {selectedRegenerateBusy ? (
+                              <>
+                                <ArcSpinner label="Regenerating invite link" sizeClassName="h-4 w-4" />
+                                Regenerating...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                                Regenerate invite link
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={selectedRevokeBusy}
+                            onClick={() => handleLifecycleAction(selectedCandidate, 'revoke')}
+                            className={selectedActionButtonClass}
+                          >
+                            {selectedRevokeBusy ? (
+                              <>
+                                <ArcSpinner label="Revoking invite" sizeClassName="h-4 w-4" />
+                                Revoking...
+                              </>
+                            ) : (
+                              <>
+                                <UserX className="h-4 w-4" aria-hidden="true" />
+                                Revoke unused invite
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                      {selectedCanMarkNoShow && selectedCandidateStatus !== 'no_show' && (
+                        <button
+                          type="button"
+                          disabled={selectedNoShowBusy}
+                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_no_show')}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedNoShowBusy ? (
+                            <>
+                              <ArcSpinner label="Marking no-show" sizeClassName="h-4 w-4" />
+                              Marking...
+                            </>
+                          ) : (
+                            <>
+                              <UserMinus className="h-4 w-4" aria-hidden="true" />
+                              Mark no-show
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCandidateStatus !== 'withdrawn' && (
+                        <button
+                          type="button"
+                          disabled={selectedWithdrawnBusy}
+                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_withdrawn')}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedWithdrawnBusy ? (
+                            <>
+                              <ArcSpinner label="Marking withdrawn" sizeClassName="h-4 w-4" />
+                              Marking...
+                            </>
+                          ) : (
+                            <>
+                              <Ban className="h-4 w-4" aria-hidden="true" />
+                              Mark withdrawn
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCandidateStatus !== 'disqualified' && (
+                        <button
+                          type="button"
+                          disabled={selectedDisqualifiedBusy}
+                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_disqualified')}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedDisqualifiedBusy ? (
+                            <>
+                              <ArcSpinner label="Marking disqualified" sizeClassName="h-4 w-4" />
+                              Marking...
+                            </>
+                          ) : (
+                            <>
+                              <UserX className="h-4 w-4" aria-hidden="true" />
+                              Mark disqualified
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {selectedCandidate.candidate_lifecycle_status && (
+                        <button
+                          type="button"
+                          disabled={selectedClearBusy}
+                          onClick={() => handleLifecycleSelect(selectedCandidate, 'clear_lifecycle')}
+                          className={selectedActionButtonClass}
+                        >
+                          {selectedClearBusy ? (
+                            <>
+                              <ArcSpinner label="Clearing status" sizeClassName="h-4 w-4" />
+                              Clearing...
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                              Clear candidate status
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">Select one candidate to show available actions.</p>
+                )}
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
+                <table className="w-full min-w-240 border-collapse text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
                     <th className="px-5 py-3 font-medium">Candidate</th>
                     <th className="px-5 py-3 font-medium">Email</th>
                     <th className="px-5 py-3 font-medium">Started</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium">Session Status</th>
+                    <th className="px-5 py-3 font-medium">Candidate Status</th>
                     <th className="px-5 py-3 font-medium">Decision</th>
-                    <th className="px-5 py-3 font-medium">Session Link</th>
                     <th className="px-5 py-3 font-medium">Invite Email</th>
-                    <th className="px-5 py-3 font-medium">Manage</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1719,14 +1958,24 @@ export default function ChallengeDetailPage() {
                     const isStartingAnalysis = analysisStartingIds.has(session.id);
                     const visibleStatus = isStartingAnalysis ? 'queued' : session.status;
                     const analysisAlertLabel = getAnalysisAlertLabel(session);
-                    const canUsePendingActions = canManagePendingInvite(session);
-                    const sendBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'send_invite_email'));
-                    const regenerateBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'regenerate_link'));
-                    const revokeBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'revoke'));
-                    const rowBusy = sendBusy || regenerateBusy || revokeBusy;
+                    const isSelected = selectedCandidateId === session.id;
 
                     return (
-                      <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/3">
+                      <tr
+                        key={session.id}
+                        onClick={() => setSelectedCandidateId((current) => current === session.id ? null : session.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedCandidateId((current) => current === session.id ? null : session.id);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        className={`cursor-pointer border-b border-white/5 transition-colors last:border-0 ${isSelected ? 'bg-primary/8' : 'hover:bg-white/3'}`}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ${session.candidate_name}`}
+                      >
                         <td className="px-5 py-4 font-medium text-white">{session.candidate_name}</td>
                         <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
                         <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>
@@ -1740,12 +1989,18 @@ export default function ChallengeDetailPage() {
                                 {analysisAlertLabel}
                               </span>
                             )}
-                            {session.candidate_lifecycle_status && (
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
-                                {lifecycleStatusLabels[session.candidate_lifecycle_status]}
-                              </span>
-                            )}
                           </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {session.candidate_lifecycle_status ? (
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
+                              {lifecycleStatusLabels[session.candidate_lifecycle_status]}
+                            </span>
+                          ) : (
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${activeCandidateStatusClass}`}>
+                              Active
+                            </span>
+                          )}
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
@@ -1755,7 +2010,10 @@ export default function ChallengeDetailPage() {
                             {session.recruiter_notes?.trim() && (
                               <button
                                 type="button"
-                                onClick={() => setReviewPreviewSession(session)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setReviewPreviewSession(session);
+                                }}
                                 className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"
                                 title="View reviewer notes"
                                 aria-label="Reviewer notes saved"
@@ -1766,191 +2024,12 @@ export default function ChallengeDetailPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <button
-                            type="button"
-                            onClick={() => copySessionLink(session)}
-                            className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-500 transition-colors hover:text-primary"
-                            title="Copy candidate session link"
-                          >
-                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                            {copiedSessionId === session.id ? 'Copied' : 'Copy'}
-                          </button>
-                        </td>
-                        <td className="px-5 py-4">
                           <div className="flex flex-col items-start gap-2">
                             <span
                               className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${inviteEmailStatusColors[session.invite_email_status || 'not_sent']}`}
                             >
                               {inviteEmailStatusLabels[session.invite_email_status || 'not_sent']}
                             </span>
-                            {lifecycleMessage?.sessionId === session.id && (
-                              <span className={`max-w-52 text-xs ${lifecycleMessage.tone === 'error' ? 'text-red-300' : 'text-primary'}`}>
-                                {lifecycleMessage.message}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex flex-wrap items-center gap-3">
-                            {visibleStatus === 'analyzed' && (
-                              <Link href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`} className="text-sm font-medium text-primary transition-colors hover:text-primary-light">
-                                View Report
-                              </Link>
-                            )}
-                            {visibleStatus === 'queued' && (
-                              <span className="flex items-center gap-2 text-sm font-medium text-amber-300 whitespace-nowrap">
-                                {isStartingAnalysis && (
-                                  <ArcSpinner label="Queueing analysis" sizeClassName="h-4 w-4" />
-                                )}
-                                Queued
-                              </span>
-                            )}
-                            {visibleStatus === 'analyzing' && (
-                              <span className="flex items-center gap-2 text-sm font-medium text-violet-300 whitespace-nowrap">
-                                <ArcSpinner label="Analyzing session" sizeClassName="h-4 w-4" />
-                                Analyzing...
-                              </span>
-                            )}
-                            {visibleStatus === 'analysis failed' && (
-                              <button
-                                type="button"
-                                disabled={isStartingAnalysis}
-                                onClick={() => handleAnalyze(session.id)}
-                                title="The analysis could not finish. Candidate data is saved."
-                                className="flex items-center gap-2 text-sm font-medium text-red-300 hover:text-red-200 disabled:text-red-500 whitespace-nowrap"
-                              >
-                                Retry analysis
-                              </button>
-                            )}
-                            {visibleStatus === 'completed' && (
-                              <button
-                                type="button"
-                                disabled={isStartingAnalysis}
-                                onClick={() => handleAnalyze(session.id)}
-                                className="flex items-center gap-2 text-sm font-medium text-violet-400 hover:text-violet-300 disabled:text-violet-600 whitespace-nowrap"
-                              >
-                                Analyze
-                              </button>
-                            )}
-                            {visibleStatus === 'pending' && canUsePendingActions && (
-                              <button
-                                type="button"
-                                disabled={sendBusy}
-                                onClick={() => handleLifecycleAction(session, 'send_invite_email')}
-                                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary-light disabled:text-neutral-600"
-                                title="Send invite email"
-                              >
-                                {sendBusy ? (
-                                  <ArcSpinner label="Sending invite email" sizeClassName="h-4 w-4" />
-                                ) : (
-                                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
-                                )}
-                                Send Invite
-                              </button>
-                            )}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={() => setOpenManageMenuId((current) => current === session.id ? null : session.id)}
-                                disabled={rowBusy}
-                                className="inline-flex h-9 min-w-32 items-center justify-between gap-2 rounded-md border border-emerald-500/70 bg-[#0a0a0a] px-3 text-sm font-medium text-white shadow-sm outline-none transition-colors hover:border-emerald-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
-                                aria-haspopup="menu"
-                                aria-expanded={openManageMenuId === session.id}
-                                aria-label={`Manage ${session.candidate_name}`}
-                              >
-                                Manage
-                                <ChevronDown className="h-4 w-4 text-neutral-300" aria-hidden="true" />
-                              </button>
-                              {openManageMenuId === session.id && (
-                                <div
-                                  role="menu"
-                                  className="absolute right-0 z-40 mt-1 min-w-52 overflow-hidden rounded-md border border-white/15 bg-[#050505] py-1 text-sm text-white shadow-xl"
-                                >
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => setOpenManageMenuId(null)}
-                                    className="block w-full bg-primary/15 px-3 py-1.5 text-left text-primary"
-                                  >
-                                    Manage
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setOpenManageMenuId(null);
-                                      copySessionLink(session);
-                                    }}
-                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                  >
-                                    Copy invite link
-                                  </button>
-                                  {canUsePendingActions && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        onClick={() => handleLifecycleSelect(session, 'send_invite_email')}
-                                        className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                      >
-                                        Send invite email
-                                      </button>
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        onClick={() => handleLifecycleSelect(session, 'regenerate_link')}
-                                        className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                      >
-                                        Regenerate invite link
-                                      </button>
-                                      <button
-                                        type="button"
-                                        role="menuitem"
-                                        onClick={() => handleLifecycleSelect(session, 'revoke')}
-                                        className="block w-full px-3 py-1.5 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
-                                      >
-                                        Revoke unused invite
-                                      </button>
-                                    </>
-                                  )}
-                                  <div className="my-1 border-t border-white/10" />
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => handleLifecycleSelect(session, 'mark_no_show')}
-                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                  >
-                                    Mark no-show
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => handleLifecycleSelect(session, 'mark_withdrawn')}
-                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                  >
-                                    Mark withdrawn
-                                  </button>
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => handleLifecycleSelect(session, 'mark_disqualified')}
-                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
-                                  >
-                                    Mark disqualified
-                                  </button>
-                                  {session.candidate_lifecycle_status && (
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      onClick={() => handleLifecycleSelect(session, 'clear_lifecycle')}
-                                      className="block w-full border-t border-white/10 px-3 py-1.5 text-left text-neutral-300 transition-colors hover:bg-primary/15 hover:text-primary"
-                                    >
-                                      Clear status
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1958,6 +2037,7 @@ export default function ChallengeDetailPage() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>

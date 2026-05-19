@@ -67,6 +67,39 @@ function nextLifecycleStatus(action: LifecycleAction): CandidateLifecycleStatus 
   return null;
 }
 
+function validateLifecycleTransition(session: SessionLifecycleRow, action: LifecycleAction): string | null {
+  if (action === 'clear_lifecycle') {
+    return session.candidate_lifecycle_status
+      ? null
+      : 'This candidate does not have a lifecycle status to clear.';
+  }
+
+  const nextStatus = nextLifecycleStatus(action);
+  if (!nextStatus) return null;
+
+  if (session.candidate_lifecycle_status === nextStatus) {
+    return `Candidate is already marked ${nextStatus.replace('_', '-')}.`;
+  }
+
+  if (nextStatus === 'revoked') {
+    return session.status === 'pending' && !session.started_at
+      ? null
+      : 'Only pending candidates who have not started can be revoked.';
+  }
+
+  if (nextStatus === 'no_show') {
+    return session.status === 'pending' && !session.started_at
+      ? null
+      : 'Only pending candidates who have not started can be marked no-show.';
+  }
+
+  if (nextStatus === 'withdrawn' || nextStatus === 'disqualified') {
+    return null;
+  }
+
+  return 'Lifecycle status is not supported for this session.';
+}
+
 function assertPendingUnstarted(session: SessionLifecycleRow, actionLabel: string) {
   if (session.status !== 'pending' || session.started_at) {
     throw new Error(`${actionLabel} is only available for pending candidates who have not started.`);
@@ -263,7 +296,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       }
     }
 
+    const transitionError = validateLifecycleTransition(session, action);
+    if (transitionError) {
+      return NextResponse.json({ error: transitionError }, { status: 400 });
+    }
+
     const nextStatus = nextLifecycleStatus(action);
+    const requiresPendingUnstarted = action === 'revoke' || action === 'mark_no_show';
     const [updated] = await sql<Session[]>`
       UPDATE sessions
       SET candidate_lifecycle_status = ${nextStatus},
@@ -272,11 +311,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
           candidate_lifecycle_updated_by_email = ${user.email}
       WHERE id = ${sessionId}
         AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
-        ${action === 'revoke' ? sql`AND status = 'pending' AND started_at IS NULL` : sql``}
+        ${requiresPendingUnstarted ? sql`AND status = 'pending' AND started_at IS NULL` : sql``}
       RETURNING *
     `;
     if (!updated) {
-      return NextResponse.json({ error: 'Lifecycle changes are unavailable while an invite email is sending. Revoking invites is only available for pending candidates who have not started.' }, { status: 409 });
+      return NextResponse.json({ error: 'Lifecycle change is unavailable for the current candidate/session status.' }, { status: 409 });
     }
     await writeLifecycleEvent(
       sql,
