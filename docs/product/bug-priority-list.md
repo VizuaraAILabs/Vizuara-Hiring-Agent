@@ -53,6 +53,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ## P1
 
+### TERM-P1-001: Terminal UI feels laggy during interactive sessions
+
+- Status: Open
+- Area: Terminal UI / candidate experience
+- Evidence: Recruiter/user report that the in-browser terminal UI has noticeable lag. The current terminal client streams WebSocket output directly into xterm (`apps/web/src/hooks/useTerminal.ts`) and forwards input immediately, but there is no latency instrumentation, output batching metric, render-pressure guard, or visible reconnect/degraded-performance state.
+- Impact: Candidates may experience delayed keystrokes, slow command feedback, or poor confidence that the assessment environment is responding. Even when backend execution is healthy, perceived terminal lag can hurt completion quality and supportability.
+- Suggested fix: Add lightweight client/server timing diagnostics first: measure input-to-echo latency, WebSocket round-trip time, output chunk sizes/rate, and xterm render backlog. Then optimize based on findings, likely by batching high-frequency terminal writes with `requestAnimationFrame`, reducing unnecessary React work around the terminal, and surfacing a degraded-connection state when network/server latency is the root cause.
+
 ### AE-P1-001: Recovery re-enqueues all queued/analyzing sessions without stale-job checks
 
 - Status: Fixed

@@ -76,11 +76,12 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P1-004: Add report export and sharing controls
 
-- Status: Proposed
+- Status: Implemented
 - Area: Reports / hiring workflow
 - Evidence: Analysis reports are rendered in-app under `apps/web/src/app/dashboard/challenges/[id]/submissions/[subId]/page.tsx`, with report components for scores, transcript, workspace, timeline, and evidence. There is no obvious PDF/CSV export, public read-only share link, or hiring-panel handoff workflow.
 - Impact: Recruiters often need to share candidate results with hiring managers outside the platform or archive reports in an ATS.
 - Suggested fix: Add PDF export, CSV score export per challenge, and optional expiring read-only report links with recruiter-controlled access.
+- Implementation notes: Added browser print/PDF export for candidate reports, challenge-level CSV score export from the Candidates tab, and expiring read-only report links that recruiters can create, replace, copy, or revoke from the report page. The first pass keeps shared reports read-only and excludes recruiter-only review controls.
 
 ## P2
 

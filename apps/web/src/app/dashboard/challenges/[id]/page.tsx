@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, Ban, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, UserMinus, UserX, Users } from 'lucide-react';
+import { Archive, Ban, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, UserMinus, UserX, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -1718,12 +1718,21 @@ export default function ChallengeDetailPage() {
 
       {activeTab === 'candidates' && (
         <div>
-          <div className="mb-4 flex flex-col gap-1">
-            <h2 className="text-lg font-semibold text-white">Candidates ({challenge.sessions.length})</h2>
-            <p className="max-w-3xl text-sm text-neutral-500">
-              Unstarted candidates marked revoked, no-show, withdrawn, or disqualified do not count against assessment usage or capacity. Started sessions still count.
-            </p>
-            <p className="text-sm text-primary">Click a candidate row to view actions.</p>
+          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-white">Candidates ({challenge.sessions.length})</h2>
+              <p className="max-w-3xl text-sm text-neutral-500">
+                Unstarted candidates marked revoked, no-show, withdrawn, or disqualified do not count against assessment usage or capacity. Started sessions still count.
+              </p>
+              <p className="text-sm text-primary">Click a candidate row to view actions.</p>
+            </div>
+            <a
+              href={`/api/challenges/${challenge.id}/scores.csv`}
+              className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              Export scores CSV
+            </a>
           </div>
           {challenge.sessions.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-surface p-8 text-center">

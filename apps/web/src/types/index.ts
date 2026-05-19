@@ -89,6 +89,17 @@ export interface Session {
   candidate_lifecycle_updated_by_email?: string | null;
 }
 
+export interface ReportShareLink {
+  id: string;
+  session_id: string;
+  token: string;
+  expires_at: string;
+  revoked_at: string | null;
+  created_by_email: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface Interaction {
   id: number;
   session_id: string;

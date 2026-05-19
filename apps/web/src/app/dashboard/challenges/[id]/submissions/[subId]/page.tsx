@@ -2,7 +2,9 @@
 
 import IntegrityPanel from '@/components/report/IntegrityPanel';
 import KeyMoments from '@/components/report/KeyMoments';
+import PrintableReport from '@/components/report/PrintableReport';
 import RecruiterReviewPanel from '@/components/report/RecruiterReviewPanel';
+import ReportExportActions from '@/components/report/ReportExportActions';
 import ReportHeader from '@/components/report/ReportHeader';
 import ReportSummary from '@/components/report/ReportSummary';
 import ScoreSummary from '@/components/report/ScoreSummary';
@@ -247,20 +249,28 @@ export default function ReportPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Back link */}
-      <Link
-        href={`/dashboard/challenges/${challengeId}`}
-        className="text-neutral-600 hover:text-neutral-300 text-sm mb-6 block transition-colors"
-      >
-        &larr; Back to challenge
-      </Link>
+      <div className="print-only">
+        <PrintableReport session={session} analysis={analysis} challenge={challenge} />
+      </div>
 
-      {/* Header */}
-      <ReportHeader session={session} analysis={analysis} />
-      <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
+      <div className="screen-only">
+        {/* Back link */}
+        <Link
+          href={`/dashboard/challenges/${challengeId}`}
+          className="text-neutral-600 hover:text-neutral-300 text-sm mb-6 block transition-colors"
+        >
+          &larr; Back to challenge
+        </Link>
+
+        <ReportExportActions sessionId={sessionId} />
+
+        {/* Header */}
+        <ReportHeader session={session} analysis={analysis} />
+        <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
+      </div>
 
       {/* Tabs */}
-      <div className="sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 pt-3">
+      <div className="screen-only sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 pt-3">
         <div className="overflow-x-auto border-b border-white/10" role="tablist" aria-label="Submission report sections">
           <div className="flex min-w-max gap-6 sm:gap-8">
             {tabs.map((tab) => {
@@ -287,6 +297,7 @@ export default function ReportPage() {
       </div>
 
       {/* Tab Content */}
+      <div className="screen-only">
       {activeTab === 'summary' && <ReportSummary analysis={analysis} />}
 
       {activeTab === 'overview' && (
@@ -361,6 +372,7 @@ export default function ReportPage() {
           sessionId={sessionId}
         />
       )}
+      </div>
 
       {/* Feedback — shown below all tabs */}
       {/*
