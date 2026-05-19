@@ -87,7 +87,7 @@ export default function RecruiterReviewPanel({ session, onSessionUpdated }: Recr
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-white/5 bg-surface p-5">
+    <section className="border-b border-white/10 py-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
@@ -116,7 +116,7 @@ export default function RecruiterReviewPanel({ session, onSessionUpdated }: Recr
         <button
           type="button"
           onClick={openReviewModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light"
+          className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light"
         >
           <Pencil className="h-4 w-4" aria-hidden="true" />
           {session.reviewed_at ? 'Edit Review' : 'Add Review'}
@@ -222,6 +222,6 @@ export default function RecruiterReviewPanel({ session, onSessionUpdated }: Recr
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

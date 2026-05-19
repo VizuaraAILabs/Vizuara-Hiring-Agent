@@ -99,13 +99,13 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
   }
 
   return (
-    <div className="screen-only mb-6 rounded-xl border border-white/5 bg-surface px-4 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="screen-only">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:text-primary"
           >
             <FileDown className="h-4 w-4" aria-hidden="true" />
             Export PDF
@@ -114,7 +114,7 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
           <select
             value={durationDays}
             onChange={(event) => setDurationDays(event.target.value)}
-            className="rounded-full border border-white/10 bg-black px-3 py-2 text-sm font-semibold text-neutral-300 outline-none transition-colors hover:border-primary/40 focus:border-primary"
+            className="rounded-full border border-white/10 bg-transparent px-3 py-2 text-sm font-semibold text-neutral-300 outline-none transition-colors hover:border-primary/40 focus:border-primary"
             aria-label="Report link expiry"
           >
             {durationOptions.map((option) => (
@@ -126,7 +126,7 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
             type="button"
             disabled={actionBusy}
             onClick={createShareLink}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:text-neutral-600"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:text-neutral-600"
           >
             {busy === 'create' ? (
               <>
@@ -147,7 +147,7 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
                 type="button"
                 disabled={actionBusy}
                 onClick={copyShareLink}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:text-neutral-600"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:text-neutral-600"
               >
                 {busy === 'copy' ? (
                   <>
@@ -165,7 +165,7 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
                 type="button"
                 disabled={actionBusy}
                 onClick={revokeShareLink}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:text-neutral-600"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-red-400/40 hover:text-red-300 disabled:cursor-not-allowed disabled:text-neutral-600"
               >
                 {busy === 'revoke' ? (
                   <>
@@ -183,7 +183,7 @@ export default function ReportExportActions({ sessionId }: ReportExportActionsPr
           )}
         </div>
 
-        <div className="min-h-5 text-xs text-neutral-500">
+        <div className="min-h-5 text-xs text-neutral-500 lg:text-right">
           {loading ? 'Checking link access...' : shareLink ? `Expires ${new Date(shareLink.expires_at).toLocaleString()}` : 'No public report link active.'}
           {message && <span className="ml-2 text-primary">{message}</span>}
         </div>

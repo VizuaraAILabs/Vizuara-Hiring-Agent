@@ -254,15 +254,15 @@ export default function ReportPage() {
       </div>
 
       <div className="screen-only">
-        {/* Back link */}
-        <Link
-          href={`/dashboard/challenges/${challengeId}`}
-          className="text-neutral-600 hover:text-neutral-300 text-sm mb-6 block transition-colors"
-        >
-          &larr; Back to challenge
-        </Link>
-
-        <ReportExportActions sessionId={sessionId} />
+        <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <Link
+            href={`/dashboard/challenges/${challengeId}`}
+            className="text-neutral-600 hover:text-neutral-300 text-sm transition-colors"
+          >
+            &larr; Back to challenge
+          </Link>
+          <ReportExportActions sessionId={sessionId} />
+        </div>
 
         {/* Header */}
         <ReportHeader session={session} analysis={analysis} />

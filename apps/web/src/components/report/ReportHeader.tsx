@@ -10,8 +10,8 @@ interface ReportHeaderProps {
 
 export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
   return (
-    <div className="bg-surface border border-white/5 rounded-2xl p-8">
-      <div className="flex items-start justify-between">
+    <section className="border-b border-white/10 py-8">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-serif italic text-white mb-1">{session.candidate_name}</h1>
           <p className="text-neutral-500 text-sm">{session.candidate_email}</p>
@@ -20,7 +20,7 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5 sm:justify-end">
           <div className="text-center">
             <div className={`text-4xl font-bold ${getScoreColor(analysis.overall_score)}`}>
               {analysis.overall_score.toFixed(0)}
@@ -37,6 +37,6 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
           </span>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
