@@ -62,9 +62,9 @@ export default function SharedReportPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#0a0a0a] px-6 py-10">
+      <main className="min-h-screen bg-[#0a0a0a] px-4 py-8 sm:px-6">
         <div className="mx-auto max-w-6xl animate-pulse space-y-4">
-          <div className="h-36 rounded-2xl bg-surface" />
+          <div className="h-20 rounded-xl bg-surface" />
           <div className="h-72 rounded-2xl bg-surface" />
         </div>
       </main>
@@ -73,7 +73,7 @@ export default function SharedReportPage() {
 
   if (error || !data) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-6">
+      <main className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4 sm:px-6">
         <div className="max-w-md rounded-2xl border border-white/5 bg-surface p-8 text-center">
           <h1 className="text-xl font-semibold text-white">Report unavailable</h1>
           <p className="mt-2 text-sm text-neutral-500">{error ?? 'This link may have expired or been revoked.'}</p>
@@ -94,13 +94,13 @@ export default function SharedReportPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] px-6 py-10">
+    <main className="min-h-screen bg-[#0a0a0a] px-4 py-8 sm:px-6">
       <div className="print-only">
         <PrintableReport session={data.session} analysis={data.analysis} challenge={data.challenge} />
       </div>
 
       <div className="screen-only mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/5 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-white/5 bg-surface px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-white">Read-only candidate report</p>
             <p className="mt-1 text-xs text-neutral-500">Expires {new Date(data.expires_at).toLocaleString()}</p>

@@ -11,7 +11,12 @@ export default function Header() {
 
   // Don't render Header on dashboard pages (Sidebar handles navigation)
   // or session terminal pages (TerminalToolbar handles navigation)
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/session') || pathname.includes('/terminal')) return null;
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/session') ||
+    pathname.startsWith('/reports/shared') ||
+    pathname.includes('/terminal')
+  ) return null;
 
   return (
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">

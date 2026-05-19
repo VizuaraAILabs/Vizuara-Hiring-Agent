@@ -163,6 +163,12 @@ summary,
     color: #111111 !important;
   }
 
+  .dashboard-main {
+    display: block !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
   .screen-only {
     display: none !important;
   }

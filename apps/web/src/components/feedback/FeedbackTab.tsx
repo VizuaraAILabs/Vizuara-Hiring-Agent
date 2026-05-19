@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useFeedback } from '@/hooks/useFeedback';
 import type { FeedbackCategory } from '@/types/feedback';
@@ -14,6 +15,7 @@ const CATEGORIES: { value: FeedbackCategory; label: string }[] = [
 
 export default function FeedbackTab() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const { submit } = useFeedback();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<FeedbackCategory>('suggestion');
@@ -27,7 +29,7 @@ export default function FeedbackTab() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  if (!user) return null;
+  if (!user || pathname.startsWith('/reports/shared')) return null;
 
   const handleSubmit = async () => {
     if (!comment.trim()) return;
@@ -46,7 +48,7 @@ export default function FeedbackTab() {
       {/* Fixed tab */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 cursor-pointer"
+        className="fixed right-0 top-1/2 z-40 -translate-y-1/2 cursor-pointer print:hidden"
         aria-label="Open feedback"
       >
         <span
@@ -60,14 +62,14 @@ export default function FeedbackTab() {
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/50"
+          className="fixed inset-0 z-40 bg-black/50 print:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
       {/* Slide-out panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-sm z-50 bg-surface border-l border-border flex flex-col transition-transform duration-300 ${
+        className={`fixed top-0 right-0 z-50 flex h-full w-full max-w-sm flex-col border-l border-border bg-surface transition-transform duration-300 print:hidden ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

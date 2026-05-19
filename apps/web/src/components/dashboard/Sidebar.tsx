@@ -43,7 +43,7 @@ export default function Sidebar() {
     : null;
 
   return (
-    <aside className="w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
+    <aside className="print:hidden w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-white/5">
         <Link href="/" className="flex items-center gap-2.5">
           <FPLLogo size={26} />
