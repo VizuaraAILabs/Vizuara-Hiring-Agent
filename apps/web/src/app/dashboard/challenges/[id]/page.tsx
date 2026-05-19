@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, Ban, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, UserMinus, UserX, Users } from 'lucide-react';
+import { Archive, Ban, BarChart3, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Trash2, UserMinus, UserX, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -18,7 +18,46 @@ interface ChallengeDetail extends Challenge {
   sessions: Session[];
 }
 
-type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'invites' | 'candidates' | 'settings';
+type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'invites' | 'candidates' | 'analytics' | 'settings';
+
+type AnalyticsItem = {
+  key?: string;
+  label: string;
+  count: number;
+  percent?: number;
+};
+
+type ChallengeAnalytics = {
+  totalSessions: number;
+  startedCount: number;
+  completedCount: number;
+  analyzedCount: number;
+  activeCount: number;
+  pendingCount: number;
+  averageScore: number | null;
+  averageDurationMinutes: number | null;
+  funnel: AnalyticsItem[];
+  scoreBands: AnalyticsItem[];
+  recommendationDistribution: AnalyticsItem[];
+  decisionDistribution: AnalyticsItem[];
+  lifecycleCounts: {
+    noShow: number;
+    withdrawn: number;
+    disqualified: number;
+    revoked: number;
+  };
+  capacity: {
+    limit: number | null;
+    used: number;
+    percent: number | null;
+  };
+  accessWindow: {
+    startsAt: string | null;
+    endsAt: string | null;
+    status: 'not_set' | 'not_started' | 'open' | 'ended';
+    elapsedPercent: number | null;
+  };
+};
 
 type SettingsForm = {
   title: string;
@@ -51,6 +90,42 @@ type LifecycleAction =
   | 'mark_withdrawn'
   | 'mark_disqualified'
   | 'clear_lifecycle';
+
+type CandidateColumnId =
+  | 'candidate'
+  | 'email'
+  | 'started'
+  | 'duration'
+  | 'sessionStatus'
+  | 'candidateStatus'
+  | 'decision'
+  | 'inviteEmail';
+
+type CandidateColumn = {
+  id: CandidateColumnId;
+  label: string;
+  description: string;
+  locked?: boolean;
+};
+
+const candidateColumns: CandidateColumn[] = [
+  { id: 'candidate', label: 'Candidate', description: 'Candidate name', locked: true },
+  { id: 'email', label: 'Email', description: 'Candidate email address' },
+  { id: 'started', label: 'Started', description: 'Session start time' },
+  { id: 'duration', label: 'Duration', description: 'Total time taken' },
+  { id: 'sessionStatus', label: 'Session Status', description: 'Assessment progress state' },
+  { id: 'candidateStatus', label: 'Candidate Status', description: 'Recruiter lifecycle state' },
+  { id: 'decision', label: 'Decision', description: 'Recruiter decision and notes' },
+  { id: 'inviteEmail', label: 'Invite Email', description: 'Invite delivery status' },
+];
+
+const defaultCandidateColumns = new Set<CandidateColumnId>([
+  'candidate',
+  'duration',
+  'sessionStatus',
+  'candidateStatus',
+  'decision',
+]);
 
 const roleOptions: RoleOption[] = [
   { id: 'full-stack', name: 'Full-Stack', description: 'End-to-end web applications' },
@@ -125,6 +200,87 @@ function challengeToSettingsForm(challenge: Challenge): SettingsForm {
   };
 }
 
+function formatAnalyticsPercent(value: number | null | undefined) {
+  return value == null ? 'N/A' : `${value}%`;
+}
+
+function formatDurationMinutes(value: number | null) {
+  if (value == null) return 'N/A';
+  if (value < 60) return `${value}m`;
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+function getSessionDurationLabel(session: Session) {
+  if (!session.started_at) return 'Not started';
+  if (!session.ended_at) return 'In progress';
+
+  const startedAt = new Date(session.started_at).getTime();
+  const endedAt = new Date(session.ended_at).getTime();
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt) || endedAt < startedAt) {
+    return 'N/A';
+  }
+
+  return formatDurationMinutes(Math.ceil((endedAt - startedAt) / 60000));
+}
+
+function AnalyticsMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <div className="border-l border-white/10 pl-4 first:border-l-0 first:pl-0">
+      <p className="text-xs font-medium uppercase tracking-[0.16em] text-neutral-600">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      {detail && <p className="mt-1 text-xs text-neutral-500">{detail}</p>}
+    </div>
+  );
+}
+
+function AnalyticsRows({
+  items,
+  total,
+  emptyLabel = 'No data yet',
+}: {
+  items: AnalyticsItem[];
+  total: number;
+  emptyLabel?: string;
+}) {
+  const hasData = items.some((item) => item.count > 0);
+
+  if (!hasData) {
+    return <p className="text-sm text-neutral-600">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => {
+        const itemPercent = item.percent ?? (total > 0 ? Math.round((item.count / total) * 100) : 0);
+        return (
+          <div key={item.key ?? item.label}>
+            <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+              <span className="text-neutral-300">{item.label}</span>
+              <span className="text-neutral-500">{item.count} - {itemPercent}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, Math.max(0, itemPercent))}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ChallengeDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -181,6 +337,16 @@ export default function ChallengeDetailPage() {
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<ChallengeAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
+  const [candidateColumnsOpen, setCandidateColumnsOpen] = useState(false);
+  const [visibleCandidateColumns, setVisibleCandidateColumns] = useState<Set<CandidateColumnId>>(
+    () => new Set(defaultCandidateColumns)
+  );
+  const [draftCandidateColumns, setDraftCandidateColumns] = useState<Set<CandidateColumnId>>(
+    () => new Set(defaultCandidateColumns)
+  );
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -191,6 +357,26 @@ export default function ChallengeDetailPage() {
     }
 
     return data;
+  }, [challengeId]);
+
+  const fetchChallengeAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+
+    try {
+      const res = await fetch(`/api/challenges/${challengeId}/analytics`);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data) {
+        throw new Error(data?.error || 'Failed to load analytics');
+      }
+
+      setAnalytics(data);
+    } catch (error) {
+      setAnalyticsError(error instanceof Error ? error.message : 'Failed to load analytics');
+    } finally {
+      setAnalyticsLoading(false);
+    }
   }, [challengeId]);
 
   function toDateTimeLocal(value: string | null | undefined) {
@@ -255,6 +441,12 @@ export default function ChallengeDetailPage() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'analytics' && !analytics && !analyticsLoading && !analyticsError) {
+      void fetchChallengeAnalytics();
+    }
+  }, [activeTab, analytics, analyticsError, analyticsLoading, fetchChallengeAnalytics]);
+
   const starterFileCount = starterFiles.filter((file) => file.path && !file.path.endsWith('/.gitkeep')).length;
   const hasStarterFileChanges = useMemo(
     () => JSON.stringify(starterFiles) !== JSON.stringify(savedStarterFiles),
@@ -298,6 +490,7 @@ export default function ChallengeDetailPage() {
     { id: 'distribution' as const, label: 'Access Control', icon: Link2 },
     { id: 'invites' as const, label: 'Invites', icon: MailPlus },
     { id: 'candidates' as const, label: 'Candidates', icon: Users, badge: challenge?.sessions.length ?? 0 },
+    { id: 'analytics' as const, label: 'Analytics', icon: BarChart3 },
     { id: 'settings' as const, label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -644,6 +837,8 @@ export default function ChallengeDetailPage() {
         setAllowedEmails((current) => current.includes(normalizedEmail) ? current : [...current, normalizedEmail]);
         setInviteForm({ name: '', email: '' });
         setChallenge(await fetchChallengeDetail());
+        setAnalytics(null);
+        setAnalyticsError('');
         await refreshSubscription();
       } else {
         throw new Error(data?.error || 'Failed to generate invite');
@@ -693,6 +888,8 @@ export default function ChallengeDetailPage() {
   }
 
   function updateSessionStatus(sessionId: string, status: Session['status']) {
+    setAnalytics(null);
+    setAnalyticsError('');
     setChallenge((current) => current
       ? {
         ...current,
@@ -707,6 +904,8 @@ export default function ChallengeDetailPage() {
   async function refreshChallengeAfterAnalysisFailure() {
     try {
       setChallenge(await fetchChallengeDetail());
+      setAnalytics(null);
+      setAnalyticsError('');
     } catch {
       // Keep the current UI state if the refresh fails.
     }
@@ -754,6 +953,8 @@ export default function ChallengeDetailPage() {
   }
 
   function updateSession(updatedSession: Session) {
+    setAnalytics(null);
+    setAnalyticsError('');
     setChallenge((current) => current
       ? {
         ...current,
@@ -821,6 +1022,32 @@ export default function ChallengeDetailPage() {
     void handleLifecycleAction(session, value as LifecycleAction);
   }
 
+  function candidateColumnVisible(columnId: CandidateColumnId) {
+    return visibleCandidateColumns.has(columnId);
+  }
+
+  function openCandidateColumnsModal() {
+    setDraftCandidateColumns(new Set(visibleCandidateColumns));
+    setCandidateColumnsOpen(true);
+  }
+
+  function toggleDraftCandidateColumn(columnId: CandidateColumnId) {
+    const column = candidateColumns.find((item) => item.id === columnId);
+    if (column?.locked) return;
+
+    setDraftCandidateColumns((current) => {
+      const next = new Set(current);
+      if (next.has(columnId)) next.delete(columnId);
+      else next.add(columnId);
+      return next;
+    });
+  }
+
+  function applyCandidateColumns() {
+    setVisibleCandidateColumns(new Set(draftCandidateColumns));
+    setCandidateColumnsOpen(false);
+  }
+
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
@@ -875,8 +1102,12 @@ export default function ChallengeDetailPage() {
                   {challenge.cohort_label}
                 </span>
               )}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                {challenge.time_limit_min} min
+              </span>
             </div>
-            <p className="mt-1 text-neutral-500">{challenge.time_limit_min} minute time limit</p>
+            <p className="mt-1 text-neutral-500">Assessment duration</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1716,6 +1947,136 @@ export default function ChallengeDetailPage() {
         </form>
       )}
 
+      {activeTab === 'analytics' && (
+        <div className="space-y-8">
+          <div className="flex flex-col gap-4 border-b border-white/5 pb-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Assessment Analytics</h2>
+              <p className="mt-1 max-w-3xl text-sm text-neutral-500">
+                Funnel, scoring, recommendations, and utilization for this assessment.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchChallengeAnalytics}
+                disabled={analyticsLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                {analyticsLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+              <a
+                href={`/api/challenges/${challenge.id}/scores.csv`}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export candidate table
+              </a>
+            </div>
+          </div>
+
+          {analyticsError && (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {analyticsError}
+            </div>
+          )}
+
+          {analyticsLoading && !analytics ? (
+            <div className="flex items-center gap-3 text-sm text-neutral-500">
+              <ArcSpinner label="Loading analytics" sizeClassName="h-4 w-4" />
+              Loading analytics...
+            </div>
+          ) : analytics ? (
+            <>
+              <div className="grid gap-5 border-b border-white/5 pb-6 sm:grid-cols-2 lg:grid-cols-4">
+                <AnalyticsMetric label="Invited" value={analytics.totalSessions} detail={`${analytics.pendingCount} pending`} />
+                <AnalyticsMetric label="Started" value={analytics.startedCount} detail={formatAnalyticsPercent(analytics.funnel.find((item) => item.label === 'Started')?.percent)} />
+                <AnalyticsMetric label="Average Score" value={analytics.averageScore ?? 'N/A'} detail={`${analytics.analyzedCount} analyzed`} />
+                <AnalyticsMetric label="Avg. Duration" value={formatDurationMinutes(analytics.averageDurationMinutes)} detail={`${analytics.completedCount} completed`} />
+              </div>
+
+              <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+                <section>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-white">Completion Funnel</h3>
+                    <span className="text-xs text-neutral-600">{analytics.activeCount} active now</span>
+                  </div>
+                  <AnalyticsRows items={analytics.funnel} total={analytics.totalSessions} />
+                </section>
+
+                <section>
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-white">Assessment Window</h3>
+                    <p className="mt-1 text-xs text-neutral-600">
+                      {analytics.accessWindow.status === 'not_set'
+                        ? 'No start or end window set'
+                        : analytics.accessWindow.status === 'not_started'
+                          ? 'Window has not opened yet'
+                          : analytics.accessWindow.status === 'ended'
+                            ? 'Window has ended'
+                            : 'Window is open'}
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                        <span className="text-neutral-300">Capacity used</span>
+                        <span className="text-neutral-500">
+                          {analytics.capacity.used}{analytics.capacity.limit == null ? '' : ` / ${analytics.capacity.limit}`}
+                        </span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.min(100, Math.max(0, analytics.capacity.percent ?? 0))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                        <span className="text-neutral-300">Window elapsed</span>
+                        <span className="text-neutral-500">{formatAnalyticsPercent(analytics.accessWindow.elapsedPercent)}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                        <div
+                          className="h-full rounded-full bg-neutral-500"
+                          style={{ width: `${Math.min(100, Math.max(0, analytics.accessWindow.elapsedPercent ?? 0))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div className="grid gap-8 lg:grid-cols-3">
+                <section>
+                  <h3 className="mb-4 text-sm font-semibold text-white">Score Distribution</h3>
+                  <AnalyticsRows items={analytics.scoreBands} total={analytics.analyzedCount} />
+                </section>
+                <section>
+                  <h3 className="mb-4 text-sm font-semibold text-white">Recommendation Breakdown</h3>
+                  <AnalyticsRows items={analytics.recommendationDistribution} total={analytics.analyzedCount} />
+                </section>
+                <section>
+                  <h3 className="mb-4 text-sm font-semibold text-white">Recruiter Decisions</h3>
+                  <AnalyticsRows items={analytics.decisionDistribution} total={analytics.totalSessions} emptyLabel="No decisions saved yet" />
+                </section>
+              </div>
+
+              <div className="grid gap-4 border-t border-white/5 pt-6 sm:grid-cols-2 lg:grid-cols-4">
+                <AnalyticsMetric label="No-shows" value={analytics.lifecycleCounts.noShow} />
+                <AnalyticsMetric label="Withdrawn" value={analytics.lifecycleCounts.withdrawn} />
+                <AnalyticsMetric label="Disqualified" value={analytics.lifecycleCounts.disqualified} />
+                <AnalyticsMetric label="Revoked" value={analytics.lifecycleCounts.revoked} />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-600">Analytics will appear once candidate activity is available.</p>
+          )}
+        </div>
+      )}
+
       {activeTab === 'candidates' && (
         <div>
           <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1726,13 +2087,23 @@ export default function ChallengeDetailPage() {
               </p>
               <p className="text-sm text-primary">Click a candidate row to view actions.</p>
             </div>
-            <a
-              href={`/api/challenges/${challenge.id}/scores.csv`}
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              Export scores CSV
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openCandidateColumnsModal}
+                className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              >
+                <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+                Columns
+              </button>
+              <a
+                href={`/api/challenges/${challenge.id}/scores.csv`}
+                className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export scores CSV
+              </a>
+            </div>
           </div>
           {challenge.sessions.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-surface p-8 text-center">
@@ -1949,17 +2320,18 @@ export default function ChallengeDetailPage() {
                 )}
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-white/5 bg-surface">
-                <table className="w-full min-w-240 border-collapse text-left text-sm whitespace-nowrap">
+              <div className="block w-full max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-white/5 bg-surface">
+                <table className="w-max min-w-full border-collapse text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-xs uppercase tracking-[0.18em] text-neutral-600">
-                    <th className="px-5 py-3 font-medium">Candidate</th>
-                    <th className="px-5 py-3 font-medium">Email</th>
-                    <th className="px-5 py-3 font-medium">Started</th>
-                    <th className="px-5 py-3 font-medium">Session Status</th>
-                    <th className="px-5 py-3 font-medium">Candidate Status</th>
-                    <th className="px-5 py-3 font-medium">Decision</th>
-                    <th className="px-5 py-3 font-medium">Invite Email</th>
+                    {candidateColumnVisible('candidate') && <th className="px-5 py-3 font-medium">Candidate</th>}
+                    {candidateColumnVisible('email') && <th className="px-5 py-3 font-medium">Email</th>}
+                    {candidateColumnVisible('started') && <th className="px-5 py-3 font-medium">Started</th>}
+                    {candidateColumnVisible('duration') && <th className="px-5 py-3 font-medium">Duration</th>}
+                    {candidateColumnVisible('sessionStatus') && <th className="px-5 py-3 font-medium">Session Status</th>}
+                    {candidateColumnVisible('candidateStatus') && <th className="px-5 py-3 font-medium">Candidate Status</th>}
+                    {candidateColumnVisible('decision') && <th className="px-5 py-3 font-medium">Decision</th>}
+                    {candidateColumnVisible('inviteEmail') && <th className="px-5 py-3 font-medium">Invite Email</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1985,9 +2357,19 @@ export default function ChallengeDetailPage() {
                         aria-pressed={isSelected}
                         aria-label={`Select ${session.candidate_name}`}
                       >
-                        <td className="px-5 py-4 font-medium text-white">{session.candidate_name}</td>
-                        <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
-                        <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>
+                        {candidateColumnVisible('candidate') && (
+                          <td className="px-5 py-4 font-medium text-white">{session.candidate_name}</td>
+                        )}
+                        {candidateColumnVisible('email') && (
+                          <td className="px-5 py-4 text-neutral-500">{session.candidate_email}</td>
+                        )}
+                        {candidateColumnVisible('started') && (
+                          <td className="px-5 py-4 text-neutral-600">{session.started_at ? formatDateTime(session.started_at) : 'Not started'}</td>
+                        )}
+                        {candidateColumnVisible('duration') && (
+                          <td className="px-5 py-4 text-neutral-500">{getSessionDurationLabel(session)}</td>
+                        )}
+                        {candidateColumnVisible('sessionStatus') && (
                         <td className="px-5 py-4">
                           <div className="flex flex-col items-start gap-1.5">
                             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColors[visibleStatus]}`}>
@@ -2000,6 +2382,8 @@ export default function ChallengeDetailPage() {
                             )}
                           </div>
                         </td>
+                        )}
+                        {candidateColumnVisible('candidateStatus') && (
                         <td className="px-5 py-4">
                           {session.candidate_lifecycle_status ? (
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
@@ -2011,6 +2395,8 @@ export default function ChallengeDetailPage() {
                             </span>
                           )}
                         </td>
+                        )}
+                        {candidateColumnVisible('decision') && (
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getDecisionColor(session.decision_label)}`}>
@@ -2032,6 +2418,8 @@ export default function ChallengeDetailPage() {
                             )}
                           </div>
                         </td>
+                        )}
+                        {candidateColumnVisible('inviteEmail') && (
                         <td className="px-5 py-4">
                           <div className="flex flex-col items-start gap-2">
                             <span
@@ -2041,6 +2429,7 @@ export default function ChallengeDetailPage() {
                             </span>
                           </div>
                         </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -2049,6 +2438,81 @@ export default function ChallengeDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {candidateColumnsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setCandidateColumnsOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="candidate-columns-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-white/5 px-5 py-4">
+              <div>
+                <p id="candidate-columns-title" className="text-sm font-semibold text-white">Table Columns</p>
+                <p className="mt-1 text-xs text-neutral-500">Choose which candidate fields are shown.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCandidateColumnsOpen(false)}
+                className="rounded-lg p-2 text-neutral-500 transition-colors hover:bg-white/5 hover:text-white"
+                aria-label="Close column selector"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
+              {candidateColumns.map((column) => {
+                const checked = draftCandidateColumns.has(column.id);
+                return (
+                  <label
+                    key={column.id}
+                    className={`flex cursor-pointer items-start gap-3 border-b border-white/5 py-3 last:border-0 ${column.locked ? 'cursor-not-allowed opacity-70' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={column.locked}
+                      onChange={() => toggleDraftCandidateColumn(column.id)}
+                      className="mt-1 h-4 w-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">
+                        {column.label}
+                        {column.locked && <span className="ml-2 text-xs font-normal text-neutral-500">Required</span>}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-5 text-neutral-500">{column.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-white/5 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setDraftCandidateColumns(new Set(defaultCandidateColumns))}
+                className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={applyCandidateColumns}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

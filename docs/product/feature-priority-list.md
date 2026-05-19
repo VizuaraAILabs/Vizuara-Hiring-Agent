@@ -87,11 +87,12 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P2-001: Add assessment-level analytics dashboard
 
-- Status: Proposed
+- Status: Implemented
 - Area: Analytics / recruiter insight
 - Evidence: Challenge detail shows candidate rows and status counts implicitly, while admin has platform cost/usage summaries. There is no per-assessment funnel for invited, started, completed, analyzed, average score, recommendation distribution, no-shows, or time-to-complete.
 - Impact: Recruiters cannot quickly understand drive performance or identify weak/strong cohorts without opening reports one by one.
 - Suggested fix: Add a challenge analytics panel with completion funnel, score distribution, recommendation breakdown, average duration, assessment-window utilization, and downloadable candidate table.
+- Implementation notes: Added an Analytics tab on challenge detail backed by `/api/challenges/[id]/analytics`. The tab shows invited/started/completed/analyzed funnel, average score and duration, score bands, recommendation and decision breakdowns, candidate lifecycle counts, assessment-window/capacity utilization, and a candidate-table CSV export.
 
 ### FEAT-P2-002: Add assessment template versioning
 
