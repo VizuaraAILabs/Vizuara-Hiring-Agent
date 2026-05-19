@@ -11,7 +11,7 @@ type CandidateSessionWithChallenge = Omit<
 
 type CandidateSessionUpdate = Pick<
   Session,
-  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot'
+  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot' | 'candidate_lifecycle_status' | 'invite_email_status'
 >;
 
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -22,6 +22,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       SELECT
         s.id, s.challenge_id, s.candidate_name, s.candidate_email, s.token, s.status,
         s.started_at, s.ended_at, s.created_at, s.workspace_snapshot,
+        s.candidate_lifecycle_status, s.candidate_lifecycle_reason, s.invite_email_status,
+        s.candidate_lifecycle_updated_at, s.candidate_lifecycle_updated_by_email,
         c.title as challenge_title, c.description as challenge_description,
         c.time_limit_min, c.company_id as challenge_company_id, c.is_active as challenge_is_active,
         c.starts_at as challenge_starts_at, c.ends_at as challenge_ends_at,
@@ -33,6 +35,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(
+        { error: 'This assessment invite is no longer active. Please contact the company.' },
+        { status: 403 }
+      );
+    }
+    if (session.invite_email_status === 'sending') {
+      return NextResponse.json({ error: 'This assessment invite is still being prepared. Please try again shortly.' }, { status: 409 });
     }
 
     if (session.status !== 'pending') {
@@ -72,10 +83,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       UPDATE sessions
       SET status = 'active'
       WHERE id = ${session.id}
+        AND status = 'pending'
+        AND candidate_lifecycle_status IS NULL
+        AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
       RETURNING
         id, challenge_id, candidate_name, candidate_email, token, status,
-        started_at, ended_at, created_at, workspace_snapshot
+        started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status, invite_email_status
     `;
+    if (!updated) {
+      return NextResponse.json({ error: 'This assessment invite is no longer available. Please refresh and try again.' }, { status: 409 });
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

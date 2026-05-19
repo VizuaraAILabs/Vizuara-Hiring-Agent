@@ -100,13 +100,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
 
       const [existing] = await trx`
-        SELECT id, token, status FROM sessions
+        SELECT id, token, status, candidate_lifecycle_status FROM sessions
         WHERE challenge_id = ${id} AND LOWER(TRIM(candidate_email)) = ${normalizedEmail}
         ORDER BY created_at DESC LIMIT 1
       `;
 
       if (existing) {
         if (existing.status === 'pending' || existing.status === 'active') {
+          if (existing.candidate_lifecycle_status) {
+            return {
+              body: { error: 'This candidate has a lifecycle status set. Clear it from the Candidates tab before reusing this invite.' },
+              status: 409,
+            };
+          }
           const allowedEmails = addEmailToAllowlist(lockedChallenge.allowed_emails, normalizedEmail);
           await trx`UPDATE challenges SET allowed_emails = ${allowedEmails} WHERE id = ${id}`;
           return {

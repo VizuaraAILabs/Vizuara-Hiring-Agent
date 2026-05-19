@@ -62,6 +62,7 @@ export interface WorkspaceSnapshot {
 }
 
 export type DecisionLabel = 'shortlisted' | 'hold' | 'reject' | 'hired';
+export type CandidateLifecycleStatus = 'revoked' | 'no_show' | 'withdrawn' | 'disqualified';
 
 export interface Session {
   id: string;
@@ -79,9 +80,13 @@ export interface Session {
   reviewed_by_email: string | null;
   reviewed_by_name: string | null;
   reviewed_at: string | null;
-  invite_email_status?: 'not_sent' | 'sent' | 'failed' | null;
+  invite_email_status?: 'not_sent' | 'sending' | 'sent' | 'failed' | null;
   invite_email_sent_at?: string | null;
   invite_email_error?: string | null;
+  candidate_lifecycle_status?: CandidateLifecycleStatus | null;
+  candidate_lifecycle_reason?: string | null;
+  candidate_lifecycle_updated_at?: string | null;
+  candidate_lifecycle_updated_by_email?: string | null;
 }
 
 export interface Interaction {

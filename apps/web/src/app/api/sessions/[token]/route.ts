@@ -16,6 +16,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       SELECT
         s.id, s.challenge_id, s.candidate_name, s.candidate_email, s.token, s.status,
         s.started_at, s.ended_at, s.created_at, s.workspace_snapshot,
+        s.candidate_lifecycle_status, s.candidate_lifecycle_reason,
+        s.candidate_lifecycle_updated_at, s.candidate_lifecycle_updated_by_email,
         c.title as challenge_title, c.description as challenge_description, c.time_limit_min
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
@@ -24,6 +26,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(
+        { error: 'This assessment invite is no longer active. Please contact the company.' },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json(session);

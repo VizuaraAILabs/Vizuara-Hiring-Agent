@@ -70,11 +70,9 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P1-003: Add candidate lifecycle controls
 
-- Status: Proposed
+- Status: Implemented
 - Area: Candidate management / recruiter operations
-- Evidence: Candidate rows on the challenge detail page show status and report links, but there are no actions to revoke a pending session, extend time, allow a retry, reset a candidate, or manually mark disqualified/no-show.
-- Impact: Real recruiting workflows need exception handling when candidates enter the wrong email, lose access, start accidentally, or require an approved retake.
-- Suggested fix: Add recruiter/admin actions with audit logging: revoke pending invite, regenerate link, allow one retry, extend deadline/time limit for a specific candidate, and add candidate notes.
+- Implementation notes: Added audited lifecycle controls for candidate sessions without adding a separate candidate CRM. Recruiters can send invite email from the Candidates tab, regenerate and copy a pending unstarted invite link, revoke unused invites, and mark candidates as no-show, withdrawn, or disqualified. Manual lifecycle states block candidate access until cleared. Existing recruiter notes remain the notes surface; retakes, resets, and time extensions are intentionally deferred.
 
 ### FEAT-P1-004: Add report export and sharing controls
 

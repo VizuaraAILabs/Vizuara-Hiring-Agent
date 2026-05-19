@@ -12,7 +12,7 @@ type CandidateSessionWithChallenge = Omit<
 
 type CandidateSessionUpdate = Pick<
   Session,
-  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot'
+  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot' | 'candidate_lifecycle_status'
 >;
 
 const OPENING_SYSTEM_PROMPT = `You are a senior technical interviewer opening a live software engineering assessment.
@@ -26,7 +26,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     const [session] = await sql<CandidateSessionWithChallenge[]>`
       SELECT
         s.id, s.challenge_id, s.candidate_name, s.candidate_email, s.token, s.status,
-        s.started_at, s.ended_at, s.created_at, s.workspace_snapshot,
+        s.started_at, s.ended_at, s.created_at, s.workspace_snapshot, s.candidate_lifecycle_status,
         c.title as challenge_title, c.description as challenge_description
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
@@ -35,6 +35,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(
+        { error: 'This assessment invite is no longer active. Please contact the company.' },
+        { status: 403 }
+      );
     }
 
     if (session.status !== 'active') {
@@ -49,11 +55,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     const [updated] = await sql<CandidateSessionUpdate[]>`
       UPDATE sessions
       SET started_at = ${now}
-      WHERE id = ${session.id} AND started_at IS NULL
+      WHERE id = ${session.id}
+        AND started_at IS NULL
+        AND candidate_lifecycle_status IS NULL
       RETURNING
         id, challenge_id, candidate_name, candidate_email, token, status,
-        started_at, ended_at, created_at, workspace_snapshot
+        started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status
     `;
+    if (!updated) {
+      return NextResponse.json({ error: 'This assessment invite is no longer available. Please refresh and try again.' }, { status: 409 });
+    }
 
     generateOpeningQuestion(session.id, session.challenge_title, session.challenge_description).catch(
       (err) => console.error('Failed to generate opening interview question:', err)

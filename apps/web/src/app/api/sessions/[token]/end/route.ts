@@ -5,7 +5,7 @@ import type { Session } from '@/types';
 
 type CandidateSession = Pick<
   Session,
-  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot'
+  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot' | 'candidate_lifecycle_status'
 >;
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -15,13 +15,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const [session] = await sql<CandidateSession[]>`
       SELECT
         id, challenge_id, candidate_name, candidate_email, token, status,
-        started_at, ended_at, created_at, workspace_snapshot
+        started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status
       FROM sessions
       WHERE token = ${token}
     `;
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(
+        { error: 'This assessment invite is no longer active. Please contact the company.' },
+        { status: 403 }
+      );
     }
 
     if (session.status !== 'active') {
@@ -36,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       WHERE id = ${session.id}
       RETURNING
         id, challenge_id, candidate_name, candidate_email, token, status,
-        started_at, ended_at, created_at, workspace_snapshot
+        started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status
     `;
 
     return NextResponse.json(updated);

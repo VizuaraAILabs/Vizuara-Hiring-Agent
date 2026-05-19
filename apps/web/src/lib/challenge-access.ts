@@ -94,7 +94,13 @@ export async function validateChallengeAccess(
   if (options.enforceCapacity && challenge.sessions_limit != null) {
     const db = options.db ?? sql;
     const [{ count }] = await db<{ count: number }[]>`
-      SELECT COUNT(*)::int AS count FROM sessions WHERE challenge_id = ${challenge.id}
+      SELECT COUNT(*)::int AS count
+      FROM sessions
+      WHERE challenge_id = ${challenge.id}
+        AND (
+          candidate_lifecycle_status IS NULL
+          OR started_at IS NOT NULL
+        )
     `;
     if (count >= challenge.sessions_limit) {
       return unavailableResponse('capacity_reached');

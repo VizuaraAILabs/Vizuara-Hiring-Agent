@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, CalendarClock, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Archive, CalendarClock, ChevronDown, Copy, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
@@ -12,7 +12,7 @@ import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
 import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
 import ArcSpinner from '@/components/ArcSpinner';
 import { useSubscription } from '@/context/SubscriptionContext';
-import type { Challenge, Session, StarterFile } from '@/types';
+import type { CandidateLifecycleStatus, Challenge, Session, StarterFile } from '@/types';
 
 interface ChallengeDetail extends Challenge {
   sessions: Session[];
@@ -42,6 +42,15 @@ type Option = {
   value: string;
   label: string;
 };
+
+type LifecycleAction =
+  | 'revoke'
+  | 'regenerate_link'
+  | 'send_invite_email'
+  | 'mark_no_show'
+  | 'mark_withdrawn'
+  | 'mark_disqualified'
+  | 'clear_lifecycle';
 
 const roleOptions: RoleOption[] = [
   { id: 'full-stack', name: 'Full-Stack', description: 'End-to-end web applications' },
@@ -168,6 +177,9 @@ export default function ChallengeDetailPage() {
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
+  const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
+  const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
+  const [openManageMenuId, setOpenManageMenuId] = useState<string | null>(null);
 
   const fetchChallengeDetail = useCallback(async (): Promise<ChallengeDetail> => {
     const res = await fetch(`/api/challenges/${challengeId}`);
@@ -309,15 +321,31 @@ export default function ChallengeDetailPage() {
   };
 
   const inviteEmailStatusColors: Record<string, string> = {
+    sending: 'bg-blue-500/10 text-blue-300',
     sent: 'bg-primary/10 text-primary',
     failed: 'bg-red-500/10 text-red-300',
     not_sent: 'bg-neutral-800 text-neutral-400',
   };
 
   const inviteEmailStatusLabels: Record<string, string> = {
+    sending: 'Sending',
     sent: 'Sent',
     failed: 'Failed',
     not_sent: 'Not sent',
+  };
+
+  const lifecycleStatusColors: Record<CandidateLifecycleStatus, string> = {
+    revoked: 'border-red-500/20 bg-red-500/10 text-red-300',
+    no_show: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+    withdrawn: 'border-neutral-500/20 bg-neutral-800 text-neutral-400',
+    disqualified: 'border-red-500/20 bg-red-500/10 text-red-300',
+  };
+
+  const lifecycleStatusLabels: Record<CandidateLifecycleStatus, string> = {
+    revoked: 'Revoked',
+    no_show: 'No-show',
+    withdrawn: 'Withdrawn',
+    disqualified: 'Disqualified',
   };
 
   function getAnalysisAlertLabel(session: Session) {
@@ -715,6 +743,75 @@ export default function ChallengeDetailPage() {
     navigator.clipboard.writeText(url);
     setCopiedSessionId(session.id);
     setTimeout(() => setCopiedSessionId(null), 2000);
+  }
+
+  function updateSession(updatedSession: Session) {
+    setChallenge((current) => current
+      ? {
+        ...current,
+        sessions: current.sessions.map((session) => (
+          session.id === updatedSession.id ? updatedSession : session
+        )),
+      }
+      : current
+    );
+  }
+
+  function lifecycleBusyKey(sessionId: string, action: LifecycleAction) {
+    return `${sessionId}:${action}`;
+  }
+
+  function canManagePendingInvite(session: Session) {
+    return session.status === 'pending' && !session.started_at && !session.candidate_lifecycle_status;
+  }
+
+  async function handleLifecycleAction(session: Session, action: LifecycleAction) {
+    const key = lifecycleBusyKey(session.id, action);
+    setLifecycleBusyIds((current) => new Set(current).add(key));
+    setLifecycleMessage(null);
+
+    try {
+      const res = await fetch(`/api/session-lifecycle/${session.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.session) updateSession(data.session);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to update candidate');
+      }
+
+      if (action === 'regenerate_link' && data?.invite_url) {
+        const url = `${window.location.origin}${data.invite_url}`;
+        await navigator.clipboard.writeText(url);
+        setCopiedSessionId(session.id);
+        setTimeout(() => setCopiedSessionId(null), 2000);
+        setLifecycleMessage({ sessionId: session.id, message: 'New link copied', tone: 'success' });
+      } else if (action === 'send_invite_email') {
+        setLifecycleMessage({ sessionId: session.id, message: 'Invite email sent', tone: 'success' });
+      } else {
+        setLifecycleMessage({ sessionId: session.id, message: 'Updated', tone: 'success' });
+      }
+    } catch (error) {
+      setLifecycleMessage({
+        sessionId: session.id,
+        message: error instanceof Error ? error.message : 'Failed to update candidate',
+        tone: 'error',
+      });
+    } finally {
+      setLifecycleBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
+
+  function handleLifecycleSelect(session: Session, value: string) {
+    if (!value) return;
+    setOpenManageMenuId(null);
+    void handleLifecycleAction(session, value as LifecycleAction);
   }
 
   if (loading) {
@@ -1592,7 +1689,12 @@ export default function ChallengeDetailPage() {
 
       {activeTab === 'candidates' && (
         <div>
-          <h2 className="mb-4 text-lg font-semibold text-white">Candidates ({challenge.sessions.length})</h2>
+          <div className="mb-4 flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-white">Candidates ({challenge.sessions.length})</h2>
+            <p className="max-w-3xl text-sm text-neutral-500">
+              Unstarted candidates marked revoked, no-show, withdrawn, or disqualified do not count against assessment usage or capacity. Started sessions still count.
+            </p>
+          </div>
           {challenge.sessions.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-surface p-8 text-center">
               <p className="text-neutral-600">No candidates invited yet</p>
@@ -1609,7 +1711,7 @@ export default function ChallengeDetailPage() {
                     <th className="px-5 py-3 font-medium">Decision</th>
                     <th className="px-5 py-3 font-medium">Session Link</th>
                     <th className="px-5 py-3 font-medium">Invite Email</th>
-                    <th className="px-5 py-3 font-medium">Action</th>
+                    <th className="px-5 py-3 font-medium">Manage</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1617,6 +1719,11 @@ export default function ChallengeDetailPage() {
                     const isStartingAnalysis = analysisStartingIds.has(session.id);
                     const visibleStatus = isStartingAnalysis ? 'queued' : session.status;
                     const analysisAlertLabel = getAnalysisAlertLabel(session);
+                    const canUsePendingActions = canManagePendingInvite(session);
+                    const sendBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'send_invite_email'));
+                    const regenerateBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'regenerate_link'));
+                    const revokeBusy = lifecycleBusyIds.has(lifecycleBusyKey(session.id, 'revoke'));
+                    const rowBusy = sendBusy || regenerateBusy || revokeBusy;
 
                     return (
                       <tr key={session.id} className="border-b border-white/5 last:border-0 hover:bg-white/3">
@@ -1631,6 +1738,11 @@ export default function ChallengeDetailPage() {
                             {analysisAlertLabel && (
                               <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
                                 {analysisAlertLabel}
+                              </span>
+                            )}
+                            {session.candidate_lifecycle_status && (
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
+                                {lifecycleStatusLabels[session.candidate_lifecycle_status]}
                               </span>
                             )}
                           </div>
@@ -1665,14 +1777,21 @@ export default function ChallengeDetailPage() {
                           </button>
                         </td>
                         <td className="px-5 py-4">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${inviteEmailStatusColors[session.invite_email_status || 'not_sent']}`}
-                          >
-                            {inviteEmailStatusLabels[session.invite_email_status || 'not_sent']}
-                          </span>
+                          <div className="flex flex-col items-start gap-2">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${inviteEmailStatusColors[session.invite_email_status || 'not_sent']}`}
+                            >
+                              {inviteEmailStatusLabels[session.invite_email_status || 'not_sent']}
+                            </span>
+                            {lifecycleMessage?.sessionId === session.id && (
+                              <span className={`max-w-52 text-xs ${lifecycleMessage.tone === 'error' ? 'text-red-300' : 'text-primary'}`}>
+                                {lifecycleMessage.message}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex justify-start">
+                          <div className="flex flex-wrap items-center gap-3">
                             {visibleStatus === 'analyzed' && (
                               <Link href={`/dashboard/challenges/${challenge.id}/submissions/${session.id}`} className="text-sm font-medium text-primary transition-colors hover:text-primary-light">
                                 View Report
@@ -1713,6 +1832,125 @@ export default function ChallengeDetailPage() {
                                 Analyze
                               </button>
                             )}
+                            {visibleStatus === 'pending' && canUsePendingActions && (
+                              <button
+                                type="button"
+                                disabled={sendBusy}
+                                onClick={() => handleLifecycleAction(session, 'send_invite_email')}
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary-light disabled:text-neutral-600"
+                                title="Send invite email"
+                              >
+                                {sendBusy ? (
+                                  <ArcSpinner label="Sending invite email" sizeClassName="h-4 w-4" />
+                                ) : (
+                                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                                )}
+                                Send Invite
+                              </button>
+                            )}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setOpenManageMenuId((current) => current === session.id ? null : session.id)}
+                                disabled={rowBusy}
+                                className="inline-flex h-9 min-w-32 items-center justify-between gap-2 rounded-md border border-emerald-500/70 bg-[#0a0a0a] px-3 text-sm font-medium text-white shadow-sm outline-none transition-colors hover:border-emerald-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
+                                aria-haspopup="menu"
+                                aria-expanded={openManageMenuId === session.id}
+                                aria-label={`Manage ${session.candidate_name}`}
+                              >
+                                Manage
+                                <ChevronDown className="h-4 w-4 text-neutral-300" aria-hidden="true" />
+                              </button>
+                              {openManageMenuId === session.id && (
+                                <div
+                                  role="menu"
+                                  className="absolute right-0 z-40 mt-1 min-w-52 overflow-hidden rounded-md border border-white/15 bg-[#050505] py-1 text-sm text-white shadow-xl"
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => setOpenManageMenuId(null)}
+                                    className="block w-full bg-primary/15 px-3 py-1.5 text-left text-primary"
+                                  >
+                                    Manage
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setOpenManageMenuId(null);
+                                      copySessionLink(session);
+                                    }}
+                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                  >
+                                    Copy invite link
+                                  </button>
+                                  {canUsePendingActions && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => handleLifecycleSelect(session, 'send_invite_email')}
+                                        className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                      >
+                                        Send invite email
+                                      </button>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => handleLifecycleSelect(session, 'regenerate_link')}
+                                        className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                      >
+                                        Regenerate invite link
+                                      </button>
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => handleLifecycleSelect(session, 'revoke')}
+                                        className="block w-full px-3 py-1.5 text-left text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
+                                      >
+                                        Revoke unused invite
+                                      </button>
+                                    </>
+                                  )}
+                                  <div className="my-1 border-t border-white/10" />
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => handleLifecycleSelect(session, 'mark_no_show')}
+                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                  >
+                                    Mark no-show
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => handleLifecycleSelect(session, 'mark_withdrawn')}
+                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                  >
+                                    Mark withdrawn
+                                  </button>
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => handleLifecycleSelect(session, 'mark_disqualified')}
+                                    className="block w-full px-3 py-1.5 text-left text-white transition-colors hover:bg-primary/15 hover:text-primary"
+                                  >
+                                    Mark disqualified
+                                  </button>
+                                  {session.candidate_lifecycle_status && (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => handleLifecycleSelect(session, 'clear_lifecycle')}
+                                      className="block w-full border-t border-white/10 px-3 py-1.5 text-left text-neutral-300 transition-colors hover:bg-primary/15 hover:text-primary"
+                                    >
+                                      Clear status
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>

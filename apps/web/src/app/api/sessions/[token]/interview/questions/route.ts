@@ -10,11 +10,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const url = new URL(request.url);
     const after = parseInt(url.searchParams.get('after') || '0', 10);
 
-    const [session] = await sql<{ id: string; status: string }[]>`
-      SELECT id, status FROM sessions WHERE token = ${token}
+    const [session] = await sql<{ id: string; status: string; candidate_lifecycle_status: string | null }[]>`
+      SELECT id, status, candidate_lifecycle_status FROM sessions WHERE token = ${token}
     `;
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(
+        { error: 'This assessment invite is no longer active. Please contact the company.' },
+        { status: 403 }
+      );
     }
 
     const interactions = await sql<{

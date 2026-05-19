@@ -27,13 +27,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const { recentActivity, triggerType } = await request.json();
 
     // Fetch session + challenge
-    const [session] = await sql<{ id: string; status: string; challenge_description: string; challenge_title: string }[]>`
-      SELECT s.id, s.status, c.description as challenge_description, c.title as challenge_title
+    const [session] = await sql<{ id: string; status: string; candidate_lifecycle_status: string | null; challenge_description: string; challenge_title: string }[]>`
+      SELECT s.id, s.status, s.candidate_lifecycle_status, c.description as challenge_description, c.title as challenge_title
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
       WHERE s.token = ${token}
     `;
-    if (!session || session.status !== 'active') {
+    if (!session || session.status !== 'active' || session.candidate_lifecycle_status) {
       return NextResponse.json({ ok: false, reason: 'session not active' });
     }
 

@@ -166,6 +166,10 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
       JOIN challenges c ON s.challenge_id = c.id
       WHERE c.company_id = ${companyId}
         AND s.created_at >= ${since.toISOString()}
+        AND (
+          s.candidate_lifecycle_status IS NULL
+          OR s.started_at IS NOT NULL
+        )
     `;
     return count;
   }
@@ -173,6 +177,10 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
     SELECT COUNT(*)::int AS count FROM sessions s
     JOIN challenges c ON s.challenge_id = c.id
     WHERE c.company_id = ${companyId}
+      AND (
+        s.candidate_lifecycle_status IS NULL
+        OR s.started_at IS NOT NULL
+      )
   `;
   return count;
 }
