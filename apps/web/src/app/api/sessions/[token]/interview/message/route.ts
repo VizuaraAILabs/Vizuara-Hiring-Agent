@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
 import { isNoQuestionPlaceholder } from '@/lib/interview';
@@ -38,16 +39,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       WHERE s.token = ${token}
     `;
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
     if (session.candidate_lifecycle_status) {
-      return NextResponse.json(
-        { error: 'This assessment invite is no longer active. Please contact the company.' },
-        { status: 403 }
-      );
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
     if (session.status !== 'active') {
-      return NextResponse.json({ error: 'Session is not active' }, { status: 400 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
     // Fetch conversation history (last 10 interview exchanges)

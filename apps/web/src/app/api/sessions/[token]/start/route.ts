@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { validateChallengeAccess } from '@/lib/challenge-access';
 import type { Session, SessionWithChallenge } from '@/types';
 
@@ -13,6 +14,8 @@ type CandidateSessionUpdate = Pick<
   Session,
   'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot' | 'candidate_lifecycle_status' | 'invite_email_status'
 >;
+
+const COMPLETION_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
 
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
@@ -34,20 +37,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     `;
 
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
     if (session.candidate_lifecycle_status) {
-      return NextResponse.json(
-        { error: 'This assessment invite is no longer active. Please contact the company.' },
-        { status: 403 }
-      );
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
     if (session.invite_email_status === 'sending') {
-      return NextResponse.json({ error: 'This assessment invite is still being prepared. Please try again shortly.' }, { status: 409 });
+      return NextResponse.json(candidateUnavailablePayload('invite_preparing'), { status: 409 });
     }
 
     if (session.status !== 'pending') {
-      return NextResponse.json({ error: 'Session has already been started' }, { status: 400 });
+      const reason = COMPLETION_STATUSES.has(session.status) ? 'already_submitted' : 'already_started';
+      return NextResponse.json(candidateUnavailablePayload(reason), { status: 400 });
     }
 
     const access = await validateChallengeAccess({
@@ -76,7 +77,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       enforceEmailAllowlist: true,
     });
     if (!access.ok) {
-      return NextResponse.json({ error: access.message, reason: access.reason }, { status: access.status });
+      return NextResponse.json(candidateUnavailablePayload(access.reason), { status: access.status });
     }
 
     const [updated] = await sql<CandidateSessionUpdate[]>`
@@ -91,7 +92,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
         started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status, invite_email_status
     `;
     if (!updated) {
-      return NextResponse.json({ error: 'This assessment invite is no longer available. Please refresh and try again.' }, { status: 409 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 409 });
     }
 
     return NextResponse.json(updated);

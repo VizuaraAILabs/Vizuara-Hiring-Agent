@@ -1,13 +1,14 @@
 import sql from '@/lib/db';
 import { generateToken } from '@/lib/utils';
 import { normalizeEmail, validateChallengeAccess } from '@/lib/challenge-access';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { getChallengeById } from '@/lib/challenge-queries';
 import type { Challenge } from '@/types';
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
 type SessionCreationResult = {
-  body: Record<string, unknown>;
+  body: object;
   status?: number;
 };
 
@@ -18,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const challenge = await getChallengeById(id);
     if (!challenge) {
-      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
 
     const { candidate_name, candidate_email } = await request.json();
@@ -38,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       enforceEmailAllowlist: true,
     });
     if (!access.ok) {
-      return NextResponse.json({ error: access.message, reason: access.reason }, { status: access.status });
+      return NextResponse.json(candidateUnavailablePayload(access.reason), { status: access.status });
     }
 
     const result = await sql.begin(async (tx): Promise<SessionCreationResult> => {
@@ -49,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       const lockedChallenge = await getChallengeById(id);
       if (!lockedChallenge) {
-        return { body: { error: 'Challenge not found' }, status: 404 };
+        return { body: candidateUnavailablePayload('invalid_link'), status: 404 };
       }
 
       const lockedAccess = await validateChallengeAccess(lockedChallenge, {
@@ -58,7 +59,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       if (!lockedAccess.ok) {
         return {
-          body: { error: lockedAccess.message, reason: lockedAccess.reason },
+          body: candidateUnavailablePayload(lockedAccess.reason),
           status: lockedAccess.status,
         };
       }
@@ -76,12 +77,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
         if (existing.status === 'queued' || existing.status === 'analyzing') {
           return {
-            body: { error: 'Your assessment has been submitted and is currently being evaluated.' },
+            body: candidateUnavailablePayload('submitted_evaluating'),
             status: 403,
           };
         }
         return {
-          body: { error: 'You have already completed this assessment. Each candidate may only attempt it once.' },
+          body: candidateUnavailablePayload('already_submitted'),
           status: 403,
         };
       }
@@ -93,7 +94,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       if (!creationAccess.ok) {
         return {
-          body: { error: creationAccess.message, reason: creationAccess.reason },
+          body: candidateUnavailablePayload(creationAccess.reason),
           status: creationAccess.status,
         };
       }
@@ -127,11 +128,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     `;
 
     if (!challenge) {
-      return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
 
     const [company] = await sql`SELECT name FROM companies WHERE id = ${challenge.company_id}`;
-    const access = await validateChallengeAccess(challenge);
+    const access = await validateChallengeAccess(challenge, {
+      enforceCapacity: true,
+      enforcePlanQuota: true,
+    });
 
     return NextResponse.json({
       id: challenge.id,
@@ -143,7 +147,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       ends_at: challenge.ends_at,
       availability: access.ok
         ? { ok: true, reason: 'ok', message: 'OK' }
-        : { ok: false, reason: access.reason, message: access.message },
+        : {
+            ok: false,
+            reason: access.reason,
+            title: candidateUnavailablePayload(access.reason).title,
+            message: access.message,
+          },
     });
   } catch (error) {
     console.error('Error fetching challenge for apply:', error);

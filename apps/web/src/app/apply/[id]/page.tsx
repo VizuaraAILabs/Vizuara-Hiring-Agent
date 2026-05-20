@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ArcSpinner from '@/components/ArcSpinner';
+import { getCandidateUnavailableCopy, isCandidateUnavailableReason } from '@/lib/candidate-unavailable';
 
 interface ChallengeInfo {
   id: string;
@@ -15,9 +16,12 @@ interface ChallengeInfo {
   availability?: {
     ok: boolean;
     reason: string;
+    title?: string;
     message: string;
   };
 }
+
+const HARD_UNAVAILABLE_REASONS = new Set(['closed', 'not_started', 'expired']);
 
 export default function ApplyPage() {
   const params = useParams();
@@ -26,11 +30,16 @@ export default function ApplyPage() {
 
   const [challenge, setChallenge] = useState<ChallengeInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<{ title: string; message: string } | null>(null);
   const [form, setForm] = useState({ name: '', email: '' });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const isUnavailable = Boolean(challenge?.availability && !challenge.availability.ok);
+  const isHardUnavailable = Boolean(
+    challenge?.availability &&
+    !challenge.availability.ok &&
+    HARD_UNAVAILABLE_REASONS.has(challenge.availability.reason)
+  );
 
   function formatWindowDate(value: string | null) {
     if (!value) return null;
@@ -42,12 +51,27 @@ export default function ApplyPage() {
 
   useEffect(() => {
     fetch(`/api/challenges/${challengeId}/apply`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Challenge not found');
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const reason = isCandidateUnavailableReason(data?.reason)
+            ? data.reason
+            : res.status === 404
+              ? 'invalid_link'
+              : 'temporarily_unavailable';
+          const copy = getCandidateUnavailableCopy(reason);
+          throw {
+            title: data?.title || copy.title,
+            message: isCandidateUnavailableReason(data?.reason) ? data.error || copy.message : copy.message,
+          };
+        }
         return res.json();
       })
       .then((data) => setChallenge(data))
-      .catch(() => setError('This challenge link is invalid or no longer available.'))
+      .catch((err) => setError({
+        title: typeof err?.title === 'string' ? err.title : getCandidateUnavailableCopy('temporarily_unavailable').title,
+        message: typeof err?.message === 'string' ? err.message : getCandidateUnavailableCopy('temporarily_unavailable').message,
+      }))
       .finally(() => setLoading(false));
   }, [challengeId]);
 
@@ -100,8 +124,8 @@ export default function ApplyPage() {
               Arc<span className="text-primary">Eval</span>
             </span>
           </div>
-          <h1 className="text-2xl font-serif italic text-white mb-2">Challenge Not Found</h1>
-          <p className="text-neutral-500">{error}</p>
+          <h1 className="text-2xl font-serif italic text-white mb-2">{error?.title ?? 'Assessment link not found'}</h1>
+          <p className="text-neutral-500">{error?.message ?? 'This assessment link may be invalid or no longer available.'}</p>
         </div>
       </div>
     );
@@ -158,7 +182,10 @@ export default function ApplyPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {isUnavailable && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
-                  <p className="text-sm font-semibold text-amber-200">{challenge.availability?.message}</p>
+                  <p className="text-sm font-semibold text-amber-200">
+                    {challenge.availability?.title ?? 'Assessment unavailable'}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-amber-100/80">{challenge.availability?.message}</p>
                   {(challenge.starts_at || challenge.ends_at) && (
                     <p className="mt-1 text-xs leading-5 text-amber-100/70">
                       {challenge.starts_at ? `Opens ${formatWindowDate(challenge.starts_at)}` : 'Open now'}
@@ -196,7 +223,7 @@ export default function ApplyPage() {
 
               <button
                 type="submit"
-                disabled={submitting || isUnavailable}
+                disabled={submitting || isHardUnavailable}
                 className="w-full bg-primary hover:bg-primary-light disabled:opacity-70 text-black py-4 rounded-xl text-sm font-semibold transition-all btn-glow mt-2 disabled:cursor-wait"
               >
                 {submitting ? 'Creating your session...' : 'Continue to Assessment'}

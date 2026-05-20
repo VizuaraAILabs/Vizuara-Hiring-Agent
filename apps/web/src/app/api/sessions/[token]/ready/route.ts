@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
 import type { Session, SessionWithChallenge } from '@/types';
@@ -34,17 +35,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     `;
 
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
     if (session.candidate_lifecycle_status) {
-      return NextResponse.json(
-        { error: 'This assessment invite is no longer active. Please contact the company.' },
-        { status: 403 }
-      );
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
 
     if (session.status !== 'active') {
-      return NextResponse.json({ error: 'Session is not active' }, { status: 400 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
     if (session.started_at) {
@@ -63,7 +61,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
         started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status
     `;
     if (!updated) {
-      return NextResponse.json({ error: 'This assessment invite is no longer available. Please refresh and try again.' }, { status: 409 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 409 });
     }
 
     generateOpeningQuestion(session.id, session.challenge_title, session.challenge_description).catch(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import type { Session } from '@/types';
 
 type CandidateSession = Pick<
@@ -27,17 +28,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     `;
 
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
     if (session.candidate_lifecycle_status) {
-      return NextResponse.json(
-        { error: 'This assessment invite is no longer active. Please contact the company.' },
-        { status: 403 }
-      );
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
 
     if (session.status !== 'active') {
-      return NextResponse.json({ error: 'Session is not active' }, { status: 400 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
     const now = Date.now();

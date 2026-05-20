@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { isNoQuestionPlaceholder } from '@/lib/interview';
 
 // GET /api/sessions/[token]/interview/questions?after=<sequence_num>
@@ -14,13 +15,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       SELECT id, status, candidate_lifecycle_status FROM sessions WHERE token = ${token}
     `;
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
     }
     if (session.candidate_lifecycle_status) {
-      return NextResponse.json(
-        { error: 'This assessment invite is no longer active. Please contact the company.' },
-        { status: 403 }
-      );
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
 
     const interactions = await sql<{

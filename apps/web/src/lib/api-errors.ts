@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { candidateUnavailablePayload } from './candidate-unavailable';
 
 type ErrorWithCode = {
   code?: unknown;
@@ -13,7 +14,7 @@ export function isDatabaseConnectionError(error: unknown) {
 
 export function databaseUnavailableResponse() {
   return NextResponse.json(
-    { error: 'Assessment is temporarily unavailable. Please try again in a moment.' },
+    candidateUnavailablePayload('temporarily_unavailable'),
     { status: 503 }
   );
 }

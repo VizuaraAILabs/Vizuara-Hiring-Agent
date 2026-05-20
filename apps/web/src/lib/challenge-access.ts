@@ -1,6 +1,7 @@
 import sql from './db';
 import { isAdmin } from './auth';
 import { checkEnrollmentStatus } from './enrollment';
+import { getCandidateUnavailableCopy } from './candidate-unavailable';
 import type { Challenge } from '@/types';
 
 export type ChallengeAccessReason =
@@ -53,12 +54,12 @@ export function addEmailToAllowlist(raw: unknown, email: string): string[] {
 export function unavailableResponse(reason: ChallengeAccessReason, message?: string): ChallengeAccessResult {
   const defaults: Record<ChallengeAccessReason, { status: number; message: string }> = {
     ok: { status: 200, message: 'OK' },
-    closed: { status: 403, message: 'This assessment is closed by the company.' },
-    not_started: { status: 403, message: 'This assessment is not open yet.' },
-    expired: { status: 403, message: 'This assessment window has ended.' },
-    email_not_allowed: { status: 403, message: 'Only candidates on the email allowlist are allowed to attempt this assessment.' },
-    capacity_reached: { status: 403, message: 'This assessment has reached its maximum number of candidates.' },
-    quota_unavailable: { status: 403, message: 'This assessment is temporarily unavailable. Please contact the company.' },
+    closed: { status: 403, message: getCandidateUnavailableCopy('closed').message },
+    not_started: { status: 403, message: getCandidateUnavailableCopy('not_started').message },
+    expired: { status: 403, message: getCandidateUnavailableCopy('expired').message },
+    email_not_allowed: { status: 403, message: getCandidateUnavailableCopy('email_not_allowed').message },
+    capacity_reached: { status: 403, message: getCandidateUnavailableCopy('capacity_reached').message },
+    quota_unavailable: { status: 403, message: getCandidateUnavailableCopy('quota_unavailable').message },
   };
 
   const fallback = defaults[reason];

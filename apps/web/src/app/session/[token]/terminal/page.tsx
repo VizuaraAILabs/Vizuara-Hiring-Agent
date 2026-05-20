@@ -145,9 +145,11 @@ export default function TerminalPage() {
   if (error || !session || session.status !== 'active') {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-serif italic text-white mb-2">Session Unavailable</h1>
-          <p className="text-neutral-500">This session is not currently active.</p>
+        <div className="text-center max-w-md px-5">
+          <h1 className="text-2xl font-serif italic text-white mb-2">{error?.title ?? 'Session unavailable'}</h1>
+          <p className="text-neutral-500">
+            {error?.message ?? 'This session is not currently active. Return to your assessment link or contact the company if you need help.'}
+          </p>
         </div>
       </div>
     );

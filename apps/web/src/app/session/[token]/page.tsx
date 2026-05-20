@@ -32,9 +32,9 @@ export default function SessionPage() {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center relative">
         <div className="absolute inset-0 bg-grid opacity-20" />
-        <div className="text-center relative">
-          <h1 className="text-2xl font-serif italic text-white mb-2">Session Not Found</h1>
-          <p className="text-neutral-500">This session link may be invalid or expired.</p>
+        <div className="text-center relative max-w-md px-5">
+          <h1 className="text-2xl font-serif italic text-white mb-2">{error?.title ?? 'Session unavailable'}</h1>
+          <p className="text-neutral-500">{error?.message ?? 'This session link may be invalid or expired.'}</p>
         </div>
       </div>
     );
