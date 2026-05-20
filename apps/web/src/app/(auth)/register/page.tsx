@@ -36,6 +36,8 @@ function getRegisterErrorMessage(code: string | undefined): string {
       return 'Network error. Please check your connection.';
     case 'auth/popup-closed-by-user':
       return 'Google sign-up was closed before it finished.';
+    case 'auth-service-unavailable':
+      return 'Account creation is temporarily unavailable. Please try again later.';
     default:
       return 'Unable to create your account. Please try again.';
   }
@@ -114,7 +116,8 @@ function RegisterPageContent() {
     setVerificationEmail('');
 
     if (!hasFirebaseClientConfig()) {
-      setError('Firebase signup is not configured for this environment.');
+      console.error('Missing Firebase client configuration for email signup.');
+      setError(getRegisterErrorMessage('auth-service-unavailable'));
       return;
     }
 
@@ -153,7 +156,8 @@ function RegisterPageContent() {
     setVerificationEmail('');
 
     if (!hasFirebaseClientConfig()) {
-      setError('Firebase signup is not configured for this environment.');
+      console.error('Missing Firebase client configuration for Google signup.');
+      setError(getRegisterErrorMessage('auth-service-unavailable'));
       return;
     }
 

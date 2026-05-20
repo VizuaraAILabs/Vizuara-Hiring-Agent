@@ -33,6 +33,8 @@ function getAuthErrorMessage(code: string | undefined): string {
       return 'Please verify your email through the link we sent before signing in.';
     case 'session-setup-failed':
       return 'Unable to create your session. Please try again in a moment.';
+    case 'auth-service-unavailable':
+      return 'Sign-in is temporarily unavailable. Please try again later.';
     default:
       return 'Unable to sign in. Please try again.';
   }
@@ -91,7 +93,8 @@ function LoginPageContent() {
     setNotice('');
 
     if (!hasFirebaseClientConfig()) {
-      setError('Firebase login is not configured for this environment.');
+      console.error('Missing Firebase client configuration for email login.');
+      setError(getAuthErrorMessage('auth-service-unavailable'));
       return;
     }
 
@@ -123,7 +126,8 @@ function LoginPageContent() {
     setNotice('');
 
     if (!hasFirebaseClientConfig()) {
-      setError('Firebase login is not configured for this environment.');
+      console.error('Missing Firebase client configuration for Google login.');
+      setError(getAuthErrorMessage('auth-service-unavailable'));
       return;
     }
 
