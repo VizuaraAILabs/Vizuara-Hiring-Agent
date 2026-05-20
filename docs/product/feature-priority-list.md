@@ -138,11 +138,12 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ### FEAT-P3-002: Add copy improvements for candidate-facing unavailable states
 
-- Status: Proposed
+- Status: Implemented
 - Area: Candidate UX
 - Evidence: Current candidate errors include generic messages such as "This challenge link is invalid or no longer available" and "This assessment is temporarily unavailable. Please contact the company."
 - Impact: Once expiry, closed links, quotas, and allowlists are all enforced, candidates need clearer guidance without exposing private plan details.
 - Suggested fix: Standardize candidate-facing unavailable states: not open yet, expired, closed by recruiter, invite-only, already submitted, at capacity, and temporarily unavailable.
+- Implementation notes: Added a shared candidate-safe unavailable copy map with stable reason codes, titles, and messages. Public apply and session APIs now return structured unavailable payloads for invalid links, not open yet, expired, closed, invite-only, already submitted/submitted for evaluation, at capacity, revoked invites, inactive sessions, and temporary unavailability. Candidate apply, session intro, and terminal unavailable screens now preserve and render those specific messages instead of falling back to generic invalid-link copy.
 
 ### FEAT-P3-003: Add recruiter notes and decision labels on candidate reports
 

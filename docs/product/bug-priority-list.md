@@ -223,11 +223,12 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 
 ### WEB-P2-003: Public apply page can show an assessment as available when quota/capacity is exhausted
 
-- Status: Open
+- Status: Implemented
 - Area: Candidate apply UX / quota enforcement
 - Evidence: The public apply `GET` route calls `validateChallengeAccess(challenge)` without `enforceCapacity` or `enforcePlanQuota`, while the apply `POST` route performs the stricter transactional check with both flags before creating a session (`apps/web/src/app/api/challenges/[id]/apply/route.ts:134`, `apps/web/src/app/api/challenges/[id]/apply/route.ts:91`).
 - Impact: Candidates can see an assessment page as available, fill in their details, and only then be rejected because the challenge cap or company plan quota is exhausted. That creates a poor candidate experience and unnecessary support burden for companies.
 - Suggested fix: Include capacity and plan availability in the public availability check, using customer-safe messages that do not expose internal billing details. Keep the transactional `POST` check as the final source of truth.
+- Implementation notes: The public apply `GET` route now calls `validateChallengeAccess(challenge, { enforceCapacity: true, enforcePlanQuota: true })`, so the apply page can show customer-safe unavailable states for exhausted challenge capacity or company quota before candidates submit the form. The transactional `POST` checks remain unchanged as the final source of truth.
 
 ### WEB-P2-004: Pending invitations consume plan quota even if candidates never start
 
@@ -252,6 +253,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Evidence: In the `subscription_lapsed` branch, `checkEnrollmentStatus()` calls `countSessionsSince(companyId, null)` but dashboard copy says "this period" for lapsed subscriptions (`apps/web/src/lib/enrollment.ts:107`, `apps/web/src/app/dashboard/page.tsx:126`).
 - Impact: Lapsed customers can see inflated or misleading usage numbers, especially long-lived accounts that have many historical sessions. The account is blocked either way, but the displayed explanation can be wrong.
 - Suggested fix: Preserve the last known billing-period anchor/end on the company or subscription record and use that for lapsed-period usage display, or change the copy to avoid saying "this period" when only all-time usage is available.
+
+### WEB-P2-007: Public apply availability check can trigger subscription-side effects
+
+- Status: Open
+- Area: Candidate apply UX / subscription state
+- Evidence: `GET /api/challenges/[id]/apply` now calls `validateChallengeAccess(challenge, { enforceCapacity: true, enforcePlanQuota: true })`. The plan quota path calls `checkEnrollmentStatus()`, which can read Firestore and update a trial company to the starter plan when it finds an active subscription (`apps/web/src/app/api/challenges/[id]/apply/route.ts:134`, `apps/web/src/lib/challenge-access.ts:118`, `apps/web/src/lib/enrollment.ts:52`, `apps/web/src/lib/enrollment.ts:57`).
+- Impact: A public candidate page load can perform subscription reconciliation that was previously only triggered by session creation or authenticated product surfaces. This is probably benign, but it makes a read-style availability check unexpectedly write company state and depend on Firestore availability.
+- Suggested fix: Split quota checking into a read-only public availability path and a mutating reconciliation path, or make `checkEnrollmentStatus()` accept an option to disable subscription state updates for public candidate reads. Keep the transactional apply `POST` as the final source of truth for session creation.
 
 ## P3
 
