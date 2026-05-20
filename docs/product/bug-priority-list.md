@@ -230,13 +230,13 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Suggested fix: Include capacity and plan availability in the public availability check, using customer-safe messages that do not expose internal billing details. Keep the transactional `POST` check as the final source of truth.
 - Implementation notes: The public apply `GET` route now calls `validateChallengeAccess(challenge, { enforceCapacity: true, enforcePlanQuota: true })`, so the apply page can show customer-safe unavailable states for exhausted challenge capacity or company quota before candidates submit the form. The transactional `POST` checks remain unchanged as the final source of truth.
 
-### WEB-P2-004: Pending invitations consume plan quota even if candidates never start
+### WEB-P2-004: Pending invitations reserve plan quota
 
-- Status: Open
+- Status: Obsolete
 - Area: Subscription quota accounting
-- Evidence: `countSessionsSince()` counts every row in `sessions` for a company, regardless of status or `started_at`. Invite and apply flows create `pending` sessions before a workspace starts, so unused invitations count against trial/plan limits (`apps/web/src/lib/enrollment.ts:164`, `apps/web/src/app/api/challenges/[id]/invite/route.ts:139`, `apps/web/src/app/api/challenges/[id]/apply/route.ts:99`).
-- Impact: Companies can exhaust paid or trial assessment quota through no-shows, mistaken invites, or candidates who register but never start. Trial quota is especially sticky because trial usage is counted all-time.
-- Suggested fix: Decide the intended billing unit. If quota should mean started assessments, count only sessions with `started_at IS NOT NULL` or terminal/completion statuses. If invitations should reserve quota, add explicit expiry/cancel/reclaim behavior for unused pending sessions.
+- Evidence: `countSessionsSince()` and per-challenge capacity checks count sessions where `candidate_lifecycle_status IS NULL OR started_at IS NOT NULL`, so ordinary pending invitations reserve quota/capacity while unstarted lifecycle-excluded candidates release it (`apps/web/src/lib/enrollment.ts:164`, `apps/web/src/lib/challenge-access.ts:97`).
+- Impact: This is the intended policy. Pending invitations reserve a slot so customers cannot over-invite beyond plan or challenge capacity and later create ambiguity about which candidates are valid once they start.
+- Resolution: No bug fix planned. Keep existing pending/active session reuse ahead of quota checks, and use lifecycle states such as revoked, no-show, withdrawn, or disqualified to release unstarted reservations.
 
 ### WEB-P2-005: Missing `currentPeriodStart` makes paid quota fall back to all-time usage
 
