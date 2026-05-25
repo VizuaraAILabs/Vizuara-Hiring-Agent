@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to write analysis scripts, interpret statistical output, suggest what to look at next, and help you structure your findings. The most effective approach here is iterative: explore broadly, find something interesting, ask the AI to help you quantify it, then move on to the next thread.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## Your Mission
 
 You've been handed a dataset of recent e-commerce transactions. The data team suspects there are anomalies hidden in the data — but they don't know what kind or how many. Your job: explore the data systematically, identify the anomalies, and write a findings report that a business team could act on.

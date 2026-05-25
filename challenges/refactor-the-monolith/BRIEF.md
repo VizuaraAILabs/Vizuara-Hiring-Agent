@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to understand the existing code, discuss refactoring strategies before writing anything, generate module stubs, and verify that tests continue to pass as you move code incrementally. The best approaches here are deliberate and iterative — plan your module boundaries first, then migrate one piece at a time.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## The Situation
 
 You've inherited `monolith.py` — a 500+ line Python inventory management system where every operation flows through a single `do_everything(action, data, inventory, **kwargs)` function. It works. The tests pass. But adding any new feature means reading through hundreds of lines of nested conditionals, and a single mistake anywhere can break everything.

@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to understand unfamiliar code patterns, discuss what failing tests are telling you, reason through root causes, and verify that your fixes are correct. The goal is to see how you collaborate with AI to diagnose and resolve real issues — not just to produce a passing test suite as fast as possible.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## The Situation
 
 You've been handed a Node.js data processing pipeline left by a colleague who departed in a hurry. The pipeline is supposed to:

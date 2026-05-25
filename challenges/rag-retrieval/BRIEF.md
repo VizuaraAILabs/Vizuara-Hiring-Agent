@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to design your retrieval strategy, write and debug code, understand tradeoffs between approaches, interpret your evaluation metrics, and draft your DESIGN.md. This challenge rewards thoughtful AI collaboration — use it to think through design decisions, not just to generate boilerplate.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## Scenario
 
 You're building the retrieval component for a Retrieval-Augmented Generation (RAG) system that helps developers navigate the documentation for **NexusDB** — a fictional distributed database platform.

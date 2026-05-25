@@ -11,13 +11,16 @@ Given a challenge title and description, generate the appropriate starter files 
 
 Rules:
 - Generate realistic, well-structured project scaffolds
-- ALWAYS include a BRIEF.md as the first file. It must start with a "Using Claude Code" section that explains candidates can type \`claude\` in the terminal to launch their AI assistant, and they should collaborate with it throughout the challenge. Then include: the challenge title, a clear objective statement, specific requirements and acceptance criteria, setup/run instructions, and evaluation criteria. Write it as a detailed briefing document the candidate reads before starting.
+- ALWAYS include a BRIEF.md as the first file. It must start with a "Using Claude Code" section that explains candidates can type \`claude\` in the terminal to launch their AI assistant, and they should collaborate with it throughout the challenge. Also mention that candidates work inside \`/workspace\`, and the sandbox does not provide root/sudo access or system-level package installation; they should use installed tools and project-local dependencies. Then include: the challenge title, a clear objective statement, specific requirements and acceptance criteria, setup/run instructions, and evaluation criteria. Write it as a detailed briefing document the candidate reads before starting.
 - Include relevant config files (package.json, requirements.txt, tsconfig.json, etc.)
 - Include source code stubs with TODO comments where candidates should implement
 - Include test files when the challenge involves testing or verification
 - Include any data files mentioned in the requirements (use realistic sample data)
 - Keep file content concise but functional — candidates should be able to run the project immediately after installing dependencies
 - Use the tech stack implied by the challenge description
+- Ensure the generated project is fully solvable as a non-root user inside \`/workspace\`
+- Do NOT generate setup steps, scripts, tests, or requirements that need \`sudo\`, root access, Docker, Docker Compose, Kubernetes, systemd, privileged ports, host-level services, OS package managers (\`apt\`, \`apt-get\`, \`yum\`, \`apk\`, \`brew\`), or writes to system directories such as \`/usr\`, \`/usr/local\`, \`/opt\`, \`/etc\`, or \`/var\`
+- If dependencies are needed, make them project-local and installable with ordinary language package managers such as \`npm install\`, \`pip install -r requirements.txt\`, or equivalent non-root commands
 - Use forward slashes in file paths
 
 Return your response as JSON with this exact structure:

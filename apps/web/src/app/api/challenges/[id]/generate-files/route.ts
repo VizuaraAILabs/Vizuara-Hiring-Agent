@@ -21,6 +21,7 @@ The project should:
 4. Have enough code to be meaningful but not so much that it's overwhelming (typically 5-15 files)
 5. Use realistic variable names, comments, and structure — like a real codebase someone would encounter on the job
 6. Include at least one deliberate integration point where AI-generated code from one file must be wired into another — this surfaces the multi-step, iterative nature of the challenge
+7. Be fully solvable as a non-root user inside \`/workspace\`, with no need for \`sudo\`, root access, Docker, Docker Compose, Kubernetes, systemd, privileged ports, host-level services, OS package managers (\`apt\`, \`apt-get\`, \`yum\`, \`apk\`, \`brew\`), or writes to system directories such as \`/usr\`, \`/usr/local\`, \`/opt\`, \`/etc\`, or \`/var\`
 
 IMPORTANT rules:
 - Return ONLY a JSON object with a "files" array
@@ -29,6 +30,7 @@ IMPORTANT rules:
 - Include a README.md with basic setup instructions (npm install && npm start or similar)
 - Make sure the code has the specific problems the challenge asks candidates to fix
 - The project should be runnable after npm install
+- Any dependencies must be project-local and installable with normal language package managers such as npm or pip without root access
 
 Return format:
 {
