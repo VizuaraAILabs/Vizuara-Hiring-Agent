@@ -4,7 +4,6 @@ import * as path from 'path';
 import { Readable, Writable, Duplex } from 'stream';
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 // Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
 const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -131,10 +130,6 @@ export class DockerManager {
       Image: SANDBOX_IMAGE,
       name: `session-${sessionId}`,
       Env: [
-        // Use _SANDBOX_API_KEY so Claude Code doesn't detect it as an env var
-        // and show the "Do you want to use this API key?" prompt.
-        // The entrypoint script writes it to ~/.claude.json as primaryApiKey.
-        `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
@@ -153,7 +148,6 @@ export class DockerManager {
 
     await container.start();
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
-    console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
 
     // Fix ownership: starter files were written by root on the host,
     // but the candidate user needs write access inside the container
@@ -167,7 +161,7 @@ export class DockerManager {
       console.warn(`[Docker] Failed to chown /workspace for ${sessionId}:`, err.message);
     }
 
-    // Wait for entrypoint to write the API key file before attaching exec
+    // Give the entrypoint a moment to finish before attaching exec.
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     // Create an exec instance for interactive bash as the candidate user
@@ -175,7 +169,6 @@ export class DockerManager {
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
-        `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
         `CLAUDE_MODEL=${CLAUDE_MODEL}`,
         'TERM=xterm-256color',
       ],

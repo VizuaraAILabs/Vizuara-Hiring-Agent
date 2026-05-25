@@ -33,7 +33,6 @@ services:
       - /tmp/sessions:/tmp/sessions
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SANDBOX_IMAGE: hiring-sandbox
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-5}
       SANDBOX_IDLE_TTL_MS: ${SANDBOX_IDLE_TTL_MS:-900000}
