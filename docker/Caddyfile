@@ -4,6 +4,11 @@
         reverse_proxy terminal:3001
     }
 
+    # Claude Code gateway (Anthropic-compatible messages endpoint)
+    handle /claude-gateway* {
+        reverse_proxy terminal:3001
+    }
+
     # Analysis API (for admin/debug)
     handle /api/analyze/* {
         reverse_proxy analysis:8000

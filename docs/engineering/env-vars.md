@@ -15,7 +15,8 @@ All variables go in `.env.production` at the project root. Start from `.env.exam
 | Variable | Value | Notes |
 |---|---|---|
 | `GEMINI_API_KEY` | *(set in environment)* | Challenge generation + analysis engine |
-| `ANTHROPIC_API_KEY` | *(set in environment)* | Terminal server AI features |
+| `ANTHROPIC_API_KEY` | *(set in environment)* | Terminal-server Claude gateway only. Never passed to candidate sandboxes |
+| `CLAUDE_GATEWAY_TOKEN_SECRET` | *(set in environment)* | Long random secret used to hash session-scoped Claude gateway tokens |
 | `CANDIDATE_ANALYSIS_API_KEY` | *(set in environment)* | Bearer key for `/api/public/candidate-analysis` |
 | `BREVO_API_KEY` | *(set in environment)* | Invite and trial email delivery |
 | `CRON_SECRET` | *(set in environment)* | Bearer secret for scheduled email endpoints |
@@ -81,6 +82,7 @@ These are constructed from the variables above in `docker-compose.yml` and do no
 
 - `NEXT_PUBLIC_TERMINAL_WS_URL` - built from `DOMAIN`
 - `NEXT_PUBLIC_TERMINAL_HTTP_URL` - built from `DOMAIN`
+- `CLAUDE_GATEWAY_BASE_URL` - built from `DOMAIN`
 - `ANALYSIS_ENGINE_URL` - hardcoded to `http://analysis:8000`
 
 ## Removed

@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to read and understand the existing codebase, plan what you need to build, generate implementation code, and iterate on test failures. Pay attention to the patterns already established in the codebase — your additions should feel consistent with the existing style.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## The Situation
 
 You've joined a small team building a blog platform. The authentication layer and basic user management are already complete and fully tested. Your task is to implement the **Posts** feature, extending the existing API with new endpoints.

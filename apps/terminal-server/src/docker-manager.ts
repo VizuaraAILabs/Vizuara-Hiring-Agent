@@ -9,8 +9,6 @@ const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
 dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
-
 const DOCKER_SOCKET_PATH = process.env.DOCKER_SOCKET_PATH
   || (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock');
 // Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
@@ -36,10 +34,16 @@ interface StarterFile {
   content: string;
 }
 
+interface ClaudeGatewayEnv {
+  baseUrl: string;
+  authToken: string;
+}
+
 interface QueueEntry {
   sessionId: string;
   starterFilesDir?: string;
   starterFiles?: StarterFile[];
+  claudeGateway?: ClaudeGatewayEnv;
   resolve: (session: DockerSession) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -79,7 +83,7 @@ export class DockerManager {
     return MAX_CONCURRENT_SANDBOXES;
   }
 
-  async spawn(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
+  async spawn(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[], claudeGateway?: ClaudeGatewayEnv): Promise<DockerSession> {
     // If at capacity, queue the request and wait
     if (this.sessions.size >= MAX_CONCURRENT_SANDBOXES) {
       console.log(`[Docker] At capacity (${this.sessions.size}/${MAX_CONCURRENT_SANDBOXES}), queuing session ${sessionId}`);
@@ -90,14 +94,14 @@ export class DockerManager {
           reject(new Error('QUEUE_TIMEOUT'));
         }, QUEUE_TIMEOUT_MS);
 
-        this.queue.push({ sessionId, starterFilesDir, starterFiles, resolve, reject, timer });
+        this.queue.push({ sessionId, starterFilesDir, starterFiles, claudeGateway, resolve, reject, timer });
       });
     }
 
-    return this.spawnContainer(sessionId, starterFilesDir, starterFiles);
+    return this.spawnContainer(sessionId, starterFilesDir, starterFiles, claudeGateway);
   }
 
-  private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
+  private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[], claudeGateway?: ClaudeGatewayEnv): Promise<DockerSession> {
     await this.removeStaleNamedContainer(sessionId);
 
     // Create a temporary host directory with starter files
@@ -141,11 +145,7 @@ export class DockerManager {
       Image: SANDBOX_IMAGE,
       name: `session-${sessionId}`,
       Env: [
-        // Use _SANDBOX_API_KEY so Claude Code doesn't detect it as an env var
-        // and show the "Do you want to use this API key?" prompt.
-        // The entrypoint script writes it to ~/.claude.json as primaryApiKey.
-        `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
-        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
       ],
@@ -163,7 +163,6 @@ export class DockerManager {
 
     await container.start();
     console.log(`[Docker] Container started for session ${sessionId}: ${container.id.substring(0, 12)}`);
-    console.log(`[Docker] ANTHROPIC_API_KEY present: ${ANTHROPIC_API_KEY ? 'yes (' + ANTHROPIC_API_KEY.substring(0, 10) + '...)' : 'NO - MISSING'}`);
     await this.assertContainerRunning(container, sessionId, 'after start');
 
     // Fix ownership: starter files were written by root on the host,
@@ -179,11 +178,11 @@ export class DockerManager {
       await this.assertContainerRunning(container, sessionId, 'after chown failure');
     }
 
-    // Wait for entrypoint to write the API key file before attaching exec
+    // Give the entrypoint a moment to finish before attaching exec.
     await new Promise(resolve => setTimeout(resolve, 1500));
     await this.assertContainerRunning(container, sessionId, 'before shell attach');
 
-    return this.attachShellToContainer(sessionId, container, hostWorkDir);
+    return this.attachShellToContainer(sessionId, container, hostWorkDir, claudeGateway);
   }
 
   async recover(sessionId: string, containerId: string, workDir: string): Promise<DockerSession | undefined> {
@@ -204,14 +203,18 @@ export class DockerManager {
     }
   }
 
-  private async attachShellToContainer(sessionId: string, container: Docker.Container, hostWorkDir: string): Promise<DockerSession> {
+  private async attachShellToContainer(
+    sessionId: string,
+    container: Docker.Container,
+    hostWorkDir: string,
+    claudeGateway?: ClaudeGatewayEnv
+  ): Promise<DockerSession> {
     // Create an exec instance for interactive bash as the candidate user
     // (non-root required for --dangerously-skip-permissions)
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
-        `_SANDBOX_API_KEY=${ANTHROPIC_API_KEY}`,
-        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
       ],
       User: 'candidate',
@@ -331,7 +334,7 @@ export class DockerManager {
     clearTimeout(next.timer);
 
     console.log(`[Docker] Draining queue: spawning session ${next.sessionId} (${this.queue.length} still queued)`);
-    this.spawnContainer(next.sessionId, next.starterFilesDir, next.starterFiles)
+    this.spawnContainer(next.sessionId, next.starterFilesDir, next.starterFiles, next.claudeGateway)
       .then(next.resolve)
       .catch(next.reject);
   }
@@ -358,6 +361,15 @@ export class DockerManager {
         fs.copyFileSync(srcPath, destPath);
       }
     }
+  }
+
+  private buildClaudeEnv(claudeGateway?: ClaudeGatewayEnv): string[] {
+    const env = [`CLAUDE_MODEL=${CLAUDE_MODEL}`];
+    if (claudeGateway) {
+      env.push(`ANTHROPIC_BASE_URL=${claudeGateway.baseUrl}`);
+      env.push(`ANTHROPIC_AUTH_TOKEN=${claudeGateway.authToken}`);
+    }
+    return env;
   }
 
   private async assertContainerRunning(container: Docker.Container, sessionId: string, stage: string) {

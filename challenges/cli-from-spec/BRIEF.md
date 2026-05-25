@@ -4,6 +4,8 @@
 
 Open your terminal and type `claude` to launch your AI assistant. Use it to plan your implementation approach, work through parsing logic, handle tricky edge cases, and refine your solution iteratively. This challenge is specifically designed to test how well you collaborate with AI on a moderately complex, spec-driven build — not just your ability to write code.
 
+Work inside `/workspace`. The sandbox runs as a non-root user, so commands requiring `sudo` or system-level package installation are not available.
+
 ## Your Task
 
 Build a command-line tool called `md2html` that converts Markdown files to HTML.

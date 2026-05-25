@@ -23,7 +23,7 @@ RUN npm install -g @anthropic-ai/claude-code && \
     npm cache clean --force && \
     CLAUDE_BIN=$(which claude) && \
     mv "$CLAUDE_BIN" "${CLAUDE_BIN}-real" && \
-    printf '#!/bin/bash\nexec "%s-real" --dangerously-skip-permissions --model "${CLAUDE_MODEL:-claude-haiku-4-5-20251001}" "$@"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
+    printf '#!/bin/bash\nset -e\nFILTERED_ARGS=()\nwhile [ "$#" -gt 0 ]; do\n  case "$1" in\n    --model|-m)\n      shift\n      if [ "$#" -gt 0 ]; then shift; fi\n      ;;\n    --model=*|-m=*)\n      shift\n      ;;\n    *)\n      FILTERED_ARGS+=("$1")\n      shift\n      ;;\n  esac\ndone\nexec "%s-real" --dangerously-skip-permissions --model "claude-haiku-4-5-20251001" "${FILTERED_ARGS[@]}"\n' "$CLAUDE_BIN" > "$CLAUDE_BIN" && \
     chmod +x "$CLAUDE_BIN"
 
 # Remove build-essential now that npm global install is done (saves ~200MB)
@@ -31,17 +31,14 @@ RUN apt-get update && apt-get purge -y build-essential && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root candidate user (--dangerously-skip-permissions requires non-root)
+# Create non-root candidate user (--dangerously-skip-permissions requires non-root).
+# Candidate sandboxes are untrusted and must not be able to escalate into
+# host-provided secrets.
 RUN useradd -m -s /bin/bash candidate && \
-    echo 'candidate ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-# API key helper: reads key from file written by entrypoint at container start
-RUN printf '#!/bin/bash\ncat /home/candidate/.claude/.api-key\n' > /usr/local/bin/get-api-key.sh && \
-    chmod +x /usr/local/bin/get-api-key.sh
+    mkdir -p /home/candidate/.claude
 
 # Pre-configure Claude Code for candidate user
-RUN mkdir -p /home/candidate/.claude && \
-    echo '{"skipDangerousModePermissionPrompt":true,"apiKeyHelper":"/usr/local/bin/get-api-key.sh","permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
+RUN echo '{"skipDangerousModePermissionPrompt":true,"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
     echo '{"hasCompletedOnboarding":true}' > /home/candidate/.claude.json && \
     chown -R candidate:candidate /home/candidate/.claude /home/candidate/.claude.json
 
@@ -56,8 +53,8 @@ RUN python3 -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab');
 RUN mkdir -p /workspace && chown candidate:candidate /workspace
 WORKDIR /workspace
 
-# Entrypoint: write API key to Claude Code config (avoids env var detection
-# prompt), then keep container alive. Terminal server attaches via docker exec.
+# Entrypoint keeps the container alive. Anthropic credentials must never be
+# written into this untrusted candidate sandbox.
 COPY docker/sandbox-entrypoint.sh /entrypoint.sh
 USER root
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh

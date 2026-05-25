@@ -14,6 +14,7 @@ Project documentation is grouped by topic so planning notes, implementation guid
 ## Quick Links
 
 - [Environment Variables](engineering/env-vars.md)
+- [Claude Code Gateway](engineering/claude-gateway.md)
 - [Troubleshooting](engineering/troubleshooting.md)
 - [Public Candidate Analysis API](api/public-candidate-analysis-api.md)
 - [Auth Integration Guide](auth/auth-integration-guide.md)

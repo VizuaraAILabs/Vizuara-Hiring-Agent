@@ -129,10 +129,14 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">02</span>
-                <span>We evaluate how you collaborate with AI, not just the final output.</span>
+                <span>The sandbox runs as a <strong className="text-white">non-root user</strong>. Commands requiring sudo or system-level package installation are not available.</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">03</span>
+                <span>We evaluate how you collaborate with AI, not just the final output.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-primary mt-0.5 font-mono text-xs">04</span>
                 <span>The timer starts when you click Start Challenge.</span>
               </li>
             </ul>

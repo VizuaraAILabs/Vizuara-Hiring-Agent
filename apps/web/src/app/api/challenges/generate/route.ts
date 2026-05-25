@@ -24,6 +24,20 @@ Good challenges require candidates to:
 
 ---
 
+## Sandbox Constraints
+
+EVERY challenge MUST be solvable inside the ArcEval candidate sandbox as a non-root user working in \`/workspace\`.
+
+Do NOT design challenges that require:
+- \`sudo\`, root access, or changing system-owned files
+- Installing operating-system packages with \`apt\`, \`apt-get\`, \`yum\`, \`apk\`, \`brew\`, or similar tools
+- Docker, Docker Compose, Kubernetes, systemd, background daemons, privileged ports, or host-level services
+- Writing to \`/usr\`, \`/usr/local\`, \`/opt\`, \`/etc\`, \`/var\`, or other system directories
+
+If dependencies are needed, they must be installable as project-local dependencies through normal language package managers such as \`npm install\`, \`pip install -r requirements.txt\`, or equivalent commands that work without root. Prefer challenges that run entirely from the checked-out project files.
+
+---
+
 ## Scoring Dimensions
 
 ArcEval scores every candidate across exactly eight dimensions. Your challenge description MUST be designed so that each dimension is exercised, and the "Evaluation Criteria" section in the description MUST explicitly reference all eight by name. The dimensions are:
@@ -80,6 +94,7 @@ Map the challenge explicitly to all eight scoring dimensions:
 
 ### Starter Files Scaffold
 List the key files and their roles that the starter project should include (e.g., "src/server.ts — Express app with intentional rate-limiting bug"). This helps the file-generation step produce a scaffold that matches the challenge exactly.
+The scaffold must be runnable without root/sudo access or system-level package installation.
 
 ---
 

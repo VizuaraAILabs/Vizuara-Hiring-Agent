@@ -30,5 +30,5 @@ sqlite3 "$ROOT_DIR/database/hiring_agent.db" < "$ROOT_DIR/database/migrations/00
 
 echo ""
 echo "=== Setup complete! ==="
-echo "1. Copy .env.local and set your ANTHROPIC_API_KEY"
+echo "1. Copy .env.local and set your required API keys"
 echo "2. Run 'npm run dev' to start all services"
