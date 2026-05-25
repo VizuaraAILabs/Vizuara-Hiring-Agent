@@ -27,10 +27,16 @@ interface StarterFile {
   content: string;
 }
 
+interface ClaudeGatewayEnv {
+  baseUrl: string;
+  authToken: string;
+}
+
 interface QueueEntry {
   sessionId: string;
   starterFilesDir?: string;
   starterFiles?: StarterFile[];
+  claudeGateway?: ClaudeGatewayEnv;
   resolve: (session: DockerSession) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
@@ -70,7 +76,7 @@ export class DockerManager {
     return MAX_CONCURRENT_SANDBOXES;
   }
 
-  async spawn(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
+  async spawn(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[], claudeGateway?: ClaudeGatewayEnv): Promise<DockerSession> {
     // If at capacity, queue the request and wait
     if (this.sessions.size >= MAX_CONCURRENT_SANDBOXES) {
       console.log(`[Docker] At capacity (${this.sessions.size}/${MAX_CONCURRENT_SANDBOXES}), queuing session ${sessionId}`);
@@ -81,14 +87,14 @@ export class DockerManager {
           reject(new Error('QUEUE_TIMEOUT'));
         }, QUEUE_TIMEOUT_MS);
 
-        this.queue.push({ sessionId, starterFilesDir, starterFiles, resolve, reject, timer });
+        this.queue.push({ sessionId, starterFilesDir, starterFiles, claudeGateway, resolve, reject, timer });
       });
     }
 
-    return this.spawnContainer(sessionId, starterFilesDir, starterFiles);
+    return this.spawnContainer(sessionId, starterFilesDir, starterFiles, claudeGateway);
   }
 
-  private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[]): Promise<DockerSession> {
+  private async spawnContainer(sessionId: string, starterFilesDir?: string, starterFiles?: StarterFile[], claudeGateway?: ClaudeGatewayEnv): Promise<DockerSession> {
     // Create a temporary host directory with starter files
     const hostWorkDir = path.join('/tmp', 'sessions', sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
@@ -130,7 +136,7 @@ export class DockerManager {
       Image: SANDBOX_IMAGE,
       name: `session-${sessionId}`,
       Env: [
-        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
         `SESSION_ID=${sessionId}`,
       ],
@@ -169,7 +175,7 @@ export class DockerManager {
     const exec = await container.exec({
       Cmd: ['/bin/bash', '-l'],
       Env: [
-        `CLAUDE_MODEL=${CLAUDE_MODEL}`,
+        ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
       ],
       User: 'candidate',
@@ -280,7 +286,7 @@ export class DockerManager {
     clearTimeout(next.timer);
 
     console.log(`[Docker] Draining queue: spawning session ${next.sessionId} (${this.queue.length} still queued)`);
-    this.spawnContainer(next.sessionId, next.starterFilesDir, next.starterFiles)
+    this.spawnContainer(next.sessionId, next.starterFilesDir, next.starterFiles, next.claudeGateway)
       .then(next.resolve)
       .catch(next.reject);
   }
@@ -307,5 +313,14 @@ export class DockerManager {
         fs.copyFileSync(srcPath, destPath);
       }
     }
+  }
+
+  private buildClaudeEnv(claudeGateway?: ClaudeGatewayEnv): string[] {
+    const env = [`CLAUDE_MODEL=${CLAUDE_MODEL}`];
+    if (claudeGateway) {
+      env.push(`ANTHROPIC_BASE_URL=${claudeGateway.baseUrl}`);
+      env.push(`ANTHROPIC_AUTH_TOKEN=${claudeGateway.authToken}`);
+    }
+    return env;
   }
 }

@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import { buildFileTree, readFileContent, createFile, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
 import { CostTracker } from './cost-tracker';
 import { ActivityMonitor } from './activity-monitor';
+import { handleClaudeGatewayRequest, issueClaudeGatewayToken } from './claude-gateway';
 
 // Load env from root — __dirname is apps/terminal-server/src, root is ../../..
 const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
@@ -18,6 +19,9 @@ dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 const PORT = parseInt(process.env.TERMINAL_PORT || '3001');
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://hiring:hiring@localhost:5432/hiring_agent';
 const NEXT_APP_URL = process.env.NEXT_APP_URL || 'http://localhost:3000';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const CLAUDE_GATEWAY_BASE_URL = process.env.CLAUDE_GATEWAY_BASE_URL || `http://localhost:${PORT}/claude-gateway`;
+const CLAUDE_GATEWAY_TOKEN_SECRET = process.env.CLAUDE_GATEWAY_TOKEN_SECRET || '';
 
 // Initialize postgres connection
 const sql = postgres(DATABASE_URL, {
@@ -40,6 +44,10 @@ const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 
 // Per-session activity monitors for the AI interviewer
 const activityMonitors: Map<string, ActivityMonitor> = new Map();
+
+function redactClaudeGatewayTokens(value: string): string {
+  return value.replace(/claude_sess_[A-Za-z0-9_-]+/g, '[REDACTED_CLAUDE_AUTH_TOKEN]');
+}
 
 // Periodically kill containers for sessions that have been ended (by button or timer expiry)
 // but whose WebSocket was already disconnected so the close handler couldn't clean up.
@@ -125,6 +133,14 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
+  if (pathname === '/claude-gateway/v1/messages' || pathname === '/v1/messages') {
+    await handleClaudeGatewayRequest(req, res, sql, {
+      anthropicApiKey: ANTHROPIC_API_KEY,
+      tokenSecret: CLAUDE_GATEWAY_TOKEN_SECRET,
+    });
     return;
   }
 
@@ -357,7 +373,18 @@ wss.on('connection', async (ws: WebSocket, req) => {
       } else {
         ws.send(JSON.stringify({ type: 'spawning' }));
       }
-      dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles);
+      let claudeGateway: { baseUrl: string; authToken: string } | undefined;
+      if (ANTHROPIC_API_KEY && CLAUDE_GATEWAY_TOKEN_SECRET && CLAUDE_GATEWAY_BASE_URL) {
+        const gatewayToken = await issueClaudeGatewayToken(sql, sessionId, CLAUDE_GATEWAY_TOKEN_SECRET);
+        claudeGateway = {
+          baseUrl: CLAUDE_GATEWAY_BASE_URL,
+          authToken: gatewayToken.token,
+        };
+      } else {
+        console.warn('[Terminal] Claude gateway is not fully configured; sandbox will not receive Claude auth');
+      }
+
+      dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles, claudeGateway);
     } catch (err: any) {
       const isQueueTimeout = err?.message === 'QUEUE_TIMEOUT';
       console.error(`[Terminal] Failed to spawn container for session ${sessionId}:`, err);
@@ -403,8 +430,9 @@ wss.on('connection', async (ws: WebSocket, req) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'output', data }));
     }
-    logger.logOutput(sessionId, data);
-    costTracker.processOutput(sessionId, data);
+    const redactedData = redactClaudeGatewayTokens(data);
+    logger.logOutput(sessionId, redactedData);
+    costTracker.processOutput(sessionId, redactedData);
   };
 
   // Trigger a resize so the shell redraws its prompt — the initial prompt is
@@ -426,8 +454,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
       switch (message.type) {
         case 'input':
           dockerManager.write(sessionId, message.data);
-          logger.logInput(sessionId, message.data);
-          costTracker.processInput(sessionId, message.data);
+          logger.logInput(sessionId, redactClaudeGatewayTokens(message.data));
+          costTracker.processInput(sessionId, redactClaudeGatewayTokens(message.data));
           break;
 
         case 'resize':
