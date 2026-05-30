@@ -26,6 +26,10 @@ The ability to demonstrate knowledge of the problem statement and domain through
 
 The ability to value code that is readable, maintainable, and appropriately organized. The developer should care about naming, structure, simplicity, duplication, and whether the implementation can be understood and safely changed by others later.
 
+## Care About Simple Code
+
+The ability to solve the problem with as little code as reasonably possible while keeping the implementation clear. The developer should avoid code that is too clever, indirect, or complex for the actual requirements, and should prefer straightforward solutions that are easier to read, test, and change.
+
 ## Care About Optimization
 
 The ability to notice and care about performance, efficiency, and resource usage where they matter for the problem. The developer should consider whether a solution is unnecessarily slow, expensive, or wasteful, while still balancing optimization against readability, maintainability, and the actual constraints of the system.
