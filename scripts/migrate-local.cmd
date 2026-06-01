@@ -41,7 +41,7 @@ if not defined PSQL_EXE set "PSQL_EXE=psql.exe"
 if /I "%TARGET%"=="latest" (
   set "LATEST_MIGRATION="
   for %%F in ("database\migrations\*.sql") do (
-    if /I not "%%~nxF"=="001_initial_schema.sql" set "LATEST_MIGRATION=%%~fF"
+    set "LATEST_MIGRATION=%%~fF"
   )
 
   if not defined LATEST_MIGRATION (
@@ -55,11 +55,9 @@ if /I "%TARGET%"=="latest" (
 )
 
 for %%F in ("database\migrations\*.sql") do (
-  if /I not "%%~nxF"=="001_initial_schema.sql" (
-    echo Running %%~nxF
-    "!PSQL_EXE!" "!DATABASE_URL!" -v ON_ERROR_STOP=1 -f "%%~fF"
-    if errorlevel 1 exit /b !errorlevel!
-  )
+  echo Running %%~nxF
+  "!PSQL_EXE!" "!DATABASE_URL!" -v ON_ERROR_STOP=1 -f "%%~fF"
+  if errorlevel 1 exit /b !errorlevel!
 )
 
 echo Migrations complete.

@@ -1,5 +1,4 @@
 -- Hiring Agent Platform - PostgreSQL Schema
--- Adapted from SQLite schema for production deployment
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

@@ -61,7 +61,7 @@ echo ""
 echo "2. Running all database migrations..."
 for migration in database/migrations/*.sql; do
   echo "  Running $migration..."
-  docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" < "$migration"
+  docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" -v ON_ERROR_STOP=1 < "$migration"
 done
 
 echo ""
