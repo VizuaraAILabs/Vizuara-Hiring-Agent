@@ -4,7 +4,7 @@ Project documentation is grouped by topic so planning notes, implementation guid
 
 ## Folders
 
-- [analysis](analysis/) - Analysis engine test data and fixture guidance.
+- [analysis](analysis/) - Analysis engine scoring specs, test data, and fixture guidance.
 - [api](api/) - Public API contracts and response references.
 - [auth](auth/) - Authentication, signup/login, payment, enrollment, and access-control plans.
 - [design](design/) - UI and visual design conventions.
@@ -15,6 +15,7 @@ Project documentation is grouped by topic so planning notes, implementation guid
 
 - [Environment Variables](engineering/env-vars.md)
 - [Claude Code Gateway](engineering/claude-gateway.md)
+- [Concrete Skill Signals Spec](analysis/concrete-skill-signals-spec.md)
 - [Troubleshooting](engineering/troubleshooting.md)
 - [Public Candidate Analysis API](api/public-candidate-analysis-api.md)
 - [Auth Integration Guide](auth/auth-integration-guide.md)
