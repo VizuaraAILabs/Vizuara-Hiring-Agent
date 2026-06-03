@@ -171,6 +171,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: A company can appear paid for candidate-session quota while the subscription status endpoint reports not enrolled, or appear enrolled in the UI while quota enforcement treats the subscription as lapsed. This is especially risky because Vizuara's subscription activation webhook creates the `Enrollments` document only after successfully loading `Users/{uid}`; locally-created ArcEval accounts may have an active `Subscriptions` document but no matching `Enrollments` document if the Vizuara `Users` profile is missing.
 - Suggested fix: Pick one canonical source for paid ArcEval access. Prefer `Subscriptions` for paid-plan enforcement because it contains `status`, `currentPeriodStart`, and `currentPeriodEnd` for billing-period quota resets. Update `/api/subscription/status` to use the same subscription reader, optionally returning matching `Enrollments` data as secondary/debug context, and add tests for `Subscriptions ACTIVE / Enrollments missing` and `Enrollments ACTIVE / Subscriptions missing` cases.
 
+### WEB-P1-005: Private GitHub repository blocks repeatable VM deployments
+
+- Status: Open
+- Area: Deployment operations / release reliability
+- Evidence: The production system is hosted on a GCP VM, while the GitHub repository is private. Manual VM updates require an authenticated way to fetch private repository changes, but the current deployment process does not yet have a finalized private-repo access strategy or CI/CD path. Deploy keys may not be available in the target environment, and relying on ad hoc personal credentials on the VM is operationally risky.
+- Impact: Production can lag behind committed fixes, deployment steps become person-dependent, and emergency updates can be blocked by missing credentials. Workarounds such as making the repository public or storing broad personal tokens on the VM would weaken security.
+- Suggested fix: Keep the repository private and implement a controlled deployment path. Prefer GitHub Actions CI/CD that checks out the private repo inside GitHub, validates/builds the system, then deploys to the VM using scoped VM SSH credentials stored in GitHub environments/secrets. If VM-side pulls remain necessary, use a fine-grained read-only token or GitHub App installation token scoped to this repository, with rotation and revocation documented.
+
 ## P2
 
 ### AE-P2-001: Analysis engine error details are swallowed by web API responses
