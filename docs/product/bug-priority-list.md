@@ -163,6 +163,14 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: A growth or enterprise purchase can be under-allocated as starter, or a downgraded/cancelled tier can continue receiving the old local quota. Remaining-session calculations and candidate admission can diverge from what the customer actually paid for.
 - Suggested fix: Store the purchased plan tier from the billing/subscription source of truth and reconcile `companies.plan` on every subscription status check or webhook. Avoid defaulting paid trial upgrades to starter unless the subscription explicitly says starter.
 
+### WEB-P1-004: Subscription status checks use different Firestore sources of truth
+
+- Status: Open
+- Area: Subscription access consistency
+- Evidence: Paid-plan quota enforcement in `checkEnrollmentStatus()` treats an active Firestore `Subscriptions` document as the source of truth for paid access and billing-period quota anchors (`apps/web/src/lib/enrollment.ts:198`). However, `/api/subscription/status` reports enrollment by reading `Enrollments/{firebase_uid}_{ARCEVAL_ENROLLMENT_ID}` instead (`apps/web/src/app/api/subscription/status/route.ts:31`).
+- Impact: A company can appear paid for candidate-session quota while the subscription status endpoint reports not enrolled, or appear enrolled in the UI while quota enforcement treats the subscription as lapsed. This is especially risky because Vizuara's subscription activation webhook creates the `Enrollments` document only after successfully loading `Users/{uid}`; locally-created ArcEval accounts may have an active `Subscriptions` document but no matching `Enrollments` document if the Vizuara `Users` profile is missing.
+- Suggested fix: Pick one canonical source for paid ArcEval access. Prefer `Subscriptions` for paid-plan enforcement because it contains `status`, `currentPeriodStart`, and `currentPeriodEnd` for billing-period quota resets. Update `/api/subscription/status` to use the same subscription reader, optionally returning matching `Enrollments` data as secondary/debug context, and add tests for `Subscriptions ACTIVE / Enrollments missing` and `Enrollments ACTIVE / Subscriptions missing` cases.
+
 ## P2
 
 ### AE-P2-001: Analysis engine error details are swallowed by web API responses
