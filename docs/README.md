@@ -14,6 +14,7 @@ Project documentation is grouped by topic so planning notes, implementation guid
 ## Quick Links
 
 - [Environment Variables](engineering/env-vars.md)
+- [Private GitHub Pulls on GCP VM](engineering/private-github-pulls-on-gcp-vm.md)
 - [Claude Code Gateway](engineering/claude-gateway.md)
 - [Concrete Skill Signals Spec](analysis/concrete-skill-signals-spec.md)
 - [Troubleshooting](engineering/troubleshooting.md)

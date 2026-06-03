@@ -76,6 +76,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: Recruiters may lose confidence in the report when the headline score and recommendation badge appear to disagree, especially in shareable/exported reports.
 - Suggested fix: Decide whether the badge should be score-derived or model-derived. If model-derived, add prompt and/or post-processing calibration rules so recommendations cannot contradict score bands without an explicit rationale, then surface that rationale in the report when exceptions occur.
 
+### FEAT-P1-007: Create a CI/CD pipeline for the hosted system
+
+- Status: Proposed
+- Area: Deployment operations / release reliability
+- Evidence: The system is hosted on a GCP VM and currently relies on manual Git pulls and deployment commands. Existing docs cover environment variables, deployment troubleshooting, scaling strategy, and private GitHub pulls, but there is no automated pipeline that validates changes, builds images, deploys to the VM, and records deployment status.
+- Impact: Manual deployments are easy to forget, repeat inconsistently, or run with unvalidated code. This increases the risk of downtime, missed migrations, stale sandbox images, and unclear rollback steps when production behavior changes.
+- Suggested fix: Add a GitHub Actions workflow for CI checks on pull requests and controlled deployments from the production branch. The pipeline should run lint/typecheck/tests where available, build the web, terminal-server, analysis-engine, and sandbox images, push or transfer deployable artifacts securely, SSH into the GCP VM using repository secrets, run migrations and `scripts/deploy.sh`, perform health checks, and publish deployment logs/status. Include rollback guidance and make production secrets available only through GitHub environments or VM-local `.env.production`, never committed files.
+
 ### FEAT-P1-003: Add candidate lifecycle controls
 
 - Status: Implemented
