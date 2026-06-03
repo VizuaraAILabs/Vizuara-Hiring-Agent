@@ -19,16 +19,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 deactivate
 
-# Initialize database
-echo "Initializing database..."
-mkdir -p "$ROOT_DIR/database"
-sqlite3 "$ROOT_DIR/database/hiring_agent.db" < "$ROOT_DIR/database/migrations/001_initial_schema.sql"
-
-# Apply additional migrations (idempotent)
-echo "Applying migrations..."
-sqlite3 "$ROOT_DIR/database/hiring_agent.db" < "$ROOT_DIR/database/migrations/002_add_starter_files.sql" 2>/dev/null || true
-
 echo ""
 echo "=== Setup complete! ==="
 echo "1. Copy .env.local and set your required API keys"
-echo "2. Run 'npm run dev' to start all services"
+echo "2. Start Postgres with 'docker compose -f docker-compose.dev.yml up -d'"
+echo "3. Run database migrations with 'scripts\\migrate-local.cmd all' on Windows"
+echo "4. Run 'npm run dev' to start all services"
