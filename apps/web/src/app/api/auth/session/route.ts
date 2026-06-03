@@ -1,4 +1,4 @@
-import { createSessionCookie } from '@/lib/auth';
+import { createSessionCookie, isAdmin } from '@/lib/auth';
 import sql from '@/lib/db';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,50 +25,121 @@ function getExternalOrigin(request: NextRequest): string {
   return request.nextUrl.origin;
 }
 
-export async function GET(request: NextRequest) {
-  const token = request.nextUrl.searchParams.get('token');
-  const origin = getExternalOrigin(request);
+function getSafeReturnTo(returnTo?: string | null): string {
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return '/dashboard';
+  return returnTo;
+}
 
+async function createSessionResponse({
+  request,
+  token,
+  redirect,
+  returnTo,
+  companyName,
+}: {
+  request: NextRequest;
+  token: string | null;
+  redirect: boolean;
+  returnTo?: string | null;
+  companyName?: string | null;
+}) {
   if (!token) {
-    return NextResponse.redirect(new URL('/auth/login', origin));
+    if (redirect) {
+      return NextResponse.redirect(new URL('/login', getExternalOrigin(request)));
+    }
+    return NextResponse.json({ error: 'Missing token' }, { status: 400 });
+  }
+
+  const adminAuth = getAdminAuth();
+  const decoded = await adminAuth.verifyIdToken(token).catch((error) => {
+    console.error('Auth token verification error:', error);
+    return null;
+  });
+
+  if (!decoded) {
+    if (redirect) {
+      return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+    }
+    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }
 
   try {
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(token);
-
-    const sessionCookie = await createSessionCookie(token);
-
-    // Vizuara sets decoded.name to the company name when redirecting to ArcEval
-    const firebaseUid = decoded.uid;
-    const name = decoded.name || decoded.email?.split('@')[0] || 'Unknown';
-    const email = decoded.email || '';
-
-    // Upsert company record keyed by Firebase UID or email
-    const [existing] = await sql<{ id: string }[]>`
-      SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
-      LIMIT 1
-    `;
-
-    if (!existing) {
-      const id = uuidv4();
-      const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      await sql`
-        INSERT INTO companies (id, name, email, password_hash, firebase_uid, plan, trial_ends_at)
-        VALUES (${id}, ${name}, ${email}, '', ${firebaseUid}, 'trial', ${trialEndsAt})
-      `;
-    } else {
-      // Sync profile and firebase_uid from Vizuara on every login
-      await sql`
-        UPDATE companies SET email = ${email}, name = ${name}, firebase_uid = ${firebaseUid}
-        WHERE id = ${existing.id}
-      `;
+    if (decoded.email_verified === false) {
+      if (redirect) {
+        return NextResponse.redirect(new URL('/login?error=email-not-verified', getExternalOrigin(request)));
+      }
+      return NextResponse.json({ error: 'Email verification is required' }, { status: 403 });
     }
 
-    const returnTo = request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
-    const redirectPath = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/dashboard';
+    const firebaseUid = decoded.uid;
+    const trimmedCompanyName = companyName?.trim() || '';
+    const email = decoded.email || '';
+    const role = typeof decoded.role === 'string' ? decoded.role : null;
+    const userIsAdmin = isAdmin(email, role);
+    const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
 
-    const response = NextResponse.redirect(new URL(redirectPath, origin));
+    if (!userIsAdmin) {
+      const [existing] = await sql<{ id: string }[]>`
+        SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+        LIMIT 1
+      `;
+
+      if (!existing) {
+        const [pendingSignup] = await sql<{ company_name: string }[]>`
+          SELECT company_name FROM pending_signups
+          WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          LIMIT 1
+        `;
+
+        const companyNameForCreate =
+          trimmedCompanyName ||
+          pendingSignup?.company_name ||
+          decoded.name ||
+          email.split('@')[0] ||
+          'Unknown company';
+
+        const id = uuidv4();
+        const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        await sql.begin(async (tx) => {
+          const trx = tx as unknown as typeof sql;
+
+          await trx`
+            INSERT INTO companies (id, name, email, firebase_uid, plan, trial_ends_at)
+            VALUES (${id}, ${companyNameForCreate}, ${email}, ${firebaseUid}, 'trial', ${trialEndsAt})
+          `;
+
+          await trx`
+            DELETE FROM pending_signups
+            WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          `;
+        });
+      } else {
+        // Keep the local company name as the source of truth after account creation.
+        await sql.begin(async (tx) => {
+          const trx = tx as unknown as typeof sql;
+
+          await trx`
+            UPDATE companies SET email = ${email}, firebase_uid = ${firebaseUid}
+            WHERE id = ${existing.id}
+          `;
+
+          await trx`
+            DELETE FROM pending_signups
+            WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+          `;
+        });
+      }
+    }
+
+    const sessionCookie = await createSessionCookie(token);
+    const safeReturnTo = getSafeReturnTo(requestedReturnTo);
+    const redirectPath = userIsAdmin && safeReturnTo === '/dashboard'
+      ? '/dashboard/admin'
+      : safeReturnTo;
+
+    const response = redirect
+      ? NextResponse.redirect(new URL(redirectPath, getExternalOrigin(request)))
+      : NextResponse.json({ ok: true, redirectTo: redirectPath });
 
     const cookieDomain = getCookieDomain();
     response.cookies.set(COOKIE_NAME, sessionCookie, {
@@ -84,7 +155,43 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Auth callback error:', error);
-    return NextResponse.redirect(`${VIZUARA_URL}/auth/login`);
+    console.error('Auth session setup error:', error);
+    if (redirect) {
+      return NextResponse.redirect(new URL('/login?error=session-setup-failed', getExternalOrigin(request)));
+    }
+    return NextResponse.json(
+      { error: 'Unable to create your session. Please try again in a moment.' },
+      { status: 500 }
+    );
   }
+}
+
+export async function GET(request: NextRequest) {
+  return createSessionResponse({
+    request,
+    token: request.nextUrl.searchParams.get('token'),
+    redirect: true,
+  });
+}
+
+export async function POST(request: NextRequest) {
+  let token: string | null = null;
+  let returnTo: string | null = null;
+  let companyName: string | null = null;
+  try {
+    const body = await request.json();
+    token = typeof body.token === 'string' ? body.token : null;
+    returnTo = typeof body.returnTo === 'string' ? body.returnTo : null;
+    companyName = typeof body.companyName === 'string' ? body.companyName : null;
+  } catch {
+    token = null;
+  }
+
+  return createSessionResponse({
+    request,
+    token,
+    redirect: false,
+    returnTo,
+    companyName,
+  });
 }

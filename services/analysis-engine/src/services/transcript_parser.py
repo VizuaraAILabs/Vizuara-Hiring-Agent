@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
+
+
+@dataclass(frozen=True)
+class ParsedTranscript:
+    transcript: str
+    turns: list[dict]
 
 
 class TranscriptParser:
@@ -34,6 +41,9 @@ class TranscriptParser:
         re.compile(r"[─━╭╮╰╯│┃═]{4,}"),                           # box borders
         re.compile(r"⏸\s*plan\s*mode\s*on\b[^❯]*"),               # plan mode on ...
         re.compile(r"⏵⏵\s*accept\s*edits?\s*on\b[^❯]*"),          # accept edits on ...
+        re.compile(r"⏵⏵?\s*bypass\s*permissions\s*on\b[^❯\n]*", re.I), # bypass permissions on ...
+        re.compile(r"bypass\s*permissions\s*on\b[^❯\n]*", re.I),  # bypass permissions on ...
+        re.compile(r"bypasspermissionson\b[^❯\n]*", re.I),        # smashed status
         re.compile(r"shift\+tab\s*to\s*cycle[^❯]*"),               # shift+tab hint
         re.compile(r"esc\s*to\s*interrupt[^❯]*"),                   # esc hint
         re.compile(r"ctrl\+[a-z]\s*to\s*\w+[^❯]*", re.I),         # ctrl shortcuts
@@ -42,9 +52,12 @@ class TranscriptParser:
         re.compile(r"Esc\s*to\s*cancel[^❯]*"),                     # esc cancel
         re.compile(r"Entertoconfirm[^❯]*"),                        # enter confirm
         re.compile(r"Type\s*(?:here\s*to\s*tell|something)[^❯]*"), # placeholder
-        re.compile(r"[✻✶✳✢✽·⏺]\s*\w+…\s*(?:\([^)]*\))?"),        # spinner status
+        re.compile(r"[✻✶✳✢✽·⏺]\s*\w+…?\s*(?:\([^)]*\))?", re.I), # spinner status
+        re.compile(r"(?:^|\s)[✻✶✳✢✽·⏺]\s*[A-Za-z]{1,24}(?=\s|$)"), # partial spinner status
         re.compile(r"\(thinking\)"),                                 # thinking tag
         re.compile(r"\(ctrl\+o\s*to\s*expand\)"),                   # expand hint
+        re.compile(r"Auto-update failed[^\n]*", re.I),              # update warning
+        re.compile(r"(?:Claude\s+Code|claude\s+doctor)[^\n]*", re.I), # status/tooling chrome
         re.compile(r"Reading\s+\d+\s+file[^❯]*"),                  # reading files
         re.compile(r"Searching\s*for\s*\d+\s*pattern[^❯]*"),       # searching
         re.compile(r"Pasting\s+text…"),                             # paste indicator
@@ -71,9 +84,49 @@ class TranscriptParser:
 
     # Welcome/splash screen
     _WELCOME_SCREEN_RE = re.compile(r"╭───\s*Claude\s*Code\s*v")
+    _REPLACEMENT_CHAR_RE = re.compile(r"\ufffd+")
+    _TUI_STATUS_LINE_COMPACT_MARKERS = (
+        "bypasspermissionson",
+        "accepteditson",
+        "planmodeon",
+        "shift+tabtocycle",
+        "esctointerrupt",
+        "pressuptoeditqueued",
+        "typeheretotell",
+        "autoupdatefailed",
+        "claudedoctor",
+        "npmi-g@anthropic-ai/claude-code",
+        "forcommands",
+        "tokenthinking",
+    )
+    _TUI_SPINNER_WORDS = (
+        "catapulting",
+        "cogitating",
+        "ruminating",
+        "inferring",
+        "thinking",
+        "crafting",
+        "reading",
+        "listing",
+        "searching",
+        "running",
+        "capturing",
+    )
 
     # Maximum transcript length
     _MAX_TRANSCRIPT_LENGTH = 80_000
+
+    _SHELL_COMMAND_RE = re.compile(
+        r"^\s*(?:"
+        r"ls|ll|la|pwd|cd|cat|less|head|tail|grep|rg|find|tree|wc|"
+        r"git|npm|pnpm|yarn|bun|node|npx|python|python3|pip|pip3|"
+        r"pytest|ruff|mypy|uv|poetry|cargo|go|java|javac|mvn|gradle|"
+        r"make|tsc|tsx|deno|docker|docker-compose|kubectl|curl|wget|psql|mysql|sqlite3|"
+        r"vim|vi|nano|sed|awk|sort|uniq|xargs|chmod|chown|mkdir|touch|"
+        r"cp|mv|rm|echo|env|export|source"
+        r")(?:\s|$|[;&|])",
+        re.I,
+    )
 
     _LABELS = {
         "prompt": "[CANDIDATE PROMPT]",
@@ -93,14 +146,128 @@ class TranscriptParser:
         text = self._CONTROL_RE.sub("", text)
         return text
 
+    def _normalize_tui_redraws(self, text: str) -> str:
+        """Normalize PTY redraw/control artifacts before extracting visible text."""
+        text = self._strip_ansi(text)
+        text = text.replace("\u00a0", " ")
+        text = self._REPLACEMENT_CHAR_RE.sub(" ", text)
+        text = text.replace("\r", "\n")
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text
+
+    def _is_tui_status_line(self, line: str) -> bool:
+        stripped = line.strip()
+        if not stripped:
+            return True
+
+        if self._SHELL_COMMAND_RE.match(stripped):
+            return False
+
+        compact = re.sub(r"\s+", "", stripped.lower())
+        spaced = re.sub(r"\s+", " ", stripped.lower())
+
+        if any(marker in compact for marker in self._TUI_STATUS_LINE_COMPACT_MARKERS):
+            return True
+
+        if "tokens" in compact and len(stripped) <= 60:
+            return True
+
+        if any(word in spaced for word in self._TUI_SPINNER_WORDS) and re.search(
+            r"[✻✶✳✢✽·⏺]",
+            stripped,
+        ):
+            return True
+
+        if stripped.startswith(("⏵", "⎿")):
+            return True
+
+        if re.fullmatch(r"[\s*]+", stripped):
+            return True
+
+        if "thinking" in compact and len(stripped) <= 40:
+            return True
+
+        if len(stripped) <= 20:
+            alpha = re.sub(r"[^a-zA-Z0-9]", "", stripped)
+            if re.search(r"[✻✶✳✢✽·⏺●…↑↓]", stripped):
+                return True
+            if alpha and len(alpha) <= 4:
+                return True
+            if re.fullmatch(r"[A-Za-z0-9]+", stripped) and len(stripped) <= 8:
+                return True
+            if any(word.startswith(alpha.lower()) for word in self._TUI_SPINNER_WORDS if alpha):
+                return True
+
+        if re.search(r"[✻✶✳✢✽·⏺●]", stripped) and any(
+            word in spaced for word in self._TUI_SPINNER_WORDS
+        ):
+            return True
+
+        if re.fullmatch(r"[\s─━╭╮╰╯│┃═╴╶┄┈┌┐└┘┬┴┼]+", stripped):
+            return True
+
+        if re.fullmatch(r"[\s✻✶✳✢✽·⏺●|/\-\\()0-9.ms↑↓ktokens,]+", stripped, re.I):
+            return True
+
+        return False
+
+    def _remove_tui_status_lines(self, text: str) -> str:
+        """Drop whole redraw/status lines while leaving candidate and AI prose intact."""
+        kept: list[str] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if self._is_tui_status_line(line):
+                continue
+            kept.append(line)
+        return "\n".join(kept)
+
+    def _remove_repeated_tui_fragments(self, text: str) -> str:
+        """Drop runs of short prompt-redraw fragments emitted while a user is typing."""
+        lines = text.splitlines()
+        kept: list[str] = []
+        run: list[str] = []
+
+        def is_fragment(line: str) -> bool:
+            stripped = line.strip()
+            if not stripped or len(stripped) > 24:
+                return False
+            if self._SHELL_COMMAND_RE.match(stripped):
+                return False
+            if stripped.endswith(":"):
+                return False
+            return bool(re.fullmatch(r"[A-Za-z ]+", stripped))
+
+        def flush_run() -> None:
+            nonlocal run
+            if len(run) < 3:
+                kept.extend(run)
+            run = []
+
+        for line in lines:
+            if is_fragment(line):
+                run.append(line)
+            else:
+                flush_run()
+                kept.append(line)
+
+        flush_run()
+        return "\n".join(kept)
+
     def _clean_tui_text(self, text: str) -> str:
         """Aggressively clean TUI artifacts from extracted text."""
+        text = self._normalize_tui_redraws(text)
+        text = self._remove_tui_status_lines(text)
+
         # Remove all TUI noise patterns
         for pattern in self._TUI_STRIP_PATTERNS:
             text = pattern.sub(" ", text)
 
+        text = re.sub(r"(?m)^\s*[●⏺]\s*", "", text)
+        text = self._remove_tui_status_lines(text)
+        text = self._remove_repeated_tui_fragments(text)
+
         # Remove orphaned spinner characters
-        text = re.sub(r"(?<!\w)[✻✶✳✢✽·⏺](?!\w)", " ", text)
+        text = re.sub(r"(?<!\w)[✻✶✳✢✽·⏺●](?!\w)", " ", text)
 
         # Remove single-character fragments (from keystroke echo)
         # These appear as isolated chars surrounded by whitespace
@@ -121,6 +288,23 @@ class TranscriptParser:
         # Remove all whitespace and punctuation for length check
         alpha = re.sub(r"[^a-zA-Z0-9]", "", text)
         return len(alpha) > 10
+
+    def _is_likely_candidate_action(self, text: str) -> bool:
+        """Return true for short commands/prompts that are meaningful evidence."""
+        cleaned = re.sub(r"\s+", " ", text).strip()
+        if not cleaned:
+            return False
+
+        if self._SHELL_COMMAND_RE.match(cleaned):
+            return True
+
+        if re.match(r"^\s*(?:\.\/|\.\.\/|/|~\/)\S+", cleaned):
+            return True
+
+        if re.search(r"\b(?:test|debug|fix|inspect|check|run|open|create|update)\b", cleaned, re.I):
+            return len(re.sub(r"[^a-zA-Z0-9]", "", cleaned)) >= 8
+
+        return False
 
     # ── TUI detection ─────────────────────────────────────────────────
 
@@ -156,12 +340,14 @@ class TranscriptParser:
             content = interaction.get("content", "")
             seq = interaction.get("sequence_num", 0)
             ts = interaction.get("timestamp", "")
-            cleaned = self._strip_ansi(content)
+            cleaned = self._normalize_tui_redraws(content)
 
-            for match in re.finditer(r"❯\s+(.+?)(?=\s*❯|\s*$)", cleaned, re.DOTALL):
+            for match in re.finditer(r"❯\s*([^\r\n]+)", cleaned):
                 prompt_text = self._clean_tui_text(match.group(1).strip())
-                # Require substantial content (filters keystroke echo noise)
-                if len(prompt_text) > 30 and self._is_meaningful_text(prompt_text):
+                # Keep short real commands; require length only for unknown text.
+                if self._is_likely_candidate_action(prompt_text) or (
+                    len(prompt_text) > 30 and self._is_meaningful_text(prompt_text)
+                ):
                     prompt_marker_hits.append((seq, prompt_text, ts))
 
         # ── Step 2: Collect input/prompt records (supplementary) ──────
@@ -169,10 +355,10 @@ class TranscriptParser:
         for interaction in sorted_ints:
             if interaction.get("direction") != "input" or interaction.get("content_type") != "prompt":
                 continue
-            raw = self._strip_ansi(interaction.get("content", ""))
+            raw = self._normalize_tui_redraws(interaction.get("content", ""))
             raw = re.sub(r"\s+", " ", raw).strip()
-            # Only keep substantial input records
-            if len(raw) > 40:
+            # Keep short real commands; require length only for unknown text.
+            if self._is_likely_candidate_action(raw) or len(raw) > 40:
                 input_prompts.append((
                     interaction.get("sequence_num", 0),
                     raw,
@@ -219,9 +405,11 @@ class TranscriptParser:
         for seq, text, ts in merged:
             text = self._clean_tui_text(text)
 
-            # Must be substantial (filters fragments and noise)
+            is_candidate_action = self._is_likely_candidate_action(text)
+
+            # Unknown text must be substantial; known short commands are evidence.
             alpha_only = re.sub(r"[^a-zA-Z]", "", text)
-            if len(alpha_only) < 20:
+            if not is_candidate_action and len(alpha_only) < 20:
                 continue
 
             # Skip known TUI/system interactions
@@ -265,7 +453,7 @@ class TranscriptParser:
 
             seq = interaction.get("sequence_num", 0)
             ts = interaction.get("timestamp", "")
-            cleaned = self._strip_ansi(content)
+            cleaned = self._normalize_tui_redraws(content)
 
             # Skip welcome/splash screens
             if self._WELCOME_SCREEN_RE.search(cleaned):
@@ -300,11 +488,13 @@ class TranscriptParser:
                 "content": p_text,
                 "timestamp": p_ts,
                 "sequence_num": p_seq,
+                "_source_sequence_nums": [p_seq],
             })
 
             # Find AI response blocks between this prompt and the next
             next_seq = clean_prompts[p_idx + 1][0] if p_idx + 1 < len(clean_prompts) else float("inf")
             parts = []
+            part_seqs = []
 
             while ai_idx < len(ai_blocks):
                 a_seq, a_text, a_ts = ai_blocks[ai_idx]
@@ -314,22 +504,18 @@ class TranscriptParser:
                 if a_seq >= next_seq:
                     break
                 parts.append(a_text)
+                part_seqs.append(a_seq)
                 ai_idx += 1
 
             if parts:
                 combined = "\n\n".join(parts)
-                if len(combined) > 3000:
-                    combined = (
-                        combined[:2500]
-                        + "\n\n... [response truncated] ...\n\n"
-                        + combined[-500:]
-                    )
                 turns.append({
                     "content_type": "response",
                     "direction": "output",
                     "content": combined,
                     "timestamp": p_ts,
                     "sequence_num": p_seq + 1,
+                    "_source_sequence_nums": part_seqs,
                 })
 
         return turns
@@ -355,6 +541,8 @@ class TranscriptParser:
         collapsed: list[dict] = []
         current = dict(interactions[0])
         current["content"] = self._clean_text(current.get("content", ""))
+        current["_source_sequence_nums"] = [current.get("sequence_num")]
+        current["_source_interaction_ids"] = [current.get("id")]
 
         for interaction in interactions[1:]:
             cleaned_content = self._clean_text(interaction.get("content", ""))
@@ -364,10 +552,14 @@ class TranscriptParser:
             ):
                 sep = "" if current.get("direction") == "input" else "\n"
                 current["content"] += sep + cleaned_content
+                current["_source_sequence_nums"].append(interaction.get("sequence_num"))
+                current["_source_interaction_ids"].append(interaction.get("id"))
             else:
                 collapsed.append(current)
                 current = dict(interaction)
                 current["content"] = cleaned_content
+                current["_source_sequence_nums"] = [current.get("sequence_num")]
+                current["_source_interaction_ids"] = [current.get("id")]
 
         collapsed.append(current)
 
@@ -383,7 +575,7 @@ class TranscriptParser:
         return collapsed
 
     def _truncate_ai_responses(self, segments: list[dict]) -> list[dict]:
-        """If total transcript is too long, summarize AI responses."""
+        """If total transcript is too long, trim terminal output but keep dialogue intact."""
         total_length = sum(len(s.get("content", "")) for s in segments)
         if total_length <= self._MAX_TRANSCRIPT_LENGTH:
             return segments
@@ -395,7 +587,7 @@ class TranscriptParser:
         )
         non_candidate = [
             s for s in segments
-            if s.get("content_type") in ("response", "terminal")
+            if s.get("content_type") == "terminal"
         ]
         if not non_candidate:
             return segments
@@ -405,7 +597,7 @@ class TranscriptParser:
 
         truncated: list[dict] = []
         for segment in segments:
-            if segment.get("content_type") in ("response", "terminal"):
+            if segment.get("content_type") == "terminal":
                 content = segment.get("content", "")
                 if len(content) > budget:
                     head = int(budget * 0.7)
@@ -485,8 +677,15 @@ class TranscriptParser:
 
     def parse(self, interactions: list[dict]) -> str:
         """Parse raw interaction records into a clean, formatted transcript string."""
+        return self.parse_with_turns(interactions).transcript
+
+    def parse_with_turns(self, interactions: list[dict]) -> ParsedTranscript:
+        """Parse raw interaction records into a transcript plus parsed turns."""
         if not interactions:
-            return "[EMPTY TRANSCRIPT — no interactions recorded]"
+            return ParsedTranscript(
+                transcript="[EMPTY TRANSCRIPT - no interactions recorded]",
+                turns=[],
+            )
 
         sorted_interactions = sorted(
             interactions, key=lambda x: x.get("sequence_num", 0)
@@ -508,9 +707,9 @@ class TranscriptParser:
         else:
             segments = self._collapse_consecutive(terminal_interactions)
 
+        indexed_segments: list[dict] = []
         segments = [s for s in segments if s.get("content", "").strip()]
         segments = self._truncate_ai_responses(segments)
-
         parts: list[str] = [
             "=" * 60,
             "CANDIDATE SESSION TRANSCRIPT",
@@ -522,6 +721,9 @@ class TranscriptParser:
             formatted = self._format_segment(segment, i)
             if formatted:
                 parts.append(formatted)
+                parsed_turn = dict(segment)
+                parsed_turn["transcript_index"] = i
+                indexed_segments.append(parsed_turn)
 
         parts.append("=" * 60)
         parts.append("END OF TRANSCRIPT")
@@ -531,4 +733,4 @@ class TranscriptParser:
         if interview_interactions:
             parts.append(self._render_interview_section(interview_interactions))
 
-        return "\n".join(parts)
+        return ParsedTranscript(transcript="\n".join(parts), turns=indexed_segments)

@@ -54,9 +54,9 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
       if (subscription) {
         // Default to starter plan when newly enrolled
         const newPlan: PlanTier = 'starter';
-        await sql`UPDATE companies SET plan = ${newPlan} WHERE id = ${companyId}`;
+        await sql`UPDATE companies SET plan = ${newPlan}, trial_ends_at = NULL WHERE id = ${companyId}`;
         const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
-        return checkPaidPlan(newPlan, sessionsUsed, trialEndsAt);
+        return checkPaidPlan(newPlan, sessionsUsed, null);
       }
     }
 
@@ -112,16 +112,16 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
         sessionsUsed,
         sessionsLimit: limit === Infinity ? -1 : limit,
         plan: company.plan,
-        trialEndsAt,
+        trialEndsAt: null,
         paymentUrl,
       };
     }
     const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
-    return checkPaidPlan(company.plan, sessionsUsed, trialEndsAt);
+    return checkPaidPlan(company.plan, sessionsUsed, null);
   }
 
   const sessionsUsed = await countSessionsSince(companyId, null);
-  return checkPaidPlan(company.plan, sessionsUsed, trialEndsAt);
+  return checkPaidPlan(company.plan, sessionsUsed, null);
 }
 
 function checkPaidPlan(
@@ -166,6 +166,10 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
       JOIN challenges c ON s.challenge_id = c.id
       WHERE c.company_id = ${companyId}
         AND s.created_at >= ${since.toISOString()}
+        AND (
+          s.candidate_lifecycle_status IS NULL
+          OR s.started_at IS NOT NULL
+        )
     `;
     return count;
   }
@@ -173,6 +177,10 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
     SELECT COUNT(*)::int AS count FROM sessions s
     JOIN challenges c ON s.challenge_id = c.id
     WHERE c.company_id = ${companyId}
+      AND (
+        s.candidate_lifecycle_status IS NULL
+        OR s.started_at IS NOT NULL
+      )
   `;
   return count;
 }

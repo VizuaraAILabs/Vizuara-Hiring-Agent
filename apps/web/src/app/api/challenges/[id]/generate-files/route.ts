@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { callWithKeyRotation } from '@/lib/gemini';
-import type { Challenge } from '@/types';
+import { getChallengeById } from '@/lib/challenge-queries';
 
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -123,19 +123,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
 
     const { id } = await params;
 
     // Verify challenge exists and belongs to this company
-    const [challenge] = await sql<Challenge[]>`
-      SELECT * FROM challenges WHERE id = ${id}
-    `;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.sub) {
+    if (challenge.company_id !== user.companyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

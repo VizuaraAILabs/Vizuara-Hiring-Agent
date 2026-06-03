@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 export interface FileNode {
   name: string;
@@ -30,7 +30,7 @@ function getTerminalHttpUrl(): string {
 }
 
 export function useFileExplorer(token: string) {
-  const TERMINAL_HTTP_URL = getTerminalHttpUrl();
+  const terminalHttpUrl = useMemo(() => getTerminalHttpUrl(), []);
   const [tree, setTree] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +40,9 @@ export function useFileExplorer(token: string) {
   const [fileError, setFileError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const apiUrl = (endpoint: string) =>
-    `${TERMINAL_HTTP_URL}/api/files/${endpoint}?token=${encodeURIComponent(token)}`;
+  const apiUrl = useCallback((endpoint: string) =>
+    `${terminalHttpUrl}/api/files/${endpoint}?token=${encodeURIComponent(token)}`,
+  [terminalHttpUrl, token]);
 
   const postApi = useCallback(async (endpoint: string, body: Record<string, string>) => {
     const res = await fetch(apiUrl(endpoint), {
@@ -54,7 +55,7 @@ export function useFileExplorer(token: string) {
       throw new Error(data.error);
     }
     return res.json();
-  }, [token]);
+  }, [apiUrl]);
 
   const fetchTree = useCallback(async () => {
     try {
@@ -66,12 +67,12 @@ export function useFileExplorer(token: string) {
       const data = await res.json();
       setTree(data.tree ?? []);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch file tree');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [apiUrl]);
 
   const selectFile = useCallback(async (filePath: string) => {
     setSelectedFile(filePath);
@@ -80,7 +81,7 @@ export function useFileExplorer(token: string) {
 
     try {
       const res = await fetch(
-        `${TERMINAL_HTTP_URL}/api/files/read?token=${encodeURIComponent(token)}&path=${encodeURIComponent(filePath)}`
+        `${terminalHttpUrl}/api/files/read?token=${encodeURIComponent(token)}&path=${encodeURIComponent(filePath)}`
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Failed to read file' }));
@@ -89,13 +90,13 @@ export function useFileExplorer(token: string) {
       const data: FileContent = await res.json();
       setFileContent(data);
       setFileError(null);
-    } catch (err: any) {
-      setFileError(err.message);
+    } catch (err: unknown) {
+      setFileError(err instanceof Error ? err.message : 'Failed to read file');
       setFileContent(null);
     } finally {
       setFileLoading(false);
     }
-  }, [token]);
+  }, [terminalHttpUrl, token]);
 
   const closeFile = useCallback(() => {
     setSelectedFile(null);
@@ -114,6 +115,14 @@ export function useFileExplorer(token: string) {
 
   const createNewFile = useCallback(async (filePath: string) => {
     await postApi('create', { path: filePath });
+    await fetchTree();
+  }, [postApi, fetchTree]);
+
+  const saveFileContent = useCallback(async (filePath: string, content: string) => {
+    await postApi('update', { path: filePath, content });
+    setFileContent((prev) => prev && prev.path === filePath
+      ? { ...prev, content, size: new Blob([content]).size, truncated: false }
+      : prev);
     await fetchTree();
   }, [postApi, fetchTree]);
 
@@ -168,6 +177,7 @@ export function useFileExplorer(token: string) {
     closeFile,
     refresh,
     createNewFile,
+    saveFileContent,
     createNewDirectory,
     renameItem,
     deleteItem,

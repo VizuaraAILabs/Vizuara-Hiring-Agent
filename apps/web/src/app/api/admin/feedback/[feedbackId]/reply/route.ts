@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ feedbackId: string }> }
 ) {
   const user = await getAuthUser();
-  if (!user || !isAdmin(user.email)) {
+  if (!user || !isAdmin(user.email, user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -46,7 +46,7 @@ export async function PUT(
   { params }: { params: Promise<{ feedbackId: string }> }
 ) {
   const user = await getAuthUser();
-  if (!user || !isAdmin(user.email)) {
+  if (!user || !isAdmin(user.email, user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

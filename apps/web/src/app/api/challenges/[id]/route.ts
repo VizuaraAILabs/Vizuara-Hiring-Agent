@@ -1,7 +1,23 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
 import { getAuthUser, isAdmin } from '@/lib/auth';
+import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
+import { getChallengeById } from '@/lib/challenge-queries';
 import type { Challenge, Session, StarterFile } from '@/types';
+
+function hasOwn(body: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(body, key);
+}
+
+function normalizeRequiredString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeOptionalString(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -12,13 +28,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.sub && !isAdmin(user.email)) {
+    if (challenge.company_id !== user.companyId && !isAdmin(user.email, user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -47,40 +63,217 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    const [challenge] = await sql<Challenge[]>`SELECT * FROM challenges WHERE id = ${id}`;
+    const challenge = await getChallengeById(id);
 
     if (!challenge) {
       return NextResponse.json({ error: 'Challenge not found' }, { status: 404 });
     }
 
-    if (challenge.company_id !== user.sub) {
+    const userIsAdmin = isAdmin(user.email, user.role);
+    if (challenge.company_id !== user.companyId && !userIsAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { starter_files } = await request.json();
+    const body = await request.json() as Record<string, unknown>;
+    const hasStarterFiles = hasOwn(body, 'starter_files');
+    const hasAccessSettings = ['is_active', 'sessions_limit', 'starts_at', 'ends_at'].some((key) =>
+      hasOwn(body, key)
+    );
+    const hasChallengeSettings = [
+      'title',
+      'description',
+      'time_limit_min',
+      'role',
+      'tech_stack',
+      'seniority',
+      'focus_areas',
+      'context',
+      'cohort_label',
+    ].some((key) =>
+      hasOwn(body, key)
+    );
+    const hasInviteTemplateSettings = ['invite_email_subject', 'invite_email_body'].some((key) =>
+      hasOwn(body, key)
+    );
 
-    // Validate starter_files
-    if (!Array.isArray(starter_files)) {
-      return NextResponse.json({ error: 'starter_files must be an array' }, { status: 400 });
+    if (!hasStarterFiles && !hasAccessSettings && !hasChallengeSettings && !hasInviteTemplateSettings) {
+      return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
     }
 
-    for (const file of starter_files as StarterFile[]) {
-      if (!file.path || typeof file.path !== 'string') {
-        return NextResponse.json({ error: 'Each file must have a valid path' }, { status: 400 });
+    let starterFilesJson: string | null | undefined;
+    if (hasStarterFiles) {
+      const { starter_files } = body;
+      if (!Array.isArray(starter_files)) {
+        return NextResponse.json({ error: 'starter_files must be an array' }, { status: 400 });
       }
-      if (file.path.includes('..') || file.path.startsWith('/')) {
-        return NextResponse.json({ error: 'Invalid file path: ' + file.path }, { status: 400 });
+
+      for (const file of starter_files as StarterFile[]) {
+        if (!file.path || typeof file.path !== 'string') {
+          return NextResponse.json({ error: 'Each file must have a valid path' }, { status: 400 });
+        }
+        if (file.path.includes('..') || file.path.startsWith('/')) {
+          return NextResponse.json({ error: 'Invalid file path: ' + file.path }, { status: 400 });
+        }
+        if (typeof file.content !== 'string') {
+          return NextResponse.json({ error: 'Each file must have string content' }, { status: 400 });
+        }
       }
-      if (typeof file.content !== 'string') {
-        return NextResponse.json({ error: 'Each file must have string content' }, { status: 400 });
+
+      starterFilesJson = starter_files.length > 0 ? JSON.stringify(starter_files) : null;
+    }
+
+    let sessionsLimit = challenge.sessions_limit;
+    let startsAt = challenge.starts_at;
+    let endsAt = challenge.ends_at;
+    let isActive = challenge.is_active === true || challenge.is_active === 1;
+    let title = challenge.title;
+    let description = challenge.description;
+    let timeLimitMin = challenge.time_limit_min;
+    let role = challenge.role;
+    let techStack = challenge.tech_stack;
+    let seniority = challenge.seniority;
+    let focusAreas = challenge.focus_areas;
+    let context = challenge.context;
+    let cohortLabel = challenge.cohort_label;
+    let inviteEmailSubject: string | null = challenge.invite_email_subject ?? null;
+    let inviteEmailBody: string | null = challenge.invite_email_body ?? null;
+
+    if (hasAccessSettings) {
+      if (hasOwn(body, 'is_active')) {
+        if (typeof body.is_active !== 'boolean') {
+          return NextResponse.json({ error: 'is_active must be a boolean' }, { status: 400 });
+        }
+        isActive = body.is_active;
+      }
+
+      if (hasOwn(body, 'sessions_limit') && body.sessions_limit != null && body.sessions_limit !== '') {
+        const parsedSessionsLimit = Number(body.sessions_limit);
+        if (!Number.isFinite(parsedSessionsLimit) || parsedSessionsLimit < 0) {
+          return NextResponse.json({ error: 'Session limit must be zero or greater.' }, { status: 400 });
+        }
+        sessionsLimit = Math.floor(parsedSessionsLimit);
+      } else if (hasOwn(body, 'sessions_limit')) {
+        sessionsLimit = null;
+      }
+
+      if (
+        hasOwn(body, 'sessions_limit') &&
+        sessionsLimit != null &&
+        sessionsLimit !== challenge.sessions_limit
+      ) {
+        const limitError = await validateChallengeSessionLimit(challenge.company_id, sessionsLimit);
+        if (limitError) return NextResponse.json({ error: limitError }, { status: 400 });
+      }
+
+      const parsedStartsAt = hasOwn(body, 'starts_at') && body.starts_at ? new Date(String(body.starts_at)) : null;
+      const parsedEndsAt = hasOwn(body, 'ends_at') && body.ends_at ? new Date(String(body.ends_at)) : null;
+      if (
+        (parsedStartsAt && Number.isNaN(parsedStartsAt.getTime())) ||
+        (parsedEndsAt && Number.isNaN(parsedEndsAt.getTime()))
+      ) {
+        return NextResponse.json({ error: 'Invalid assessment window date.' }, { status: 400 });
+      }
+      if (hasOwn(body, 'starts_at')) {
+        startsAt = parsedStartsAt ? parsedStartsAt.toISOString() : null;
+      }
+      if (hasOwn(body, 'ends_at')) {
+        endsAt = parsedEndsAt ? parsedEndsAt.toISOString() : null;
+      }
+
+      const nextStartsAt = startsAt ? new Date(startsAt) : null;
+      const nextEndsAt = endsAt ? new Date(endsAt) : null;
+      if (nextStartsAt && nextEndsAt && nextStartsAt >= nextEndsAt) {
+        return NextResponse.json({ error: 'Assessment end time must be after the start time.' }, { status: 400 });
       }
     }
 
-    const starterFilesJson = starter_files.length > 0 ? JSON.stringify(starter_files) : null;
+    if (hasChallengeSettings) {
+      if (hasOwn(body, 'title')) {
+        title = normalizeRequiredString(body.title);
+        if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+      }
+
+      if (hasOwn(body, 'description')) {
+        description = normalizeRequiredString(body.description);
+        if (!description) return NextResponse.json({ error: 'Description is required' }, { status: 400 });
+      }
+
+      if (hasOwn(body, 'time_limit_min')) {
+        const parsedTimeLimit = Number(body.time_limit_min);
+        if (!Number.isFinite(parsedTimeLimit)) {
+          return NextResponse.json({ error: 'Time limit must be a number' }, { status: 400 });
+        }
+
+        timeLimitMin = Math.max(10, Math.min(45, Math.round(parsedTimeLimit)));
+        if (timeLimitMin !== challenge.time_limit_min) {
+          const [{ started_count }] = await sql<{ started_count: number }[]>`
+            SELECT COUNT(*)::int AS started_count
+            FROM sessions
+            WHERE challenge_id = ${id}
+              AND started_at IS NOT NULL
+          `;
+
+          if (started_count > 0) {
+            return NextResponse.json(
+              { error: 'Time limit cannot be changed after candidates have started.' },
+              { status: 400 }
+            );
+          }
+        }
+      }
+
+      if (hasOwn(body, 'role')) role = normalizeOptionalString(body.role);
+      if (hasOwn(body, 'tech_stack')) techStack = normalizeOptionalString(body.tech_stack);
+      if (hasOwn(body, 'seniority')) seniority = normalizeOptionalString(body.seniority);
+      if (hasOwn(body, 'focus_areas')) focusAreas = normalizeOptionalString(body.focus_areas);
+      if (hasOwn(body, 'context')) context = normalizeOptionalString(body.context);
+      if (hasOwn(body, 'cohort_label')) cohortLabel = normalizeOptionalString(body.cohort_label);
+    }
+
+    if (hasInviteTemplateSettings) {
+      if (hasOwn(body, 'invite_email_subject')) {
+        inviteEmailSubject = normalizeOptionalString(body.invite_email_subject);
+        if (inviteEmailSubject && inviteEmailSubject.length > 160) {
+          return NextResponse.json({ error: 'Invite email subject must be 160 characters or fewer.' }, { status: 400 });
+        }
+      }
+
+      if (hasOwn(body, 'invite_email_body')) {
+        inviteEmailBody = normalizeOptionalString(body.invite_email_body);
+        if (inviteEmailBody && inviteEmailBody.length > 5000) {
+          return NextResponse.json({ error: 'Invite email body must be 5000 characters or fewer.' }, { status: 400 });
+        }
+      }
+    }
+
+    const preservedStarterFiles = typeof challenge.starter_files === 'string'
+      ? challenge.starter_files
+      : challenge.starter_files
+        ? JSON.stringify(challenge.starter_files)
+        : null;
+    const nextStarterFiles: string | null = hasStarterFiles
+      ? starterFilesJson ?? null
+      : preservedStarterFiles;
 
     const [updated] = await sql<Challenge[]>`
       UPDATE challenges
-      SET starter_files = ${starterFilesJson}
+      SET
+        title = ${title},
+        description = ${description},
+        time_limit_min = ${timeLimitMin},
+        is_active = ${isActive},
+        role = ${role},
+        tech_stack = ${techStack},
+        seniority = ${seniority},
+        focus_areas = ${focusAreas},
+        context = ${context},
+        cohort_label = ${cohortLabel},
+        invite_email_subject = ${inviteEmailSubject},
+        invite_email_body = ${inviteEmailBody},
+        starter_files = ${nextStarterFiles},
+        sessions_limit = ${sessionsLimit},
+        starts_at = ${startsAt},
+        ends_at = ${endsAt}
       WHERE id = ${id}
       RETURNING *
     `;

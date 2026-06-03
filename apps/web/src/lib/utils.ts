@@ -65,3 +65,25 @@ export function getRecommendationColor(rec: string): string {
   };
   return colors[rec] || 'bg-gray-400 text-white';
 }
+
+export function getDecisionLabel(decision: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    shortlisted: 'Shortlisted',
+    hold: 'Hold',
+    reject: 'Reject',
+    hired: 'Hired',
+  };
+  return decision ? labels[decision] || decision : 'No decision';
+}
+
+export function getDecisionColor(decision: string | null | undefined): string {
+  const colors: Record<string, string> = {
+    shortlisted: 'bg-primary/10 text-primary border-primary/20',
+    hold: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+    reject: 'bg-red-500/10 text-red-300 border-red-500/20',
+    hired: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+  };
+  return decision
+    ? colors[decision] || 'bg-neutral-800 text-neutral-400 border-white/10'
+    : 'bg-neutral-900 text-neutral-500 border-white/10';
+}

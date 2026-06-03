@@ -5,10 +5,8 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useState } from 'react';
 
-const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
-const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
-const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
 const PAYMENT_URL = process.env.NEXT_PUBLIC_PAYMENT_URL || 'https://vizuara.ai/courses/arceval';
+const SIGNUP_URL = '/register';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 } as const,

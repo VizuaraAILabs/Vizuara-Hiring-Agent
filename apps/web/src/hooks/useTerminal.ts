@@ -9,15 +9,41 @@ interface UseTerminalOptions {
   onExit?: () => void;
 }
 
+const CUSTOMER_SAFE_TERMINAL_ERROR =
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+
+function toCustomerSafeTerminalError(message: unknown): string {
+  if (typeof message !== 'string' || !message.trim()) {
+    return CUSTOMER_SAFE_TERMINAL_ERROR;
+  }
+
+  const lowerMessage = message.toLowerCase();
+  const containsInternalDetail = [
+    'docker',
+    'container',
+    'sandbox',
+    'terminal server',
+    'image',
+    'logs',
+    'session token',
+  ].some((term) => lowerMessage.includes(term));
+
+  return containsInternalDetail ? CUSTOMER_SAFE_TERMINAL_ERROR : message;
+}
+
 export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [connected, setConnected] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('Connecting to terminal...');
+  const [terminalError, setTerminalError] = useState<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const spawnAckedRef = useRef(false);
+  const fatalErrorRef = useRef(false);
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     // NEXT_PUBLIC_* vars are inlined at build time. In production Docker builds
@@ -28,6 +54,9 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     const ws = new WebSocket(`${wsUrl}?token=${token}`);
     wsRef.current = ws;
     spawnAckedRef.current = false;
+    fatalErrorRef.current = false;
+    setTerminalError(null);
+    setStatusMessage('Connecting to terminal...');
 
     ws.onopen = () => {
       console.log('[Terminal] WebSocket connected');
@@ -48,11 +77,18 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
         switch (msg.type) {
           case 'spawning':
             spawnAckedRef.current = true;
+            setStatusMessage('Starting workspace...');
             console.log('[Terminal] Container spawning...');
+            break;
+          case 'queued':
+            spawnAckedRef.current = true;
+            setStatusMessage(msg.message || 'Server is at capacity. You are in the queue...');
+            terminalRef.current?.write(`\r\n${msg.message || 'Server is at capacity. You are in the queue...'}\r\n`);
             break;
           case 'connected':
             spawnAckedRef.current = true;
             setConnected(true);
+            setStatusMessage('');
             if (msg.reconnected) {
               console.log('[Terminal] Reconnected to existing session');
             }
@@ -64,7 +100,11 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
             onExit?.();
             break;
           case 'error':
-            console.error('[Terminal]', msg.message);
+            fatalErrorRef.current = true;
+            const safeMessage = toCustomerSafeTerminalError(msg.message);
+            setTerminalError(safeMessage);
+            terminalRef.current?.write(`\r\nError: ${safeMessage}\r\n`);
+            console.error('[Terminal] Workspace startup failed');
             break;
         }
       } catch {
@@ -75,13 +115,14 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
 
     ws.onclose = () => {
       setConnected(false);
+      if (fatalErrorRef.current) return;
       // If the server acked a spawn but hasn't sent 'connected' yet, wait longer
       // before reconnecting so we don't interrupt an in-progress container spawn.
       const delay = spawnAckedRef.current ? 5000 : 2000;
       reconnectTimeoutRef.current = setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.CLOSED) {
           console.log('[Terminal] Attempting reconnection...');
-          connect();
+          connectRef.current();
         }
       }, delay);
     };
@@ -90,6 +131,10 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
       console.error('[Terminal] WebSocket error:', err);
     };
   }, [token, onExit]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const initTerminal = useCallback((container: HTMLDivElement) => {
     if (terminalRef.current) return;
@@ -169,6 +214,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   return {
     initTerminal,
     connected,
-    terminal: terminalRef.current,
+    statusMessage,
+    terminalError,
   };
 }

@@ -5,7 +5,7 @@ import { getAuthUser, isAdmin } from '@/lib/auth';
 export async function GET() {
   try {
     const user = await getAuthUser();
-    if (!user || !isAdmin(user.email)) {
+    if (!user || !isAdmin(user.email, user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -26,6 +26,22 @@ export async function GET() {
       FROM companies c
       LEFT JOIN usage_events ue ON ue.company_id = c.id
       GROUP BY c.id, c.name, c.plan
+      UNION ALL
+      SELECT
+        NULL AS company_id,
+        'Deleted companies' AS company_name,
+        'deleted' AS plan,
+        COALESCE(SUM(cost_usd), 0) AS total_spend,
+        COUNT(DISTINCT metadata->>'deleted_session_id')::int AS session_count,
+        COALESCE(SUM(input_tokens), 0) AS total_input_tokens,
+        COALESCE(SUM(output_tokens), 0) AS total_output_tokens,
+        COALESCE(SUM(CASE WHEN provider = 'anthropic' THEN cost_usd ELSE 0 END), 0) AS anthropic_cost,
+        COALESCE(SUM(CASE WHEN provider = 'gemini' THEN cost_usd ELSE 0 END), 0) AS gemini_cost,
+        COALESCE(SUM(CASE WHEN provider = 'docker' THEN cost_usd ELSE 0 END), 0) AS docker_cost,
+        COALESCE(SUM(CASE WHEN provider = 'vps' THEN cost_usd ELSE 0 END), 0) AS vps_cost
+      FROM usage_events
+      WHERE company_deleted = TRUE
+      HAVING COUNT(*) > 0
       ORDER BY total_spend DESC
     `;
 

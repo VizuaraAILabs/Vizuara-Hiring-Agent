@@ -19,6 +19,17 @@ const STATUS_COLORS: Record<string, string> = {
   queued: 'bg-amber-500/10 text-amber-300',
   analyzing: 'bg-violet-500/10 text-violet-300',
   analyzed: 'bg-primary/10 text-primary',
+  'analysis failed': 'bg-red-500/10 text-red-300',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  active: 'Active',
+  completed: 'Completed',
+  queued: 'Queued',
+  analyzing: 'Analyzing',
+  analyzed: 'Analyzed',
+  'analysis failed': 'Analysis failed',
 };
 
 export default function AdminChallengeViewPage() {
@@ -184,7 +195,7 @@ export default function AdminChallengeViewPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[session.status] ?? ''}`}>
-                    {session.status}
+                    {STATUS_LABELS[session.status] ?? session.status}
                   </span>
                   {session.status === 'analyzed' && (
                     <Link

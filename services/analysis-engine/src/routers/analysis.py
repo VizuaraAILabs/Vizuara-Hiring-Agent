@@ -4,12 +4,19 @@ import asyncio
 import json
 import logging
 import os
+import socket
+import uuid
+from decimal import Decimal
 
 import asyncpg
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import AnalyzeRequest
-from ..services.claude_analyzer import ClaudeAnalyzer
+from ..services.claude_analyzer import (
+    AnalysisTimeoutError,
+    ClaudeAnalyzer,
+    is_timeout_exception,
+)
 from ..services.evidence_verifier import EvidenceVerifier
 from ..services.report_generator import ReportGenerator
 from ..services.score_calculator import ScoreCalculator
@@ -27,9 +34,48 @@ DATABASE_URL = os.environ.get(
 
 # Connection pool — initialized lazily
 _pool: asyncpg.Pool | None = None
-_analysis_queue: asyncio.Queue[str] = asyncio.Queue()
-_queued_session_ids: set[str] = set()
+_pool_lock = asyncio.Lock()
 _analysis_workers: list[asyncio.Task] = []
+_WORKER_INSTANCE_ID = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+_DEFAULT_GEMINI_INPUT_RATE = Decimal("0.15")
+_DEFAULT_GEMINI_OUTPUT_RATE = Decimal("0.60")
+_TOKENS_PER_MILLION = Decimal("1000000")
+
+
+def _error_payload(
+    code: str,
+    message: str,
+    *,
+    retryable: bool = False,
+    metadata: dict | None = None,
+) -> dict:
+    payload = {
+        "code": code,
+        "message": message,
+        "retryable": retryable,
+    }
+    if metadata:
+        payload["metadata"] = metadata
+    return {"error": payload}
+
+
+def _raise_analysis_error(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    retryable: bool = False,
+    metadata: dict | None = None,
+) -> None:
+    raise HTTPException(
+        status_code=status_code,
+        detail=_error_payload(
+            code,
+            message,
+            retryable=retryable,
+            metadata=metadata,
+        ),
+    )
 
 
 def _analysis_max_concurrent() -> int:
@@ -44,16 +90,225 @@ def _analysis_max_concurrent() -> int:
         return 2
 
 
+def _analysis_poll_interval_seconds() -> float:
+    raw_value = os.environ.get("ANALYSIS_QUEUE_POLL_SECONDS", "2")
+    try:
+        return max(0.2, float(raw_value))
+    except ValueError:
+        logger.warning(
+            "Invalid ANALYSIS_QUEUE_POLL_SECONDS=%r; defaulting to 2",
+            raw_value,
+        )
+        return 2
+
+
+def _analysis_lease_seconds() -> int:
+    raw_value = os.environ.get("ANALYSIS_JOB_LEASE_SECONDS", "300")
+    try:
+        return max(30, int(raw_value))
+    except ValueError:
+        logger.warning(
+            "Invalid ANALYSIS_JOB_LEASE_SECONDS=%r; defaulting to 300",
+            raw_value,
+        )
+        return 300
+
+
+def _analysis_db_connect_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_CONNECT_TIMEOUT_SECONDS",
+        default=10.0,
+        minimum=1.0,
+    )
+
+
+def _analysis_db_command_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_COMMAND_TIMEOUT_SECONDS",
+        default=30.0,
+        minimum=1.0,
+    )
+
+
+def _analysis_db_close_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_DB_CLOSE_TIMEOUT_SECONDS",
+        default=10.0,
+        minimum=1.0,
+    )
+
+
+def _env_timeout_seconds(name: str, default: float, minimum: float) -> float:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return max(minimum, float(raw_value))
+    except ValueError:
+        logger.warning("Invalid %s=%r; defaulting to %.1f", name, raw_value, default)
+        return default
+
+
+def _analysis_session_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_SESSION_TIMEOUT_SECONDS",
+        default=240.0,
+        minimum=10.0,
+    )
+
+
+def _analysis_enrichment_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS",
+        default=75.0,
+        minimum=10.0,
+    )
+
+
+def _analysis_narrative_timeout_seconds() -> float:
+    return _env_timeout_seconds(
+        "ANALYSIS_NARRATIVE_TIMEOUT_SECONDS",
+        default=105.0,
+        minimum=10.0,
+    )
+
+
+async def _run_blocking_with_timeout(
+    func,
+    *,
+    timeout_seconds: float,
+    phase: str,
+    **kwargs,
+):
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, **kwargs),
+            timeout=timeout_seconds,
+        )
+    except AnalysisTimeoutError:
+        raise
+    except asyncio.TimeoutError as exc:
+        raise AnalysisTimeoutError(
+            f"{phase} timed out after {timeout_seconds:.1f} seconds",
+            phase=phase,
+            timeout_ms=int(timeout_seconds * 1000),
+        ) from exc
+
+
 async def _get_pool() -> asyncpg.Pool:
     """Get or create the asyncpg connection pool."""
     global _pool
-    if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    if _pool is not None:
+        return _pool
+
+    async with _pool_lock:
+        if _pool is not None:
+            return _pool
+
+        connect_timeout = _analysis_db_connect_timeout_seconds()
+        command_timeout = _analysis_db_command_timeout_seconds()
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            timeout=connect_timeout,
+            command_timeout=command_timeout,
+        )
+        logger.info(
+            "Created analysis DB pool with connect_timeout=%.1fs command_timeout=%.1fs",
+            connect_timeout,
+            command_timeout,
+        )
     return _pool
 
 
+async def close_analysis_pool() -> None:
+    """Close the asyncpg pool during application shutdown."""
+    global _pool
+    async with _pool_lock:
+        if _pool is None:
+            return
+
+        pool = _pool
+        _pool = None
+
+    close_timeout = _analysis_db_close_timeout_seconds()
+    try:
+        await asyncio.wait_for(pool.close(), timeout=close_timeout)
+        logger.info("Closed analysis DB pool")
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Timed out after %.1fs while closing analysis DB pool; terminating connections",
+            close_timeout,
+        )
+        pool.terminate()
+
+
+def _analysis_worker_readiness() -> dict:
+    expected = _analysis_max_concurrent()
+    running = sum(1 for worker in _analysis_workers if not worker.done())
+    failed = sum(
+        1
+        for worker in _analysis_workers
+        if worker.done() and not worker.cancelled()
+    )
+    return {
+        "status": "ready" if running >= expected else "not_ready",
+        "expected": expected,
+        "running": running,
+        "failed": failed,
+    }
+
+
+async def get_analysis_readiness() -> dict:
+    """Return dependency readiness checks for the analysis engine."""
+    checks = {
+        "database": {"status": "unknown"},
+        "workers": _analysis_worker_readiness(),
+        "gemini": {
+            "status": (
+                "configured"
+                if os.environ.get("GEMINI_API_KEY")
+                else "not_configured"
+            )
+        },
+        "queue": {"status": "unknown"},
+    }
+
+    try:
+        pool = await _get_pool()
+        await pool.fetchval("SELECT 1")
+        checks["database"] = {"status": "ready"}
+
+        queue_stats = await pool.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE status = 'queued') AS queued,
+                COUNT(*) FILTER (WHERE status = 'running') AS running
+            FROM analysis_jobs
+            """
+        )
+        checks["queue"] = {
+            "status": "ready",
+            "queued": int(queue_stats["queued"] or 0),
+            "running": int(queue_stats["running"] or 0),
+        }
+    except Exception as exc:  # pragma: no cover - exact DB failure varies by driver
+        logger.warning("Analysis readiness database check failed: %s", exc)
+        checks["database"] = {"status": "not_ready", "error": type(exc).__name__}
+        checks["queue"] = {"status": "not_ready", "error": type(exc).__name__}
+
+    ready = (
+        checks["database"]["status"] == "ready"
+        and checks["workers"]["status"] == "ready"
+        and checks["gemini"]["status"] == "configured"
+        and checks["queue"]["status"] == "ready"
+    )
+    return {"status": "ready" if ready else "not_ready", "checks": checks}
+
+
 async def start_analysis_queue_workers() -> None:
-    """Start the bounded in-process analysis worker queue."""
+    """Start bounded workers for the Postgres-backed analysis queue."""
     if _analysis_workers:
         return
 
@@ -76,68 +331,244 @@ async def stop_analysis_queue_workers() -> None:
         await asyncio.gather(*_analysis_workers, return_exceptions=True)
 
     _analysis_workers.clear()
-    _queued_session_ids.clear()
     logger.info("Stopped analysis queue workers")
 
 
 async def _recover_pending_analysis_sessions() -> None:
-    """Re-enqueue sessions that were left queued/analyzing after a restart."""
+    """Ensure pending sessions have durable queue jobs after a restart."""
     pool = await _get_pool()
     rows = await pool.fetch(
         """
-        SELECT s.id
+        INSERT INTO analysis_jobs (session_id, status)
+        SELECT s.id, 'queued'
         FROM sessions s
         LEFT JOIN analysis_results ar ON ar.session_id = s.id
         WHERE s.status IN ('queued', 'analyzing') AND ar.id IS NULL
-        ORDER BY s.created_at ASC
+        ON CONFLICT (session_id) DO UPDATE
+        SET
+            status = CASE
+                WHEN analysis_jobs.status IN ('succeeded', 'failed') THEN 'queued'
+                ELSE analysis_jobs.status
+            END,
+            updated_at = NOW()
+        RETURNING session_id
         """
     )
 
-    for row in rows:
-        _enqueue_analysis(str(row["id"]))
-
     if rows:
-        logger.info("Recovered %d pending analysis session(s) into the queue", len(rows))
+        logger.info("Recovered %d pending analysis job(s)", len(rows))
 
 
-def _enqueue_analysis(session_id: str) -> bool:
-    if session_id in _queued_session_ids:
-        return False
-
-    _queued_session_ids.add(session_id)
-    _analysis_queue.put_nowait(session_id)
-    logger.info(
-        "Queued analysis for session %s (queue size: %d)",
+async def _enqueue_analysis(session_id: str) -> bool:
+    pool = await _get_pool()
+    row = await pool.fetchrow(
+        """
+        INSERT INTO analysis_jobs (
+            session_id,
+            status,
+            claimed_by,
+            claimed_at,
+            lease_expires_at,
+            last_error
+        )
+        VALUES ($1, 'queued', NULL, NULL, NULL, NULL)
+        ON CONFLICT (session_id) DO UPDATE
+        SET
+            status = 'queued',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            last_error = NULL,
+            updated_at = NOW()
+        WHERE analysis_jobs.status IN ('queued', 'failed', 'succeeded')
+           OR analysis_jobs.lease_expires_at <= NOW()
+        RETURNING status
+        """,
         session_id,
-        _analysis_queue.qsize(),
     )
-    return True
+    queued = row is not None
+    if queued:
+        logger.info("Queued analysis job for session %s", session_id)
+    return queued
+
+
+async def _claim_next_analysis_job(worker_id: int) -> asyncpg.Record | None:
+    pool = await _get_pool()
+    worker_name = f"{_WORKER_INSTANCE_ID}:worker-{worker_id}"
+    lease_seconds = _analysis_lease_seconds()
+    return await pool.fetchrow(
+        """
+        WITH next_job AS (
+            SELECT j.id
+            FROM analysis_jobs j
+            WHERE (
+                j.status = 'queued'
+                OR (j.status = 'running' AND j.lease_expires_at <= NOW())
+            )
+              AND NOT EXISTS (
+                  SELECT 1 FROM analysis_results ar WHERE ar.session_id = j.session_id
+              )
+            ORDER BY j.created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        UPDATE analysis_jobs j
+        SET
+            status = 'running',
+            claimed_by = $1,
+            claimed_at = NOW(),
+            lease_expires_at = NOW() + ($2 * INTERVAL '1 second'),
+            attempt_count = attempt_count + 1,
+            updated_at = NOW()
+        FROM next_job
+        WHERE j.id = next_job.id
+        RETURNING j.id, j.session_id, j.attempt_count, j.claimed_by
+        """,
+        worker_name,
+        lease_seconds,
+    )
+
+
+async def _heartbeat_analysis_job(job_id: str, claimed_by: str) -> None:
+    pool = await _get_pool()
+    lease_seconds = _analysis_lease_seconds()
+    interval_seconds = max(5, lease_seconds / 2)
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            await pool.execute(
+                """
+                UPDATE analysis_jobs
+                SET lease_expires_at = NOW() + ($3 * INTERVAL '1 second'),
+                    updated_at = NOW()
+                WHERE id = $1 AND claimed_by = $2 AND status = 'running'
+                """,
+                job_id,
+                claimed_by,
+                lease_seconds,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning(
+                "Failed to heartbeat analysis job %s claimed by %s",
+                job_id,
+                claimed_by,
+                exc_info=True,
+            )
+
+
+async def _mark_analysis_job_succeeded(job_id: str, claimed_by: str) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'succeeded',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1 AND claimed_by = $2
+        """,
+        job_id,
+        claimed_by,
+    )
+
+
+async def _mark_analysis_job_succeeded_for_session(session_id: str) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'succeeded',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            updated_at = NOW()
+        WHERE session_id = $1
+        """,
+        session_id,
+    )
+
+
+async def _mark_analysis_job_failed(
+    job_id: str,
+    claimed_by: str,
+    error_message: str,
+) -> None:
+    pool = await _get_pool()
+    await pool.execute(
+        """
+        UPDATE analysis_jobs
+        SET status = 'failed',
+            claimed_by = NULL,
+            claimed_at = NULL,
+            lease_expires_at = NULL,
+            last_error = $3,
+            updated_at = NOW()
+        WHERE id = $1 AND claimed_by = $2
+        """,
+        job_id,
+        claimed_by,
+        error_message,
+    )
 
 
 async def _analysis_worker_loop(worker_id: int) -> None:
     logger.info("Analysis queue worker %d started", worker_id)
     while True:
-        session_id = await _analysis_queue.get()
+        try:
+            job = await _claim_next_analysis_job(worker_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Analysis worker %d failed to claim a job", worker_id)
+            await asyncio.sleep(_analysis_poll_interval_seconds())
+            continue
+
+        if job is None:
+            await asyncio.sleep(_analysis_poll_interval_seconds())
+            continue
+
+        job_id = str(job["id"])
+        session_id = str(job["session_id"])
+        claimed_by = str(job["claimed_by"])
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_analysis_job(job_id, claimed_by)
+        )
         try:
             logger.info("Analysis worker %d processing session %s", worker_id, session_id)
             if not await _mark_analysis_running(session_id):
                 logger.info(
-                    "Analysis worker %d skipped session %s because it is no longer queued",
+                    "Analysis worker %d skipped session %s because it is no longer claimable",
                     worker_id,
                     session_id,
                 )
+                await _mark_analysis_job_succeeded(job_id, claimed_by)
                 continue
-            await _run_analysis_in_background(session_id)
+            succeeded = await _run_analysis_in_background(session_id)
+            if succeeded:
+                await _mark_analysis_job_succeeded(job_id, claimed_by)
+            else:
+                await _mark_analysis_job_failed(
+                    job_id,
+                    claimed_by,
+                    "Analysis failed; see analysis_failures for details.",
+                )
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Unexpected analysis worker error for session %s",
                 session_id,
             )
+            try:
+                await _mark_analysis_job_failed(job_id, claimed_by, str(exc))
+            except Exception:
+                logger.exception("Failed to mark analysis job %s as failed", job_id)
         finally:
-            _queued_session_ids.discard(session_id)
-            _analysis_queue.task_done()
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
 
 
 async def _mark_analysis_running(session_id: str) -> bool:
@@ -153,6 +584,14 @@ async def _mark_analysis_running(session_id: str) -> bool:
           )
         RETURNING id
         """,
+        session_id,
+    )
+    return row is not None
+
+
+async def _analysis_result_exists(pool: asyncpg.Pool, session_id: str) -> bool:
+    row = await pool.fetchrow(
+        "SELECT id FROM analysis_results WHERE session_id = $1",
         session_id,
     )
     return row is not None
@@ -181,6 +620,32 @@ async def _fetch_challenge(pool: asyncpg.Pool, challenge_id: str) -> dict:
             detail=f"Challenge '{challenge_id}' not found for this session",
         )
     return dict(row)
+
+
+async def _fetch_gemini_cost_rates(
+    pool: asyncpg.Pool,
+    company_id: str | None,
+) -> tuple[Decimal, Decimal, str]:
+    """Fetch Gemini token rates in USD per million tokens for a company."""
+    if not company_id:
+        return _DEFAULT_GEMINI_INPUT_RATE, _DEFAULT_GEMINI_OUTPUT_RATE, "default"
+
+    row = await pool.fetchrow(
+        """
+        SELECT gemini_input_rate, gemini_output_rate
+        FROM cost_settings
+        WHERE company_id = $1
+        """,
+        company_id,
+    )
+    if not row:
+        return _DEFAULT_GEMINI_INPUT_RATE, _DEFAULT_GEMINI_OUTPUT_RATE, "default"
+
+    return (
+        Decimal(str(row["gemini_input_rate"])),
+        Decimal(str(row["gemini_output_rate"])),
+        "company",
+    )
 
 
 async def _fetch_interactions(pool: asyncpg.Pool, session_id: str) -> list[dict]:
@@ -228,9 +693,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
         session_id,
     )
     if not existing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        _raise_analysis_error(
+            404,
+            "analysis_not_found",
+            "No analysis report exists for this session yet.",
+            retryable=False,
         )
 
     import json as _json
@@ -260,9 +727,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to enrich.",
+            retryable=False,
         )
 
     try:
@@ -271,8 +740,10 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
         logger.info("Parsed transcript for enrichment: %d characters", len(transcript))
 
         analyzer = ClaudeAnalyzer()
-        enrichment = await asyncio.to_thread(
+        enrichment = await _run_blocking_with_timeout(
             analyzer.enrich_dimension_evidence,
+            timeout_seconds=_analysis_enrichment_timeout_seconds(),
+            phase="dimension_enrichment",
             transcript=transcript,
             challenge_description=challenge.get("description", ""),
             existing_dimension_details=dimension_details,
@@ -289,6 +760,11 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
                 dimension_details[dim]["observed_points"] = enrichment[dim].get("observed_points", [])
                 dimension_details[dim]["expected_standard"] = enrichment[dim].get("expected_standard", "")
 
+        verified_details = EvidenceVerifier(transcript).verify(
+            {"dimensions": dimension_details}
+        )
+        dimension_details = verified_details.get("dimensions", dimension_details)
+
         await pool.execute(
             "UPDATE analysis_results SET dimension_details = $1::jsonb WHERE session_id = $2",
             _json.dumps(dimension_details),
@@ -298,6 +774,25 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
 
         return {"dimension_details": dimension_details}
 
+    except AnalysisTimeoutError as exc:
+        logger.error(
+            "Dimension enrichment timed out for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Detailed evidence generation timed out. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "dimension_enrichment"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Failed to enrich dimensions for session %s: %s",
@@ -305,7 +800,14 @@ async def enrich_dimension_evidence(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "dimension_enrichment_error",
+                "Detailed evidence generation failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )
 
 
 @router.post("/transcript-narrative")
@@ -326,9 +828,11 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         session_id,
     )
     if not existing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No analysis record found for session '{session_id}'. Run /analyze first.",
+        _raise_analysis_error(
+            404,
+            "analysis_not_found",
+            "No analysis report exists for this session yet.",
+            retryable=False,
         )
     if existing["transcript_narrative"]:
         logger.info("Returning cached transcript narrative for session %s", session_id)
@@ -340,9 +844,11 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to summarize.",
+            retryable=False,
         )
 
     try:
@@ -368,8 +874,10 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
         }
 
         analyzer = ClaudeAnalyzer()
-        narrative = await asyncio.to_thread(
+        narrative = await _run_blocking_with_timeout(
             analyzer.generate_transcript_narrative,
+            timeout_seconds=_analysis_narrative_timeout_seconds(),
+            phase="transcript_narrative",
             cleaned_transcript=transcript,
             session_metadata=session_metadata,
         )
@@ -384,6 +892,25 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
 
         return {"transcript_narrative": narrative}
 
+    except AnalysisTimeoutError as exc:
+        logger.error(
+            "Transcript narrative timed out for session %s: %s",
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Transcript narrative generation timed out. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "transcript_narrative"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Failed to generate transcript narrative for session %s: %s",
@@ -391,7 +918,14 @@ async def generate_transcript_narrative(request: AnalyzeRequest) -> dict:
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "transcript_narrative_error",
+                "Transcript narrative generation failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )
 
 
 @router.post("/start")
@@ -412,6 +946,7 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
             "UPDATE sessions SET status = 'analyzed' WHERE id = $1",
             session_id,
         )
+        await _mark_analysis_job_succeeded_for_session(session_id)
         return {
             "status": "already_analyzed",
             "analysis_id": str(existing["id"]),
@@ -419,26 +954,26 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
         }
 
     if session["status"] in ("queued", "analyzing"):
-        queued = _enqueue_analysis(session_id)
+        queued = await _enqueue_analysis(session_id)
         return {
             "status": "queued" if queued else "already_running",
             "session_id": session_id,
         }
 
-    if session["status"] not in ("completed", "active"):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Session '{session_id}' has status '{session['status']}'. "
-                "Only 'completed' or 'active' sessions can be analyzed."
-            ),
+    if session["status"] not in ("completed", "analysis failed"):
+        _raise_analysis_error(
+            400,
+            "invalid_session_status",
+            "This session is not ready for analysis.",
+            retryable=False,
+            metadata={"status": session["status"]},
         )
 
     updated = await pool.fetchrow(
         """
         UPDATE sessions
         SET status = 'queued'
-        WHERE id = $1 AND status IN ('completed', 'active')
+        WHERE id = $1 AND status IN ('completed', 'analysis failed')
         RETURNING id
         """,
         session_id,
@@ -446,14 +981,18 @@ async def start_analysis_session(request: AnalyzeRequest) -> dict:
     if not updated:
         return {"status": "already_running", "session_id": session_id}
 
-    _enqueue_analysis(session_id)
-    return {"status": "queued", "session_id": session_id}
+    queued = await _enqueue_analysis(session_id)
+    return {
+        "status": "queued" if queued else "already_running",
+        "session_id": session_id,
+    }
 
 
-async def _run_analysis_in_background(session_id: str) -> None:
+async def _run_analysis_in_background(session_id: str) -> bool:
     try:
         await _analyze_session_impl(session_id, allowed_statuses=("analyzing",))
         logger.info("Background analysis completed for session %s", session_id)
+        return True
     except Exception as exc:
         logger.error(
             "Background analysis failed for session %s: %s",
@@ -463,25 +1002,106 @@ async def _run_analysis_in_background(session_id: str) -> None:
         )
         try:
             pool = await _get_pool()
-            await pool.execute(
-                "UPDATE sessions SET status = 'completed' WHERE id = $1 AND status IN ('queued', 'analyzing')",
-                session_id,
-            )
+            if await _analysis_result_exists(pool, session_id):
+                logger.info(
+                    "Analysis result already exists for session %s after failure; treating job as complete",
+                    session_id,
+                )
+                return True
+            await _mark_analysis_failed(pool, session_id, exc)
         except Exception as status_exc:
             logger.error(
-                "Failed to restore completed status for session %s: %s",
+                "Failed to mark analysis failed for session %s: %s",
                 session_id,
                 status_exc,
                 exc_info=True,
             )
+        return False
+
+
+async def _mark_analysis_failed(
+    pool: asyncpg.Pool,
+    session_id: str,
+    exc: Exception,
+) -> None:
+    error_code = "analysis_error"
+    error_message = str(exc)
+    extra_metadata: dict = {}
+    status_code = getattr(exc, "status_code", None)
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        detail_error = detail.get("error")
+        if isinstance(detail_error, dict):
+            error_code = str(detail_error.get("code") or error_code)
+            error_message = str(detail_error.get("message") or error_message)
+            detail_metadata = detail_error.get("metadata")
+            if isinstance(detail_metadata, dict):
+                extra_metadata.update(detail_metadata)
+
+    if is_timeout_exception(exc):
+        error_code = "analysis_timeout"
+    elif status_code is not None:
+        error_code = error_code if error_code != "analysis_error" else f"http_{status_code}"
+
+    await pool.execute(
+        """
+        INSERT INTO analysis_failures (
+            session_id,
+            error_code,
+            error_message,
+            error_metadata
+        ) VALUES ($1, $2, $3, $4::jsonb)
+        """,
+        session_id,
+        error_code,
+        error_message,
+        json.dumps({
+            "exception_type": exc.__class__.__name__,
+            "status_code": status_code,
+            "phase": getattr(exc, "phase", None),
+            "timeout_ms": getattr(exc, "timeout_ms", None),
+            **extra_metadata,
+        }),
+    )
+    await pool.execute(
+        """
+        UPDATE sessions
+        SET status = 'analysis failed'
+        WHERE id = $1 AND status IN ('completed', 'queued', 'analyzing', 'analysis failed')
+        """,
+        session_id,
+    )
 
 
 @router.post("")
 async def analyze_session(request: AnalyzeRequest) -> dict:
-    return await _analyze_session_impl(
-        request.session_id,
-        allowed_statuses=("completed", "active"),
-    )
+    try:
+        return await _analyze_session_impl(
+            request.session_id,
+            allowed_statuses=("completed", "analysis failed"),
+        )
+    except AnalysisTimeoutError as exc:
+        try:
+            pool = await _get_pool()
+            if not await _analysis_result_exists(pool, request.session_id):
+                await _mark_analysis_failed(pool, request.session_id, exc)
+        except Exception:
+            logger.exception(
+                "Failed to record direct analysis timeout for session %s",
+                request.session_id,
+            )
+        raise HTTPException(
+            status_code=504,
+            detail=_error_payload(
+                "analysis_timeout",
+                "Analysis timed out while generating the report. Please retry.",
+                retryable=True,
+                metadata={
+                    "phase": getattr(exc, "phase", "session_analysis"),
+                    "timeout_ms": getattr(exc, "timeout_ms", None),
+                },
+            ),
+        )
 
 
 async def _analyze_session_impl(
@@ -509,12 +1129,15 @@ async def _analyze_session_impl(
 
     # Verify session is in a valid state for analysis
     if session["status"] not in allowed_statuses:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Session '{session_id}' has status '{session['status']}'. "
-                f"Only {', '.join(repr(s) for s in allowed_statuses)} sessions can be analyzed."
-            ),
+        _raise_analysis_error(
+            400,
+            "invalid_session_status",
+            "This session is not ready for analysis.",
+            retryable=False,
+            metadata={
+                "status": session["status"],
+                "allowed_statuses": list(allowed_statuses),
+            },
         )
 
     # Check if already analyzed
@@ -522,21 +1145,23 @@ async def _analyze_session_impl(
         "SELECT id FROM analysis_results WHERE session_id = $1", session_id
     )
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Session '{session_id}' has already been analyzed. "
-                f"Analysis ID: {existing['id']}"
-            ),
+        _raise_analysis_error(
+            409,
+            "already_analyzed",
+            "This session has already been analyzed.",
+            retryable=False,
+            metadata={"analysis_id": str(existing["id"])},
         )
 
     challenge = await _fetch_challenge(pool, session["challenge_id"])
     interactions = await _fetch_interactions(pool, session_id)
 
     if not interactions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No interactions found for session '{session_id}'",
+        _raise_analysis_error(
+            400,
+            "no_interactions",
+            "No session activity was found to analyze.",
+            retryable=False,
         )
 
     logger.info(
@@ -549,12 +1174,17 @@ async def _analyze_session_impl(
     try:
         # -- Step 2: Parse transcript --
         parser = TranscriptParser()
-        transcript = parser.parse(interactions)
+        parsed_transcript = parser.parse_with_turns(interactions)
+        transcript = parsed_transcript.transcript
         logger.info("Parsed transcript: %d characters", len(transcript))
 
         # -- Step 3: Quality gate --
         quality_gate = TranscriptQualityGate()
-        insufficient_result = quality_gate.assess(interactions, transcript)
+        insufficient_result = quality_gate.assess(
+            interactions,
+            transcript,
+            parsed_turns=parsed_transcript.turns,
+        )
 
         if insufficient_result is not None:
             logger.warning(
@@ -583,8 +1213,10 @@ async def _analyze_session_impl(
             }
 
             analyzer = ClaudeAnalyzer()
-            raw_analysis = await asyncio.to_thread(
+            raw_analysis = await _run_blocking_with_timeout(
                 analyzer.analyze,
+                timeout_seconds=_analysis_session_timeout_seconds(),
+                phase="session_analysis",
                 challenge_description=challenge.get("description", ""),
                 session_metadata=session_metadata,
                 transcript=transcript,
@@ -616,7 +1248,11 @@ async def _analyze_session_impl(
 
         # -- Step 7: Persist to database --
         report_gen = ReportGenerator(pool)
-        analysis_id = await report_gen.save(session_id=session_id, analysis=analysis)
+        analysis_id = await report_gen.save(
+            session_id=session_id,
+            analysis=analysis,
+            parsed_turns=parsed_transcript.turns,
+        )
         logger.info("Analysis saved with ID: %s", analysis_id)
 
         # -- Step 7b: Record Gemini cost event --
@@ -625,8 +1261,15 @@ async def _analyze_session_impl(
             company_id = challenge.get("company_id")
             input_tokens = gemini_usage.get("input_tokens", 0)
             output_tokens = gemini_usage.get("output_tokens", 0)
-            cost_usd = (input_tokens / 1_000_000) * 0.15 + (output_tokens / 1_000_000) * 0.60
             try:
+                input_rate, output_rate, rate_source = await _fetch_gemini_cost_rates(
+                    pool,
+                    company_id,
+                )
+                cost_usd = (
+                    Decimal(input_tokens) / _TOKENS_PER_MILLION * input_rate
+                    + Decimal(output_tokens) / _TOKENS_PER_MILLION * output_rate
+                )
                 await pool.execute(
                     """
                     INSERT INTO usage_events
@@ -645,11 +1288,14 @@ async def _analyze_session_impl(
                         "pass1_output": gemini_usage.get("pass1_output", 0),
                         "pass2_input": gemini_usage.get("pass2_input", 0),
                         "pass2_output": gemini_usage.get("pass2_output", 0),
+                        "input_rate_per_million": float(input_rate),
+                        "output_rate_per_million": float(output_rate),
+                        "cost_settings_source": rate_source,
                     }),
                 )
                 logger.info(
                     "Recorded Gemini cost event: $%.6f (%d in / %d out tokens)",
-                    cost_usd, input_tokens, output_tokens,
+                    float(cost_usd), input_tokens, output_tokens,
                 )
             except Exception as cost_err:
                 logger.warning("Failed to record Gemini cost event: %s", cost_err)
@@ -661,9 +1307,19 @@ async def _analyze_session_impl(
 
         return response
 
+    except AnalysisTimeoutError as exc:
+        logger.error("Analysis timed out for session %s: %s", session_id, exc)
+        raise
     except ValueError as exc:
         logger.error("Analysis failed for session %s: %s", session_id, exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=_error_payload(
+                "model_response_invalid",
+                "The analysis provider returned an invalid response. Please retry.",
+                retryable=True,
+            ),
+        )
     except Exception as exc:
         logger.error(
             "Unexpected error during analysis of session %s: %s",
@@ -671,4 +1327,11 @@ async def _analyze_session_impl(
             exc,
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(
+            status_code=500,
+            detail=_error_payload(
+                "analysis_error",
+                "Analysis failed. Please retry or contact support.",
+                retryable=True,
+            ),
+        )

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ArcSpinner from '@/components/ArcSpinner';
 
 const messages = [
   'Analyzing role requirements...',
@@ -22,12 +23,7 @@ export default function StepLoading() {
 
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-8">
-      {/* Pulsing spinner */}
-      <div className="relative">
-        <div className="w-16 h-16 rounded-full border-2 border-primary/20" />
-        <div className="absolute inset-0 w-16 h-16 rounded-full border-2 border-transparent border-t-primary animate-spin" />
-        <div className="absolute inset-2 w-12 h-12 rounded-full bg-primary/10 animate-pulse" />
-      </div>
+      <ArcSpinner label={messages[messageIndex]} sizeClassName="h-16 w-16" />
 
       {/* Rotating messages */}
       <div className="h-8 relative">

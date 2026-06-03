@@ -11,7 +11,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const status = await checkEnrollmentStatus(user.sub);
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+
+    const status = await checkEnrollmentStatus(user.companyId);
     return NextResponse.json(status);
   } catch (err) {
     console.error('Error fetching plan status:', err);

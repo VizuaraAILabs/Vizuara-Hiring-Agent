@@ -10,8 +10,8 @@ interface ReportHeaderProps {
 
 export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
   return (
-    <div className="bg-surface border border-white/5 rounded-2xl p-8">
-      <div className="flex items-start justify-between">
+    <section className="border-b border-white/10 py-8">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-serif italic text-white mb-1">{session.candidate_name}</h1>
           <p className="text-neutral-500 text-sm">{session.candidate_email}</p>
@@ -20,7 +20,7 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5 sm:justify-end">
           <div className="text-center">
             <div className={`text-4xl font-bold ${getScoreColor(analysis.overall_score)}`}>
               {analysis.overall_score.toFixed(0)}
@@ -37,42 +37,6 @@ export default function ReportHeader({ session, analysis }: ReportHeaderProps) {
           </span>
         </div>
       </div>
-
-      {analysis.summary_narrative && (
-        <div className="mt-6 pt-6 border-t border-white/5">
-          <p className="text-neutral-400 text-sm leading-relaxed">{analysis.summary_narrative}</p>
-        </div>
-      )}
-
-      <div className="mt-6 grid grid-cols-2 gap-6">
-        {analysis.strengths.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-primary mb-2">Strengths</h4>
-            <ul className="space-y-1">
-              {analysis.strengths.map((s, i) => (
-                <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                  <span className="text-primary mt-0.5">+</span>
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {analysis.areas_for_growth.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-amber-400 mb-2">Areas for Growth</h4>
-            <ul className="space-y-1">
-              {analysis.areas_for_growth.map((a, i) => (
-                <li key={i} className="text-sm text-neutral-400 flex gap-2">
-                  <span className="text-amber-500 mt-0.5">-</span>
-                  {a}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
+    </section>
   );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
+import ArcSpinner from '@/components/ArcSpinner';
 import type { StarterFile } from '@/types';
 
 export default function StarterFilesPage() {
@@ -100,7 +101,7 @@ export default function StarterFilesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+        <ArcSpinner label="Loading starter files" sizeClassName="h-8 w-8" />
       </div>
     );
   }

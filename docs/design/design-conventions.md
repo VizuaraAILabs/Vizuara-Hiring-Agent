@@ -5,9 +5,10 @@ Living conventions for frontend UI work in this repository.
 ## Tailwind Classes
 
 - Prefer canonical Tailwind utilities when a value maps exactly to the spacing, sizing, color, typography, or radius scale.
-- Avoid arbitrary values when the canonical class is equivalent. For example, use `w-150 h-150` instead of `w-[600px] h-[600px]`, and `w-125 h-125` instead of `w-[500px] h-[500px]`.
+- Avoid arbitrary values when the canonical class is equivalent. For example, use `w-150 h-150` instead of `w-[600px] h-[600px]`, `w-125 h-125` instead of `w-[500px] h-[500px]`, `min-w-230` instead of `min-w-[920px]`, `rounded-2.5` instead of `rounded-[10px]`, and `pt-16.25` instead of `pt-[65px]`.
 - Use Tailwind's canonical gradient direction utilities. For example, use `bg-linear-to-b` instead of `bg-gradient-to-b`, and `bg-linear-to-r` instead of `bg-gradient-to-r`.
 - Use canonical flex shorthands. For example, use `grow` instead of `flex-grow`, and `shrink-0` instead of `flex-shrink-0`.
+- Use canonical opacity shorthands for color utilities when they map exactly. For example, use `bg-white/4` instead of `bg-white/[0.04]`, `bg-white/3` instead of `bg-white/[0.03]`, and `hover:bg-white/7` instead of `hover:bg-white/[0.07]`.
 - Use theme color tokens for brand and surface colors. For example, use `border-primary/20` instead of `border-[#00a854]/20`, `hover:bg-primary-light` instead of `hover:bg-[#00c96b]`, `text-accent` instead of `text-[#0099b8]`, and `bg-surface` instead of `bg-[#111]`.
 - Use arbitrary values only when the design requires a value that is not represented by the scale, or when the utility is inherently custom, such as complex shadows, masks, gradients, and uncommon blur radii.
 - Keep arbitrary values intentional and local. If the same custom value appears repeatedly, consider promoting it to a theme token or shared component style.

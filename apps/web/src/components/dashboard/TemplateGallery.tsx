@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import ArcSpinner from '@/components/ArcSpinner';
 import type { TemplateConfig } from '@/lib/templates';
 
 const difficultyColors: Record<string, string> = {
@@ -60,7 +61,7 @@ export default function TemplateGallery() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+        <ArcSpinner label="Loading templates" sizeClassName="h-8 w-8" />
       </div>
     );
   }
@@ -120,8 +121,9 @@ export default function TemplateGallery() {
               <button
                 onClick={() => handleUseTemplate(template.slug)}
                 disabled={loadingSlug !== null}
-                className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-2.5 rounded-lg text-sm transition-all"
+                className="flex w-full items-center justify-center gap-2 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-2.5 rounded-lg text-sm transition-all"
               >
+                {isLoading && <ArcSpinner label="Loading template" sizeClassName="h-4 w-4" />}
                 {isLoading ? 'Loading...' : 'Use Template'}
               </button>
             </div>

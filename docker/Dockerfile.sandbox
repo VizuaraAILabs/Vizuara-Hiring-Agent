@@ -57,7 +57,7 @@ WORKDIR /workspace
 # written into this untrusted candidate sandbox.
 COPY docker/sandbox-entrypoint.sh /entrypoint.sh
 USER root
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 USER candidate
 
 CMD ["/entrypoint.sh"]

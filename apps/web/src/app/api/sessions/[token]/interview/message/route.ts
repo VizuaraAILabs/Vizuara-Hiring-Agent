@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
+import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { callWithKeyRotation } from '@/lib/gemini';
+import { isNoQuestionPlaceholder } from '@/lib/interview';
 
 const INTERVIEWER_SYSTEM_PROMPT = `You are a senior technical interviewer conducting a live software engineering assessment.
 Your role is to probe the candidate's thinking — ask about trade-offs, design decisions, scalability, and first principles.
@@ -30,17 +32,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     const trimmed = content.trim().slice(0, 2000);
 
     // Fetch session + challenge
-    const [session] = await sql<{ id: string; status: string; challenge_description: string; challenge_title: string }[]>`
-      SELECT s.id, s.status, c.description as challenge_description, c.title as challenge_title
+    const [session] = await sql<{ id: string; status: string; candidate_lifecycle_status: string | null; challenge_description: string; challenge_title: string }[]>`
+      SELECT s.id, s.status, s.candidate_lifecycle_status, c.description as challenge_description, c.title as challenge_title
       FROM sessions s
       JOIN challenges c ON c.id = s.challenge_id
       WHERE s.token = ${token}
     `;
     if (!session) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      return NextResponse.json(candidateUnavailablePayload('invalid_link'), { status: 404 });
+    }
+    if (session.candidate_lifecycle_status) {
+      return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
     if (session.status !== 'active') {
-      return NextResponse.json({ error: 'Session is not active' }, { status: 400 });
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
     // Fetch conversation history (last 10 interview exchanges)
@@ -99,6 +104,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       const result = await model.generateContent(conversationParts.join('\n'));
       return result.response.text().trim();
     });
+
+    if (!aiReply || isNoQuestionPlaceholder(aiReply)) {
+      return NextResponse.json({
+        reply: null,
+        sequence_num: null,
+        candidate_sequence_num: inserted.sequence_num,
+      });
+    }
 
     // Store AI reply as interview_question
     await sql`

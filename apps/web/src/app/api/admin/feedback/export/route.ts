@@ -4,7 +4,7 @@ import { getAuthUser, isAdmin } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   const user = await getAuthUser();
-  if (!user || !isAdmin(user.email)) {
+  if (!user || !isAdmin(user.email, user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { codeToHtml } from 'shiki';
 import type { StarterFile } from '@/types';
+import ConfirmationModal from '@/components/ConfirmationModal';
+import ArcSpinner from '@/components/ArcSpinner';
 
 interface StarterFilesEditorProps {
   files: StarterFile[];
@@ -81,6 +84,42 @@ function getExtLabel(name: string): string | null {
   const idx = name.lastIndexOf('.');
   if (idx === -1) return null;
   return EXTENSION_LABELS[name.slice(idx).toLowerCase()] || null;
+}
+
+function getLanguage(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    rb: 'ruby',
+    rs: 'rust',
+    go: 'go',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    cs: 'csharp',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    md: 'markdown',
+    sql: 'sql',
+    xml: 'xml',
+  };
+  if (filename.toLowerCase().endsWith('dockerfile')) return 'dockerfile';
+  return map[ext] ?? 'text';
 }
 
 // --- Context Menu ---
@@ -353,9 +392,12 @@ export default function StarterFilesEditor({
   const [inlineInputValue, setInlineInputValue] = useState('');
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
+  const highlightedEditorRef = useRef<HTMLDivElement>(null);
+  const [highlightedCode, setHighlightedCode] = useState<{ key: string; html: string | null } | null>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -374,10 +416,10 @@ export default function StarterFilesEditor({
     setExpandedDirs(dirs);
   }, [tree]);
 
-  // Click outside tree panel to deselect
+  // Click outside the starter-file editor to deselect.
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
-      if (treeRef.current && !treeRef.current.contains(e.target as Node)) {
+      if (dropZoneRef.current && !dropZoneRef.current.contains(e.target as Node)) {
         setSelectedPath(null);
       }
     }
@@ -388,6 +430,32 @@ export default function StarterFilesEditor({
   // Derive the file being edited (only files, not directories)
   const selectedFileData = files.find((f) => f.path === selectedPath);
   const isFull = mode === 'full';
+  const highlightKey = selectedFileData
+    ? `${selectedFileData.path}:${selectedFileData.content.length}:${selectedFileData.content.slice(0, 64)}`
+    : null;
+
+  useEffect(() => {
+    if (!selectedFileData || !highlightKey) {
+      setHighlightedCode(null);
+      return;
+    }
+
+    let cancelled = false;
+    codeToHtml(selectedFileData.content || ' ', {
+      lang: getLanguage(selectedFileData.path),
+      theme: 'vitesse-dark',
+    })
+      .then((html) => {
+        if (!cancelled) setHighlightedCode({ key: highlightKey, html });
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightedCode({ key: highlightKey, html: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [highlightKey, selectedFileData]);
 
   // Get target directory for new file/folder based on selection
   function getCreationTarget(): string {
@@ -660,15 +728,10 @@ export default function StarterFilesEditor({
 
   // --- Generate with AI ---
 
-  async function handleGenerate() {
+  async function runGenerate() {
     if (!challengeTitle || !challengeDescription) {
       setGenError('Title and description are required to generate files.');
       return;
-    }
-
-    if (files.length > 0) {
-      const confirmed = window.confirm('This will replace all existing starter files. Continue?');
-      if (!confirmed) return;
     }
 
     setGenerating(true);
@@ -698,6 +761,20 @@ export default function StarterFilesEditor({
     }
   }
 
+  function handleGenerate() {
+    if (!challengeTitle || !challengeDescription) {
+      setGenError('Title and description are required to generate files.');
+      return;
+    }
+
+    if (files.length > 0) {
+      setReplaceConfirmOpen(true);
+      return;
+    }
+
+    runGenerate();
+  }
+
   // --- Tab key inserts spaces ---
 
   function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -716,6 +793,12 @@ export default function StarterFilesEditor({
     }
   }
 
+  function handleEditorScroll(e: React.UIEvent<HTMLTextAreaElement>) {
+    if (!highlightedEditorRef.current) return;
+    highlightedEditorRef.current.scrollTop = e.currentTarget.scrollTop;
+    highlightedEditorRef.current.scrollLeft = e.currentTarget.scrollLeft;
+  }
+
   // --- Breadcrumb for selected file ---
 
   function renderBreadcrumb(filePath: string) {
@@ -732,7 +815,7 @@ export default function StarterFilesEditor({
     );
   }
 
-  const editorHeight = isFull ? 'h-full' : 'h-[400px]';
+  const editorHeight = isFull ? 'h-full' : 'h-100';
   const treeWidth = isFull ? 'w-64' : 'w-52';
 
   return (
@@ -790,7 +873,7 @@ export default function StarterFilesEditor({
           >
             {generating ? (
               <>
-                <span className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full" />
+                <ArcSpinner label="Generating starter files" sizeClassName="h-3 w-3" />
                 Generating...
               </>
             ) : (
@@ -898,13 +981,27 @@ export default function StarterFilesEditor({
           {selectedFileData ? (
             <>
               {renderBreadcrumb(selectedFileData.path)}
-              <textarea
-                value={selectedFileData.content}
-                onChange={(e) => handleContentChange(e.target.value)}
-                onKeyDown={handleTextareaKeyDown}
-                className="flex-1 w-full bg-transparent text-white font-mono text-sm p-3 resize-none focus:outline-none leading-relaxed"
-                spellCheck={false}
-              />
+              <div className="relative flex-1 min-h-0">
+                <div
+                  ref={highlightedEditorRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-sm leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-sm [&_pre]:!leading-relaxed"
+                >
+                  {highlightedCode?.key === highlightKey && highlightedCode.html ? (
+                    <div dangerouslySetInnerHTML={{ __html: highlightedCode.html }} />
+                  ) : (
+                    <pre className="whitespace-pre text-neutral-300">{selectedFileData.content}</pre>
+                  )}
+                </div>
+                <textarea
+                  value={selectedFileData.content}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  onKeyDown={handleTextareaKeyDown}
+                  onScroll={handleEditorScroll}
+                  className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-3 font-mono text-sm leading-relaxed text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  spellCheck={false}
+                />
+              </div>
             </>
           ) : (
             <div className="flex items-center justify-center h-full">
@@ -929,6 +1026,21 @@ export default function StarterFilesEditor({
           onDelete={handleDelete}
         />
       )}
+      <ConfirmationModal
+        open={replaceConfirmOpen}
+        title="Replace Starter Files?"
+        description="Generating with AI will replace all existing starter files for this challenge."
+        confirmLabel="Replace Files"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={generating}
+        error={genError || null}
+        onConfirm={() => {
+          setReplaceConfirmOpen(false);
+          runGenerate();
+        }}
+        onClose={() => setReplaceConfirmOpen(false)}
+      />
     </div>
   );
 }

@@ -14,9 +14,13 @@ export async function GET() {
       return NextResponse.json({ enrolled: false, status: null, enrollment: null });
     }
 
+    if (!user.companyId) {
+      return NextResponse.json({ enrolled: false, status: null, enrollment: null });
+    }
+
     // Get the firebase_uid for this company
     const [company] = await sql<{ firebase_uid: string | null }[]>`
-      SELECT firebase_uid FROM companies WHERE id = ${user.sub}
+      SELECT firebase_uid FROM companies WHERE id = ${user.companyId}
     `;
 
     if (!company?.firebase_uid) {

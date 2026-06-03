@@ -1,18 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
-import type { AnalysisResult, Session, Interaction, WorkspaceSnapshot, Challenge } from '@/types';
-import ReportHeader from '@/components/report/ReportHeader';
-import ScoreSummary from '@/components/report/ScoreSummary';
+import IntegrityPanel from '@/components/report/IntegrityPanel';
 import KeyMoments from '@/components/report/KeyMoments';
+import PrintableReport from '@/components/report/PrintableReport';
+import RecruiterReviewPanel from '@/components/report/RecruiterReviewPanel';
+import ReportExportActions from '@/components/report/ReportExportActions';
+import ReportHeader from '@/components/report/ReportHeader';
+import ReportSummary from '@/components/report/ReportSummary';
+import ScoreSummary from '@/components/report/ScoreSummary';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
 import WorkspaceViewer from '@/components/report/WorkspaceViewer';
-import InlineFeedback from '@/components/feedback/InlineFeedback';
-import NpsPrompt from '@/components/feedback/NpsPrompt';
-import CompletionSurvey from '@/components/feedback/CompletionSurvey';
+import type { AnalysisResult, Challenge, IntegritySummary, Interaction, Session, WorkspaceSnapshot } from '@/types';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+// import InlineFeedback from '@/components/feedback/InlineFeedback';
+// import NpsPrompt from '@/components/feedback/NpsPrompt';
+// import CompletionSurvey from '@/components/feedback/CompletionSurvey';
 
 // Dynamic imports for chart components (they use window)
 const RadarChart = dynamic(() => import('@/components/report/RadarChart'), { ssr: false });
@@ -20,7 +25,7 @@ const TimelineChart = dynamic(() => import('@/components/report/TimelineChart'),
 const PromptComplexity = dynamic(() => import('@/components/report/PromptComplexity'), { ssr: false });
 const CategoryBreakdown = dynamic(() => import('@/components/report/CategoryBreakdown'), { ssr: false });
 
-type Tab = 'overview' | 'timeline' | 'analysis' | 'transcript' | 'files';
+type Tab = 'summary' | 'overview' | 'timeline' | 'analysis' | 'ownership' | 'transcript' | 'files';
 
 export default function ReportPage() {
   const params = useParams();
@@ -32,14 +37,42 @@ export default function ReportPage() {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('summary');
   const [highlightIndex, setHighlightIndex] = useState<number | undefined>();
   const [transcriptNarrative, setTranscriptNarrative] = useState<string | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
   const [enrichingDimensions, setEnrichingDimensions] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [integritySummary, setIntegritySummary] = useState<IntegritySummary | null>(null);
+  const [integrityLoading, setIntegrityLoading] = useState(false);
+  const [integrityError, setIntegrityError] = useState<string | null>(null);
+
+  const handleEnrichDimensions = useCallback(async () => {
+    setEnrichingDimensions(true);
+    setEnrichmentError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/enrich-dimensions`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Detailed evidence could not be generated.');
+      }
+      const enriched = await res.json();
+      if (enriched?.dimension_details) {
+        setAnalysis((prev) =>
+          prev ? { ...prev, dimension_details: enriched.dimension_details } : prev,
+        );
+      }
+    } catch (err) {
+      console.error('Failed to enrich dimension evidence:', err);
+      setEnrichmentError('Detailed evidence could not be generated. Scores remain available, but some supporting observations may be missing.');
+    } finally {
+      setEnrichingDimensions(false);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     async function loadData() {
@@ -59,18 +92,7 @@ export default function ReportPage() {
             (d) => !d?.observed_points?.length,
           );
           if (needsEnrichment) {
-            setEnrichingDimensions(true);
-            fetch(`/api/analysis/${sessionId}/enrich-dimensions`, { method: 'POST' })
-              .then((r) => (r.ok ? r.json() : null))
-              .then((enriched) => {
-                if (enriched?.dimension_details) {
-                  setAnalysis((prev) =>
-                    prev ? { ...prev, dimension_details: enriched.dimension_details } : prev,
-                  );
-                }
-              })
-              .catch((err) => console.error('Failed to enrich dimension evidence:', err))
-              .finally(() => setEnrichingDimensions(false));
+            void handleEnrichDimensions();
           }
         }
 
@@ -96,30 +118,62 @@ export default function ReportPage() {
     }
 
     loadData();
-  }, [sessionId, challengeId]);
+  }, [sessionId, challengeId, handleEnrichDimensions]);
 
   const handleViewInTranscript = (index: number) => {
     setHighlightIndex(index);
     setActiveTab('transcript');
   };
 
+  const handleSessionUpdated = (updatedSession: Session) => {
+    setSession(updatedSession);
+  };
+
+  const handleGenerateNarrative = async () => {
+    if (transcriptNarrative || narrativeLoading) return;
+
+    setNarrativeLoading(true);
+    setNarrativeError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to generate transcript narrative.');
+      }
+      const data = await res.json();
+      setTranscriptNarrative(data.transcript_narrative ?? null);
+    } catch (err) {
+      console.error('Failed to generate transcript narrative:', err);
+      setNarrativeError('Transcript narrative could not be generated. Please try again.');
+    } finally {
+      setNarrativeLoading(false);
+    }
+  };
+
+  const loadIntegritySummary = useCallback(async () => {
+    if (integritySummary || integrityLoading) return;
+    setIntegrityLoading(true);
+    setIntegrityError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}/integrity`);
+      if (res.ok) {
+        setIntegritySummary(await res.json());
+      } else {
+        setIntegrityError('Ownership signals could not be generated for this session.');
+      }
+    } catch {
+      setIntegrityError('Ownership signals could not be generated for this session.');
+    } finally {
+      setIntegrityLoading(false);
+    }
+  }, [integrityLoading, integritySummary, sessionId]);
+
   const handleTabChange = async (tab: Tab) => {
     setActiveTab(tab);
-    if (tab === 'transcript' && !transcriptNarrative && !narrativeLoading) {
-      setNarrativeLoading(true);
-      try {
-        const res = await fetch(`/api/analysis/${sessionId}/transcript-narrative`, {
-          method: 'POST',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTranscriptNarrative(data.transcript_narrative ?? null);
-        }
-      } catch (err) {
-        console.error('Failed to generate transcript narrative:', err);
-      } finally {
-        setNarrativeLoading(false);
-      }
+    if (tab === 'ownership') {
+      void loadIntegritySummary();
     }
     if (tab === 'files' && !workspaceSnapshot && !workspaceLoading) {
       setWorkspaceLoading(true);
@@ -184,44 +238,68 @@ export default function ReportPage() {
   };
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'summary', label: 'Summary' },
     { key: 'overview', label: 'Overview' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'analysis', label: 'Analysis' },
+    { key: 'ownership', label: 'Ownership' },
     { key: 'transcript', label: 'Narrative' },
     { key: 'files', label: 'Files' },
   ];
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Back link */}
-      <Link
-        href={`/dashboard/challenges/${challengeId}`}
-        className="text-neutral-600 hover:text-neutral-300 text-sm mb-6 block transition-colors"
-      >
-        &larr; Back to challenge
-      </Link>
+      <div className="print-only">
+        <PrintableReport session={session} analysis={analysis} challenge={challenge} />
+      </div>
 
-      {/* Header */}
-      <ReportHeader session={session} analysis={analysis} />
+      <div className="screen-only">
+        <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <Link
+            href={`/dashboard/challenges/${challengeId}`}
+            className="text-neutral-600 hover:text-neutral-300 text-sm transition-colors"
+          >
+            &larr; Back to challenge
+          </Link>
+          <ReportExportActions sessionId={sessionId} />
+        </div>
+
+        {/* Header */}
+        <ReportHeader session={session} analysis={analysis} />
+        <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mt-6 mb-6 bg-surface rounded-2xl p-1 border border-white/5">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => handleTabChange(tab.key)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-              activeTab === tab.key
-                ? 'bg-white/5 text-white'
-                : 'text-neutral-600 hover:text-neutral-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="screen-only sticky top-0 z-20 -mx-1 mb-6 mt-6 bg-[#0a0a0a] px-1 pt-3">
+        <div className="overflow-x-auto border-b border-white/10" role="tablist" aria-label="Submission report sections">
+          <div className="flex min-w-max gap-6 sm:gap-8">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`cursor-pointer border-b-2 px-3 py-3 text-sm font-semibold transition-colors sm:px-4 ${
+                    isActive
+                      ? 'border-primary text-white'
+                      : 'border-transparent text-neutral-600 hover:text-neutral-300'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Tab Content */}
+      <div className="screen-only">
+      {activeTab === 'summary' && <ReportSummary analysis={analysis} />}
+
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <RadarChart scores={scores} />
@@ -229,6 +307,8 @@ export default function ReportPage() {
             dimensions={analysis.dimension_details}
             scores={scores}
             enriching={enrichingDimensions}
+            enrichmentError={enrichmentError}
+            onRetryEnrichment={handleEnrichDimensions}
             challengeTitle={challenge?.title ?? null}
             challengeRole={challenge?.role ?? null}
             challengeTechStack={challenge?.tech_stack ?? null}
@@ -264,12 +344,22 @@ export default function ReportPage() {
         </div>
       )}
 
+      {activeTab === 'ownership' && (
+        <IntegrityPanel
+          summary={integritySummary}
+          loading={integrityLoading}
+          error={integrityError}
+        />
+      )}
+
       {activeTab === 'transcript' && (
         <TranscriptViewer
           interactions={interactions}
           highlightIndex={highlightIndex}
           narrative={transcriptNarrative}
           narrativeLoading={narrativeLoading}
+          narrativeError={narrativeError}
+          onGenerateNarrative={handleGenerateNarrative}
           candidateName={session.candidate_name}
         />
       )}
@@ -279,27 +369,32 @@ export default function ReportPage() {
           snapshot={workspaceSnapshot}
           loading={workspaceLoading}
           error={workspaceError}
+          sessionId={sessionId}
         />
       )}
+      </div>
 
       {/* Feedback — shown below all tabs */}
-      <div className="mt-10 space-y-4">
-        <InlineFeedback
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="article"
-        />
-        <NpsPrompt
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="course"
-        />
-        <CompletionSurvey
-          courseSlug={challengeId}
-          podSlug={sessionId}
-          contentType="course"
-        />
-      </div>
+      {/*
+        Feedback sections temporarily hidden.
+        <div className="mt-10 space-y-4">
+          <InlineFeedback
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="article"
+          />
+          <NpsPrompt
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="course"
+          />
+          <CompletionSurvey
+            courseSlug={challengeId}
+            podSlug={sessionId}
+            contentType="course"
+          />
+        </div>
+      */}
     </div>
   );
 }

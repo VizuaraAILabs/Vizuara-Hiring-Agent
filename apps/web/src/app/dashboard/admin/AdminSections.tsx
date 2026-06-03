@@ -1,0 +1,1005 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
+import { Trash2 } from 'lucide-react';
+import ConfirmationModal from '@/components/ConfirmationModal';
+import Dropdown from '@/components/Dropdown';
+import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface AdminCompany {
+  id: string;
+  name: string;
+  email: string;
+  plan: string;
+  trial_ends_at: string | null;
+  created_at: string;
+  contact_name: string | null;
+  contact_title: string | null;
+  challenge_count: number;
+  total_sessions: number;
+  pending_sessions: number;
+}
+
+interface AdminChallenge {
+  id: string;
+  company_id: string;
+  title: string;
+  description: string;
+  time_limit_min: number;
+  is_active: boolean | number;
+  ends_at: string | null;
+  archived_at: string | null;
+  created_at: string;
+  company_name: string;
+  candidate_count: number;
+}
+
+interface AdminCompanyCost {
+  company_id: string | null;
+  company_name: string;
+  plan: string;
+  total_spend: number;
+  session_count: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  anthropic_cost: number;
+  gemini_cost: number;
+  docker_cost: number;
+  vps_cost: number;
+}
+
+interface AdminCostTotals {
+  total_spend: number;
+  total_sessions: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  anthropic_cost: number;
+  gemini_cost: number;
+  docker_cost: number;
+  vps_cost: number;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number) {
+  return `$${Number(n).toFixed(2)}`;
+}
+
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function fmtDate(s: string) {
+  return new Date(s).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function getChallengeStatus(challenge: Pick<AdminChallenge, 'is_active' | 'ends_at' | 'archived_at'>) {
+  if (challenge.archived_at) {
+    return { label: 'Archived', className: 'bg-neutral-800 text-neutral-400' };
+  }
+  if (challenge.ends_at && new Date(challenge.ends_at).getTime() <= Date.now()) {
+    return { label: 'Expired', className: 'bg-amber-500/10 text-amber-300' };
+  }
+  if (challenge.is_active === true || challenge.is_active === 1) {
+    return { label: 'Open', className: 'bg-primary/10 text-primary' };
+  }
+  return { label: 'Closed', className: 'bg-neutral-800 text-neutral-400' };
+}
+
+const PLAN_COLORS: Record<string, string> = {
+  trial: 'text-neutral-400 bg-white/5 border-white/10',
+  starter: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  growth: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  enterprise: 'text-primary bg-primary/10 border-primary/20',
+  deleted: 'text-red-300 bg-red-500/10 border-red-500/20',
+};
+
+const PLAN_FILTERS = ['trial', 'starter', 'growth', 'enterprise'] as const;
+const COMPANY_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const PLAN_FILTER_OPTIONS = [
+  { value: 'all', label: 'All plans' },
+  ...PLAN_FILTERS.map((plan) => ({
+    value: plan,
+    label: plan.charAt(0).toUpperCase() + plan.slice(1),
+  })),
+];
+const COMPANY_PAGE_SIZE_OPTIONS_FOR_DROPDOWN = COMPANY_PAGE_SIZE_OPTIONS.map((size) => ({
+  value: String(size),
+  label: String(size),
+}));
+
+function PlanBadge({ plan }: { plan: string }) {
+  const cls = PLAN_COLORS[plan] ?? PLAN_COLORS.trial;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border capitalize ${cls}`}>
+      {plan}
+    </span>
+  );
+}
+
+function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-surface border border-white/5 rounded-2xl p-5">
+      <p className="text-xs text-neutral-500 mb-1">{label}</p>
+      <p className="text-2xl font-semibold text-white">{value}</p>
+      {sub && <p className="text-xs text-neutral-600 mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Bulk Email Modal ──────────────────────────────────────────────────────────
+
+const MAX_BULK_RECIPIENTS = 100;
+
+function BulkEmailModal({
+  recipients,
+  onClose,
+}: {
+  recipients: { email: string; name: string }[];
+  onClose: () => void;
+}) {
+  const [subject, setSubject] = useState('');
+  const [bodyText, setBodyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ sent: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSend() {
+    if (!subject.trim() || !bodyText.trim()) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/companies/bulk-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipients, subject, bodyText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to send');
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Send email</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">{recipients.length} recipient{recipients.length !== 1 ? 's' : ''}</p>
+          </div>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors cursor-pointer text-lg leading-none">✕</button>
+        </div>
+
+        {result ? (
+          <div className="px-6 py-8 text-center space-y-3">
+            <p className="text-2xl">✓</p>
+            <p className="text-white font-medium">Sent to {result.sent} recipient{result.sent !== 1 ? 's' : ''}</p>
+            <button onClick={onClose} className="mt-4 px-4 py-2 rounded-xl bg-primary hover:bg-primary-light text-black text-sm font-semibold transition-all btn-glow cursor-pointer">
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs text-neutral-400 mb-1.5">Subject</label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Email subject…"
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-2.5 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-400 mb-1.5">Body</label>
+              <textarea
+                value={bodyText}
+                onChange={(e) => setBodyText(e.target.value)}
+                placeholder="Write your message…"
+                rows={7}
+                className="w-full bg-black/30 border-2 border-[#c0c0c0]/20 rounded-2.5 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none focus:border-primary transition-colors resize-none"
+              />
+            </div>
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-neutral-400 hover:text-white transition-colors cursor-pointer">
+                Cancel
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending || !subject.trim() || !bodyText.trim()}
+                className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-light text-black text-sm font-semibold transition-all btn-glow cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab: Companies ───────────────────────────────────────────────────────────
+
+export function CompaniesTab({
+  onSelectCompany,
+}: {
+  onSelectCompany: (id: string) => void;
+}) {
+  const [companies, setCompanies] = useState<AdminCompany[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [companyNameFilter, setCompanyNameFilter] = useState('');
+  const [emailFilter, setEmailFilter] = useState('');
+  const [planFilter, setPlanFilter] = useState('all');
+  const [pageSize, setPageSize] = useState<(typeof COMPANY_PAGE_SIZE_OPTIONS)[number]>(25);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [companyToDelete, setCompanyToDelete] = useState<AdminCompany | null>(null);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/companies')
+      .then((r) => r.json())
+      .then((d) => setCompanies(d.companies ?? []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredCompanies = useMemo(() => {
+    const nameQuery = companyNameFilter.trim().toLowerCase();
+    const emailQuery = emailFilter.trim().toLowerCase();
+
+    return companies.filter((company) => {
+      const matchesName = !nameQuery || company.name.toLowerCase().includes(nameQuery);
+      const matchesEmail = !emailQuery || company.email.toLowerCase().includes(emailQuery);
+      const matchesPlan = planFilter === 'all' || company.plan === planFilter;
+      return matchesName && matchesEmail && matchesPlan;
+    });
+  }, [companies, companyNameFilter, emailFilter, planFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCompanies.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const paginatedCompanies = filteredCompanies.slice(pageStart, pageStart + pageSize);
+  const pageCompanyIds = paginatedCompanies.map((company) => company.id);
+  const pageStartLabel = filteredCompanies.length === 0 ? 0 : pageStart + 1;
+  const pageEndLabel = Math.min(pageStart + pageSize, filteredCompanies.length);
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-16" />
+        ))}
+      </div>
+    );
+  }
+
+  const totalPending = filteredCompanies.reduce((a, c) => a + c.pending_sessions, 0);
+  const allSelected = pageCompanyIds.length > 0 && pageCompanyIds.every((id) => selected.has(id));
+  const hasActiveFilters = Boolean(companyNameFilter || emailFilter || planFilter !== 'all');
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        pageCompanyIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of pageCompanyIds) {
+          if (next.size >= MAX_BULK_RECIPIENTS) break;
+          next.add(id);
+        }
+        return next;
+      });
+    }
+  }
+
+  function clearFilters() {
+    setCompanyNameFilter('');
+    setEmailFilter('');
+    setPlanFilter('all');
+    setCurrentPage(1);
+    setSelected(new Set());
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        if (next.size >= MAX_BULK_RECIPIENTS) return prev;
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleDeleteCompany() {
+    if (!companyToDelete) return;
+
+    setDeletingCompanyId(companyToDelete.id);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/admin/companies/${companyToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Failed to delete company');
+      }
+
+      setCompanies((prev) => prev.filter((company) => company.id !== companyToDelete.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(companyToDelete.id);
+        return next;
+      });
+      setCompanyToDelete(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete company');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  }
+
+  const selectedRecipients = filteredCompanies
+    .filter((c) => selected.has(c.id))
+    .map((c) => ({ email: c.email, name: c.name }));
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <SummaryCard label="Companies" value={String(filteredCompanies.length)} sub={hasActiveFilters ? `${companies.length} total` : undefined} />
+        <SummaryCard label="Pending assessments" value={String(totalPending)} sub="pending + active" />
+        <SummaryCard label="Total sessions" value={String(filteredCompanies.reduce((a, c) => a + c.total_sessions, 0))} />
+        <SummaryCard label="Total challenges" value={String(filteredCompanies.reduce((a, c) => a + c.challenge_count, 0))} />
+      </div>
+
+      <div className="bg-surface border border-white/5 rounded-2xl p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_180px_auto]">
+          <div>
+            <label htmlFor="companyNameFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Company name
+            </label>
+            <input
+              id="companyNameFilter"
+              type="search"
+              value={companyNameFilter}
+              onChange={(e) => {
+                setCompanyNameFilter(e.target.value);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              placeholder="Filter by company..."
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="emailFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Email
+            </label>
+            <input
+              id="emailFilter"
+              type="search"
+              value={emailFilter}
+              onChange={(e) => {
+                setEmailFilter(e.target.value);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              placeholder="Filter by email..."
+              className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="planFilter" className="block text-xs text-neutral-500 mb-1.5">
+              Plan
+            </label>
+            <Dropdown
+              id="planFilter"
+              value={planFilter}
+              options={PLAN_FILTER_OPTIONS}
+              onValueChange={(nextPlan) => {
+                setPlanFilter(nextPlan);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              triggerClassName="h-10"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              className="h-10 rounded-lg border border-white/10 px-4 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
+        {/* Selection action bar */}
+        {selected.size > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 bg-primary/5 border-b border-primary/10">
+            <p className="text-xs text-primary font-medium">
+              {selected.size} selected{selected.size === MAX_BULK_RECIPIENTS ? ` (max)` : ''}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelected(new Set())}
+                className="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-light text-black text-xs font-semibold transition-all btn-glow cursor-pointer"
+              >
+                Send email
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-4 border-b border-white/5 px-5 py-3">
+          <p className="text-xs text-neutral-500">
+            Showing {pageStartLabel}-{pageEndLabel} of {filteredCompanies.length} companies
+          </p>
+          <div className="flex items-center gap-2">
+            <label htmlFor="companiesPageSize" className="text-xs text-neutral-500">
+              Rows
+            </label>
+            <Dropdown
+              id="companiesPageSize"
+              value={String(pageSize)}
+              options={COMPANY_PAGE_SIZE_OPTIONS_FOR_DROPDOWN}
+              onValueChange={(nextSize) => {
+                setPageSize(Number(nextSize) as typeof pageSize);
+                setCurrentPage(1);
+                setSelected(new Set());
+              }}
+              className="w-20"
+              triggerClassName="h-8 px-2 text-xs text-neutral-300"
+            />
+          </div>
+        </div>
+
+        {filteredCompanies.length === 0 ? (
+          <div className="flex h-screen items-center justify-center px-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-neutral-300">
+                {companies.length === 0 ? 'No companies found' : 'No companies match these filters'}
+              </p>
+              {companies.length > 0 && (
+                <p className="mt-1 text-xs text-neutral-600">
+                  Adjust the company name, email, or plan filters to broaden the results.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+        <div className="h-screen overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-surface">
+            <tr className="border-b border-white/5 text-left">
+              <th className="px-5 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="accent-primary cursor-pointer w-3.5 h-3.5"
+                />
+              </th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Contact</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Plan</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Challenges</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Total sessions</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Pending</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Joined</th>
+                  <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedCompanies.map((company) => {
+              const isSelected = selected.has(company.id);
+              const atLimit = selected.size >= MAX_BULK_RECIPIENTS && !isSelected;
+              return (
+                <tr
+                  key={company.id}
+                  className={`border-b border-white/5 last:border-0 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-white/2'}`}
+                >
+                  <td className="px-5 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={atLimit}
+                      onChange={() => toggleOne(company.id)}
+                      className="accent-primary cursor-pointer w-3.5 h-3.5 disabled:cursor-not-allowed disabled:opacity-30"
+                    />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <p className="font-medium text-white">{company.name}</p>
+                    <p className="text-xs text-neutral-500">{company.email}</p>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {company.contact_name ? (
+                      <>
+                        <p className="text-neutral-200 text-sm">{company.contact_name}</p>
+                        {company.contact_title && (
+                          <p className="text-xs text-neutral-500">{company.contact_title}</p>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-neutral-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <PlanBadge plan={company.plan} />
+                  </td>
+                  <td className="px-5 py-3.5 text-right text-neutral-300">{company.challenge_count}</td>
+                  <td className="px-5 py-3.5 text-right text-neutral-300">{company.total_sessions}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    {company.pending_sessions > 0 ? (
+                      <span className="text-amber-400 font-medium">{company.pending_sessions}</span>
+                    ) : (
+                      <span className="text-neutral-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-neutral-500">{fmtDate(company.created_at)}</td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center justify-end gap-3">
+                    <button
+                      onClick={() => onSelectCompany(company.id)}
+                      className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
+                    >
+                      View challenges
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCompanyToDelete(company);
+                        setDeleteError(null);
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-lg text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-300 cursor-pointer"
+                      aria-label={`Delete ${company.name}`}
+                      title="Delete company"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        </div>
+        )}
+
+        {filteredCompanies.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-white/5 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-neutral-500">
+              Page {safeCurrentPage} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={safeCurrentPage === 1}
+                className="h-8 rounded-lg border border-white/10 px-3 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={safeCurrentPage === totalPages}
+                className="h-8 rounded-lg border border-white/10 px-3 text-xs font-medium text-neutral-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showEmailModal && (
+        <BulkEmailModal
+          recipients={selectedRecipients}
+          onClose={() => setShowEmailModal(false)}
+        />
+      )}
+
+      <ConfirmationModal
+        open={companyToDelete !== null}
+        title="Delete company?"
+        description={
+          companyToDelete
+            ? `This will permanently delete ${companyToDelete.name}'s ArcEval company profile, challenges, candidate sessions, interaction logs, analysis reports, annotations, feedback, and cost settings. Historical usage cost events will be preserved for admin reporting and shown under Deleted companies. The shared Vizuara/Firebase auth user will not be deleted. This action cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete company"
+        variant="danger"
+        confirmationValue={companyToDelete?.name}
+        confirmationLabel={companyToDelete ? `Type "${companyToDelete.name}" to confirm` : undefined}
+        isLoading={deletingCompanyId !== null}
+        error={deleteError}
+        onConfirm={handleDeleteCompany}
+        onClose={() => {
+          setCompanyToDelete(null);
+          setDeleteError(null);
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── Tab: Challenges ──────────────────────────────────────────────────────────
+
+export function ChallengesTab({ initialCompanyId }: { initialCompanyId?: string }) {
+  const [challenges, setChallenges] = useState<AdminChallenge[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [filterOwner, setFilterOwner] = useState<'all' | string>(
+    initialCompanyId ?? 'all'
+  );
+  const [loading, setLoading] = useState(true);
+
+  // Fetch company list for dropdown
+  useEffect(() => {
+    fetch('/api/admin/companies')
+      .then((r) => r.json())
+      .then((d) => setCompanies((d.companies ?? []).map((c: AdminCompany) => ({ id: c.id, name: c.name }))))
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
+
+    let url = '/api/admin/challenges';
+    if (filterOwner !== 'all') url += `?company_id=${filterOwner}`;
+
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setChallenges(d.challenges ?? []);
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filterOwner]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4">
+        {/* Filter controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFilterOwner('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              filterOwner === 'all'
+                ? 'bg-primary/10 text-primary border border-primary/20'
+                : 'text-neutral-500 bg-white/5 border border-white/5 hover:text-white'
+            }`}
+          >
+            All companies
+          </button>
+          <Dropdown
+            value={filterOwner !== 'all' ? filterOwner : ''}
+            options={[
+              { value: '', label: 'Filter by company...' },
+              ...companies.map((company) => ({ value: company.id, label: company.name })),
+            ]}
+            onValueChange={(nextCompanyId) => setFilterOwner(nextCompanyId || 'all')}
+            className="w-56"
+            triggerClassName="h-8 px-3 text-xs text-neutral-300"
+          />
+        </div>
+
+        <Link
+          href="/dashboard/challenges/new"
+          className="bg-primary hover:bg-primary-light text-black px-4 py-2 rounded-xl text-xs font-semibold transition-all btn-glow whitespace-nowrap cursor-pointer"
+        >
+          + New Challenge
+        </Link>
+      </div>
+
+      <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/5 text-left">
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Challenge</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Status</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Assessments</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Duration</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500">Created</th>
+              <th className="px-5 py-3 text-xs font-medium text-neutral-500"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-6">
+                  <ConcentricArcLoader label="Loading challenges" />
+                </td>
+              </tr>
+            ) : (
+              challenges.map((ch) => {
+                const status = getChallengeStatus(ch);
+                return (
+                  <tr key={ch.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-white">{ch.title}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="text-neutral-400">{ch.company_name}</span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className="text-neutral-200 font-medium">{ch.candidate_count}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-neutral-500">{ch.time_limit_min} min</td>
+                    <td className="px-5 py-3.5 text-neutral-500">{fmtDate(ch.created_at)}</td>
+                    <td className="px-5 py-3.5">
+                      <Link
+                        href={`/dashboard/admin/challenges/${ch.id}`}
+                        className="text-xs text-primary hover:text-primary-light transition-colors cursor-pointer"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+            {!loading && challenges.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-5 py-12 text-center text-neutral-600">
+                  No challenges found
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tab: Costs ───────────────────────────────────────────────────────────────
+
+export function CostsTab() {
+  const [companyCosts, setCompanyCosts] = useState<AdminCompanyCost[]>([]);
+  const [totals, setTotals] = useState<AdminCostTotals | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/costs')
+      .then((r) => r.json())
+      .then((d) => {
+        setCompanyCosts(d.companyCosts ?? []);
+        setTotals(d.totals ?? null);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-20" />
+          ))}
+        </div>
+        <div className="bg-surface border border-white/5 rounded-2xl p-5 animate-pulse h-48" />
+      </div>
+    );
+  }
+
+  const totalTokens = totals
+    ? Number(totals.total_input_tokens) + Number(totals.total_output_tokens)
+    : 0;
+
+  return (
+    <div className="space-y-5">
+      {/* Platform totals */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <SummaryCard label="Total platform spend" value={fmt(Number(totals?.total_spend ?? 0))} />
+        <SummaryCard label="Total sessions" value={String(totals?.total_sessions ?? 0)} />
+        <SummaryCard label="Total tokens" value={fmtTokens(totalTokens)} sub="input + output" />
+        <SummaryCard
+          label="Avg cost / session"
+          value={
+            totals && Number(totals.total_sessions) > 0
+              ? fmt(Number(totals.total_spend) / Number(totals.total_sessions))
+              : '$0.00'
+          }
+        />
+      </div>
+
+      {/* Provider breakdown summary */}
+      {totals && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {(
+            [
+              { key: 'anthropic_cost', label: 'Anthropic' },
+              { key: 'gemini_cost', label: 'Gemini' },
+              { key: 'docker_cost', label: 'Docker' },
+              { key: 'vps_cost', label: 'VPS' },
+            ] as { key: keyof AdminCostTotals; label: string }[]
+          ).map(({ key, label }) => (
+            <div key={key} className="bg-surface border border-white/5 rounded-2xl p-4">
+              <p className="text-xs text-neutral-500 mb-1">{label}</p>
+              <p className="text-lg font-semibold text-white">{fmt(Number(totals[key]))}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Per-company table */}
+      <div className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5">
+          <h3 className="text-sm font-medium text-white">Per-company breakdown</h3>
+          <p className="text-xs text-neutral-500 mt-0.5">Sorted by total spend. Includes all-time usage.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5 text-left">
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500">Company</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500">Plan</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Sessions</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Tokens</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Anthropic</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Gemini</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Docker</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">VPS</th>
+                <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {companyCosts.map((row) => {
+                const tokens =
+                  Number(row.total_input_tokens) + Number(row.total_output_tokens);
+                return (
+                  <tr
+                    key={row.company_id}
+                    className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors"
+                  >
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-white">{row.company_name}</p>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <PlanBadge plan={row.plan} />
+                    </td>
+                    <td className="px-5 py-3.5 text-right text-neutral-300">{row.session_count}</td>
+                    <td className="px-5 py-3.5 text-right text-neutral-500">{fmtTokens(tokens)}</td>
+                    <td className="px-5 py-3.5 text-right text-neutral-400">{fmt(Number(row.anthropic_cost))}</td>
+                    <td className="px-5 py-3.5 text-right text-neutral-400">{fmt(Number(row.gemini_cost))}</td>
+                    <td className="px-5 py-3.5 text-right text-neutral-400">{fmt(Number(row.docker_cost))}</td>
+                    <td className="px-5 py-3.5 text-right text-neutral-400">{fmt(Number(row.vps_cost))}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-white">
+                      {fmt(Number(row.total_spend))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {companyCosts.length === 0 && (
+            <p className="text-center text-neutral-600 py-12">No usage data yet</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+function useAdminRouteGuard() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && (!user || !user.isAdmin)) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
+
+  return { user, authLoading, router };
+}
+
+export function CompaniesAdminPage() {
+  const { user, authLoading, router } = useAdminRouteGuard();
+
+  if (authLoading || !user?.isAdmin) return null;
+
+  function handleSelectCompany(id: string) {
+    router.push(`/dashboard/admin/challenges?company_id=${id}`);
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-serif italic text-white">Companies</h1>
+        <p className="text-neutral-500 mt-1">Manage company accounts, plans, and assessments</p>
+      </div>
+
+      <CompaniesTab onSelectCompany={handleSelectCompany} />
+    </div>
+  );
+}
+
+export function ChallengesAdminPage({ initialCompanyId }: { initialCompanyId?: string }) {
+  const { user, authLoading } = useAdminRouteGuard();
+
+  if (authLoading || !user?.isAdmin) return null;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-serif italic text-white">Challenges</h1>
+        <p className="text-neutral-500 mt-1">Review company assessments</p>
+      </div>
+
+      <ChallengesTab initialCompanyId={initialCompanyId} />
+    </div>
+  );
+}
+
+export function CostsAdminPage() {
+  const { user, authLoading } = useAdminRouteGuard();
+
+  if (authLoading || !user?.isAdmin) return null;
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-serif italic text-white">Usage & Costs</h1>
+        <p className="text-neutral-500 mt-1">Track preserved usage spend across active and deleted companies</p>
+      </div>
+
+      <CostsTab />
+    </div>
+  );
+}

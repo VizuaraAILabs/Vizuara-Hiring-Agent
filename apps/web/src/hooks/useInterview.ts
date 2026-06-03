@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { isNoQuestionPlaceholder } from '@/lib/interview';
 
 export interface InterviewMessage {
   id: number;
@@ -29,23 +30,36 @@ export function useInterview(token: string) {
         if (!res.ok || cancelled) return;
         const data = await res.json();
         const incoming = data.interactions ?? [];
-        if (incoming.length === 0) return;
+        const latestSeq = typeof data.latest_sequence_num === 'number'
+          ? data.latest_sequence_num
+          : null;
+        if (incoming.length === 0) {
+          if (latestSeq !== null) {
+            lastSeqRef.current = Math.max(lastSeqRef.current, latestSeq);
+          }
+          return;
+        }
 
-        const newMessages: InterviewMessage[] = incoming.map((i: {
-          id: number;
-          sequence_num: number;
-          timestamp: string;
-          content_type: string;
-          content: string;
-        }) => ({
-          id: i.id,
-          sequence_num: i.sequence_num,
-          timestamp: i.timestamp,
-          role: i.content_type === 'interview_question' ? 'interviewer' : 'candidate',
-          content: i.content,
-        }));
+        const newMessages: InterviewMessage[] = incoming
+          .map((i: {
+            id: number;
+            sequence_num: number;
+            timestamp: string;
+            content_type: string;
+            content: string;
+          }) => ({
+            id: i.id,
+            sequence_num: i.sequence_num,
+            timestamp: i.timestamp,
+            role: i.content_type === 'interview_question' ? 'interviewer' as const : 'candidate' as const,
+            content: i.content,
+          }))
+          .filter((message: InterviewMessage) => !isNoQuestionPlaceholder(message.content));
 
-        lastSeqRef.current = incoming[incoming.length - 1].sequence_num;
+        lastSeqRef.current = Math.max(
+          lastSeqRef.current,
+          latestSeq ?? incoming[incoming.length - 1].sequence_num
+        );
 
         setMessages((prev) => {
           // Avoid duplicates (poll might race with optimistic update)
@@ -122,16 +136,20 @@ export function useInterview(token: string) {
             role: 'candidate',
             content: content.trim(),
           };
-          const aiMsg: InterviewMessage = {
+          const shouldAppendReply = typeof reply === 'string' && !isNoQuestionPlaceholder(reply);
+          const aiMsg: InterviewMessage | null = shouldAppendReply ? {
             id: -(sequence_num as number),
             sequence_num: sequence_num as number,
             timestamp: new Date().toISOString(),
             role: 'interviewer',
             content: reply as string,
-          };
+          } : null;
           // Advance lastSeq past both messages so poll doesn't re-fetch them
-          lastSeqRef.current = Math.max(lastSeqRef.current, sequence_num as number);
-          return [...withoutOptimistic, confirmedCandidate, aiMsg];
+          lastSeqRef.current = Math.max(
+            lastSeqRef.current,
+            (sequence_num ?? candidate_sequence_num) as number
+          );
+          return aiMsg ? [...withoutOptimistic, confirmedCandidate, aiMsg] : [...withoutOptimistic, confirmedCandidate];
         });
 
         return true;

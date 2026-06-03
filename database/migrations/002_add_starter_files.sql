@@ -2,4 +2,4 @@
 -- Points to a directory (relative to project root) containing starter files
 -- that get copied into the candidate's workspace when a session starts.
 
-ALTER TABLE challenges ADD COLUMN starter_files_dir TEXT;
+ALTER TABLE challenges ADD COLUMN IF NOT EXISTS starter_files_dir TEXT;

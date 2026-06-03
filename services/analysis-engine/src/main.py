@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Load .env.local from the project root.
 # This file is at: services/analysis-engine/src/main.py
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 # Import the router after loading env so that env vars are available
 from .routers.analysis import (  # noqa: E402
+    close_analysis_pool,
+    get_analysis_readiness,
     router as analysis_router,
     start_analysis_queue_workers,
     stop_analysis_queue_workers,
@@ -59,6 +62,7 @@ async def startup_event() -> None:
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     await stop_analysis_queue_workers()
+    await close_analysis_pool()
 
 
 @app.get("/")
@@ -70,17 +74,34 @@ async def root() -> dict:
         "description": "Candidate transcript analysis powered by Gemini",
         "endpoints": {
             "POST /analyze": "Analyze a candidate session",
-            "GET /health": "Health check",
+            "POST /analyze/start": "Queue background analysis for a candidate session",
+            "POST /analyze/enrich-dimensions": "Enrich stored dimension evidence",
+            "POST /analyze/transcript-narrative": "Generate transcript narrative",
+            "GET /health": "Liveness check",
+            "GET /ready": "Readiness check",
         },
     }
 
 
 @app.get("/health")
 async def health_check() -> dict:
-    """Health check endpoint."""
+    """Liveness check endpoint."""
     return {
-        "status": "healthy",
+        "status": "alive",
         "service": "analysis-engine",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "gemini_key_set": bool(os.environ.get("GEMINI_API_KEY")),
     }
+
+
+@app.get("/ready")
+async def readiness_check() -> JSONResponse:
+    """Readiness check endpoint for load balancers and deployment probes."""
+    readiness = await get_analysis_readiness()
+    status_code = 200 if readiness["status"] == "ready" else 503
+    readiness.update(
+        {
+            "service": "analysis-engine",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return JSONResponse(status_code=status_code, content=readiness)

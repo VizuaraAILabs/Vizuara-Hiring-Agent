@@ -12,8 +12,8 @@ echo ""
 # Check for .env.production
 if [ ! -f .env.production ]; then
   echo "ERROR: .env.production not found!"
-  echo "Copy .env.production.template and fill in your values:"
-  echo "  cp .env.production.template .env.production"
+  echo "Copy .env.example and fill in your values:"
+  echo "  cp .env.example .env.production"
   exit 1
 fi
 
@@ -61,7 +61,7 @@ echo ""
 echo "2. Running all database migrations..."
 for migration in database/migrations/*.sql; do
   echo "  Running $migration..."
-  docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" < "$migration"
+  docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" -v ON_ERROR_STOP=1 < "$migration"
 done
 
 echo ""
@@ -70,9 +70,8 @@ docker run --rm -i postgres:16-alpine psql "$DATABASE_URL" <<'SQL'
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM companies WHERE email = 'demo@acme.com') THEN
-    INSERT INTO companies (id, name, email, password_hash)
-    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com',
-            '$2a$10$xJ8Kq5K5K5K5K5K5K5K5KuYgYgYgYgYgYgYgYgYgYgYgYgYgYgYgY');
+    INSERT INTO companies (id, name, email)
+    VALUES (gen_random_uuid(), 'Acme Engineering', 'demo@acme.com');
     RAISE NOTICE 'Demo company seeded (email: demo@acme.com)';
   ELSE
     RAISE NOTICE 'Demo company already exists, skipping.';

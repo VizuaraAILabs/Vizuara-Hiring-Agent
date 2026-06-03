@@ -6,8 +6,9 @@ from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
-# Minimum similarity ratio (0-1) for a fuzzy match to count as verified
-_MIN_SIMILARITY = 0.4
+# Minimum similarity ratio (0-1) for a fuzzy match to count as verified.
+_MIN_SIMILARITY = 0.6
+_MIN_SEGMENT_SIMILARITY = 0.55
 
 # Phrases that indicate the model honestly reported no evidence
 _HONEST_NO_EVIDENCE = [
@@ -19,6 +20,8 @@ _HONEST_NO_EVIDENCE = [
     "no meaningful",
     "cannot be evaluated",
 ]
+
+_UNVERIFIED_PREFIX = "[UNVERIFIED]"
 
 
 class EvidenceVerifier:
@@ -35,12 +38,13 @@ class EvidenceVerifier:
         self.transcript_lower = transcript.lower()
         # Extract all text segments for chunk-level matching
         self._chunks = self._extract_chunks(transcript)
+        self._segments = self._extract_numbered_segments(transcript)
 
     @staticmethod
     def _extract_chunks(transcript: str) -> list[str]:
         """Split transcript into meaningful chunks for matching."""
-        # Split on segment headers
-        segments = re.split(r"---\s*\[.*?\].*?---", transcript)
+        # Split on formatted transcript and interview dialogue headers.
+        segments = re.split(r"^---\s+.*?---\s*$", transcript, flags=re.MULTILINE)
         chunks: list[str] = []
         for seg in segments:
             seg = seg.strip()
@@ -48,10 +52,72 @@ class EvidenceVerifier:
                 chunks.append(seg.lower())
         return chunks
 
+    @staticmethod
+    def _extract_numbered_segments(transcript: str) -> dict[str, str]:
+        """Map formatted transcript segment numbers to their segment body."""
+        pattern = re.compile(
+            r"---\s+.*?\(#(?P<num>\d+)\).*?---\s*\n(?P<body>.*?)(?=\n---\s+.*?\(#\d+\).*?---|\n=+\n|$)",
+            re.DOTALL,
+        )
+        segments: dict[str, str] = {}
+        for match in pattern.finditer(transcript):
+            body = match.group("body").strip().lower()
+            if body:
+                segments[match.group("num")] = body
+        return segments
+
     def _is_honest_no_evidence(self, evidence: str) -> bool:
         """Check if the evidence string honestly says there's no evidence."""
         lower = evidence.lower()
         return any(phrase in lower for phrase in _HONEST_NO_EVIDENCE)
+
+    @staticmethod
+    def _mark_unverified(text: str) -> str:
+        if text.startswith(_UNVERIFIED_PREFIX):
+            return text
+        return f"{_UNVERIFIED_PREFIX} {text}"
+
+    @staticmethod
+    def _strip_segment_refs(text: str) -> str:
+        text = re.sub(r"\b(segment|interaction)\s*#\d+\b", " ", text, flags=re.I)
+        text = re.sub(r"#\d+\b", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _best_similarity(needle: str, haystacks: list[str]) -> float:
+        if not needle:
+            return 0.0
+        needle = needle.lower().strip()
+        best_score = 0.0
+        for haystack in haystacks:
+            haystack = haystack.lower()
+            if needle in haystack:
+                return 1.0
+            ratio = SequenceMatcher(None, needle[:200], haystack[:500]).ratio()
+            best_score = max(best_score, ratio)
+        return best_score
+
+    def _match_segment_refs(self, evidence: str, refs: list[str]) -> tuple[bool, float]:
+        """Verify referenced segments by matching claim text against segment bodies."""
+        segment_bodies = [
+            self._segments[ref]
+            for ref in refs
+            if ref in self._segments
+        ]
+        if not segment_bodies:
+            return False, 0.0
+
+        quoted = re.findall(r"['\"]([^'\"]{5,})['\"]", evidence)
+        quote_score = max(
+            (self._best_similarity(quote, segment_bodies) for quote in quoted),
+            default=0.0,
+        )
+        if quote_score >= _MIN_SEGMENT_SIMILARITY:
+            return True, quote_score
+
+        claim = self._strip_segment_refs(evidence)
+        claim_score = self._best_similarity(claim, segment_bodies)
+        return claim_score >= _MIN_SEGMENT_SIMILARITY, claim_score
 
     def _fuzzy_match(self, evidence: str) -> tuple[bool, float]:
         """Check if evidence string fuzzy-matches any part of the transcript.
@@ -59,6 +125,11 @@ class EvidenceVerifier:
         Returns (is_verified, best_similarity_score).
         """
         evidence_lower = evidence.lower().strip()
+
+        # Segment-cited evidence must be supported by the cited segment itself.
+        seg_refs = re.findall(r"#(\d+)", evidence)
+        if seg_refs:
+            return self._match_segment_refs(evidence, seg_refs)
 
         # Quick exact substring check
         if evidence_lower in self.transcript_lower:
@@ -70,25 +141,12 @@ class EvidenceVerifier:
             if quote.lower() in self.transcript_lower:
                 return True, 1.0
 
-        # Check for segment references like "#5", "segment #5", "interaction #5"
-        seg_refs = re.findall(r"#(\d+)", evidence)
-        if seg_refs:
-            # If the evidence references a segment number that exists, partial match
-            for ref in seg_refs:
-                pattern = f"(#{ref})"
-                if pattern in self.transcript:
-                    return True, 0.7
-
         # Fuzzy match against transcript chunks
         best_score = 0.0
         for chunk in self._chunks:
             # Use SequenceMatcher on shorter evidence vs longer chunk
             # Only compare first 200 chars of each to keep it fast
-            ratio = SequenceMatcher(
-                None,
-                evidence_lower[:200],
-                chunk[:500],
-            ).ratio()
+            ratio = SequenceMatcher(None, evidence_lower[:200], chunk[:500]).ratio()
             best_score = max(best_score, ratio)
             if ratio >= _MIN_SIMILARITY:
                 return True, ratio
@@ -104,12 +162,16 @@ class EvidenceVerifier:
         Returns:
             The same analysis dict with:
             - Unverified evidence items annotated with "[UNVERIFIED]" prefix
+            - Unverified observed_points transcript_quote values annotated likewise
             - "_evidence_verification" metadata added
         """
         total_evidence = 0
         verified_count = 0
         unverified_count = 0
         honest_no_evidence_count = 0
+        total_observed_points = 0
+        verified_observed_points = 0
+        unverified_observed_points = 0
         flagged_dimensions: list[str] = []
 
         dimensions = analysis.get("dimensions", {})
@@ -120,7 +182,11 @@ class EvidenceVerifier:
 
             evidence_list = dim_data.get("evidence", [])
             verified_evidence: list[str] = []
+            observed_points = dim_data.get("observed_points", [])
+            verified_observed: list[dict] = []
             dim_unverified = 0
+            dim_observed_total = 0
+            dim_observed_unverified = 0
 
             for item in evidence_list:
                 if not isinstance(item, str) or not item.strip():
@@ -142,7 +208,7 @@ class EvidenceVerifier:
                 else:
                     unverified_count += 1
                     dim_unverified += 1
-                    verified_evidence.append(f"[UNVERIFIED] {item}")
+                    verified_evidence.append(self._mark_unverified(item))
                     logger.debug(
                         "Unverified evidence in %s (score=%.2f): %s",
                         dim_name, score, item[:100],
@@ -150,9 +216,53 @@ class EvidenceVerifier:
 
             dim_data["evidence"] = verified_evidence
 
+            for point in observed_points if isinstance(observed_points, list) else []:
+                if not isinstance(point, dict):
+                    verified_observed.append(point)
+                    continue
+
+                normalized_point = dict(point)
+                quote = normalized_point.get("transcript_quote")
+                if not isinstance(quote, str) or not quote.strip():
+                    verified_observed.append(normalized_point)
+                    continue
+
+                total_observed_points += 1
+                dim_observed_total += 1
+
+                if self._is_honest_no_evidence(quote):
+                    honest_no_evidence_count += 1
+                    verified_observed_points += 1
+                    normalized_point["quote_verified"] = True
+                    normalized_point["quote_similarity"] = 1.0
+                    verified_observed.append(normalized_point)
+                    continue
+
+                is_verified, score = self._fuzzy_match(quote)
+                normalized_point["quote_verified"] = is_verified
+                normalized_point["quote_similarity"] = round(score, 3)
+
+                if is_verified:
+                    verified_observed_points += 1
+                else:
+                    unverified_observed_points += 1
+                    dim_observed_unverified += 1
+                    normalized_point["transcript_quote"] = self._mark_unverified(quote)
+                    logger.debug(
+                        "Unverified observed point quote in %s (score=%.2f): %s",
+                        dim_name, score, quote[:100],
+                    )
+
+                verified_observed.append(normalized_point)
+
+            if isinstance(observed_points, list):
+                dim_data["observed_points"] = verified_observed
+
             # Flag dimensions where most evidence is unverified
-            if dim_unverified > 0 and len(evidence_list) > 0:
-                unverified_ratio = dim_unverified / len(evidence_list)
+            dim_total_items = len(evidence_list) + dim_observed_total
+            dim_total_unverified = dim_unverified + dim_observed_unverified
+            if dim_total_unverified > 0 and dim_total_items > 0:
+                unverified_ratio = dim_total_unverified / dim_total_items
                 if unverified_ratio > 0.5:
                     flagged_dimensions.append(dim_name)
                     logger.warning(
@@ -162,8 +272,18 @@ class EvidenceVerifier:
                     )
 
         # Attach verification metadata
+        total_verified_items = verified_count + verified_observed_points
+        total_items = total_evidence + total_observed_points
         verification_rate = (
+            total_verified_items / total_items * 100 if total_items > 0 else 100
+        )
+        evidence_verification_rate = (
             verified_count / total_evidence * 100 if total_evidence > 0 else 100
+        )
+        observed_points_verification_rate = (
+            verified_observed_points / total_observed_points * 100
+            if total_observed_points > 0
+            else 100
         )
 
         analysis["_evidence_verification"] = {
@@ -171,13 +291,23 @@ class EvidenceVerifier:
             "verified": verified_count,
             "unverified": unverified_count,
             "honest_no_evidence": honest_no_evidence_count,
+            "total_observed_points": total_observed_points,
+            "observed_points_verified": verified_observed_points,
+            "observed_points_unverified": unverified_observed_points,
+            "evidence_verification_rate_pct": round(evidence_verification_rate, 1),
+            "observed_points_verification_rate_pct": round(
+                observed_points_verification_rate, 1
+            ),
             "verification_rate_pct": round(verification_rate, 1),
             "flagged_dimensions": flagged_dimensions,
         }
 
         logger.info(
-            "Evidence verification: %d/%d verified (%.1f%%), %d flagged dimensions",
-            verified_count, total_evidence, verification_rate, len(flagged_dimensions),
+            "Evidence verification: %d/%d items verified (%.1f%%), %d flagged dimensions",
+            total_verified_items,
+            total_items,
+            verification_rate,
+            len(flagged_dimensions),
         )
 
         return analysis

@@ -4,7 +4,6 @@ export interface Company {
   id: string;
   name: string;
   email: string;
-  password_hash: string;
   firebase_uid: string | null;
   plan: PlanTier;
   trial_ends_at: string | null;
@@ -22,16 +21,22 @@ export interface Challenge {
   title: string;
   description: string;
   time_limit_min: number;
-  is_active: number;
+  is_active: boolean | number;
   starter_files_dir: string | null;
   starter_files: StarterFile[] | null;
   sessions_limit: number | null;
   allowed_emails: string[] | null;
+  starts_at: string | null;
+  ends_at: string | null;
   role: string | null;
   tech_stack: string | null;
   seniority: string | null;
   focus_areas: string | null;
   context: string | null;
+  cohort_label: string | null;
+  invite_email_subject?: string | null;
+  invite_email_body?: string | null;
+  archived_at: string | null;
   created_at: string;
 }
 
@@ -56,17 +61,43 @@ export interface WorkspaceSnapshot {
   files: WorkspaceFile[];
 }
 
+export type DecisionLabel = 'shortlisted' | 'hold' | 'reject' | 'hired';
+export type CandidateLifecycleStatus = 'revoked' | 'no_show' | 'withdrawn' | 'disqualified';
+
 export interface Session {
   id: string;
   challenge_id: string;
   candidate_name: string;
   candidate_email: string;
   token: string;
-  status: 'pending' | 'active' | 'completed' | 'queued' | 'analyzing' | 'analyzed';
+  status: 'pending' | 'active' | 'completed' | 'queued' | 'analyzing' | 'analyzed' | 'analysis failed';
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
   workspace_snapshot: WorkspaceSnapshot | null;
+  decision_label: DecisionLabel | null;
+  recruiter_notes: string | null;
+  reviewed_by_email: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  invite_email_status?: 'not_sent' | 'sending' | 'sent' | 'failed' | null;
+  invite_email_sent_at?: string | null;
+  invite_email_error?: string | null;
+  candidate_lifecycle_status?: CandidateLifecycleStatus | null;
+  candidate_lifecycle_reason?: string | null;
+  candidate_lifecycle_updated_at?: string | null;
+  candidate_lifecycle_updated_by_email?: string | null;
+}
+
+export interface ReportShareLink {
+  id: string;
+  session_id: string;
+  token: string;
+  expires_at: string;
+  revoked_at: string | null;
+  created_by_email: string | null;
+  created_by_name: string | null;
+  created_at: string;
 }
 
 export interface Interaction {
@@ -84,6 +115,8 @@ export interface ObservedPoint {
   transcript_quote: string;
   observation: string;
   comparison: string;
+  quote_verified?: boolean;
+  quote_similarity?: number;
 }
 
 export interface DimensionDetail {
@@ -142,6 +175,44 @@ export interface AnalysisResult {
   created_at: string;
 }
 
+export type IntegrityReviewLevel = 'low' | 'review' | 'limited_evidence' | 'insufficient_data';
+
+export type IntegritySignalTone = 'positive' | 'neutral' | 'review' | 'warning';
+
+export interface IntegritySignal {
+  id: string;
+  title: string;
+  description: string;
+  tone: IntegritySignalTone;
+  evidence: string[];
+}
+
+export interface IntegritySummary {
+  session_id: string;
+  review_level: IntegrityReviewLevel;
+  ownership_score: number;
+  summary: string;
+  metrics: {
+    interaction_count: number;
+    prompt_count: number;
+    command_count: number;
+    test_run_count: number;
+    file_edit_count: number;
+    large_file_edit_count: number;
+    large_late_change_count: number;
+    idle_gap_count: number;
+    max_idle_gap_minutes: number;
+    duration_minutes: number | null;
+  };
+  workspace_similarity: {
+    compared_sessions: number;
+    highest_similarity: number | null;
+    matching_session_id: string | null;
+    matching_candidate_name: string | null;
+  };
+  signals: IntegritySignal[];
+}
+
 export interface InteractionAnnotation {
   id: number;
   analysis_id: string;
@@ -156,6 +227,12 @@ export interface SessionWithChallenge extends Session {
   challenge_title: string;
   challenge_description: string;
   time_limit_min: number;
+  challenge_is_active?: boolean | number;
+  challenge_starts_at?: string | null;
+  challenge_ends_at?: string | null;
+  challenge_sessions_limit?: number | null;
+  challenge_allowed_emails?: string[] | null;
+  challenge_company_id?: string;
 }
 
 // Cost tracking types
@@ -171,6 +248,7 @@ export interface UsageEvent {
   model: string | null;
   duration_seconds: number | null;
   cost_usd: number;
+  company_deleted: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
 }

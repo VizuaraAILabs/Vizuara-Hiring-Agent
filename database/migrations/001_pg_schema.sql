@@ -1,5 +1,4 @@
 -- Hiring Agent Platform - PostgreSQL Schema
--- Adapted from SQLite schema for production deployment
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -7,7 +6,6 @@ CREATE TABLE IF NOT EXISTS companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

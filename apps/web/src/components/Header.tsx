@@ -5,35 +5,34 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import FPLLogo from '@/components/FPLLogo';
 
-const VIZUARA_URL = process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai';
-const APP_CALLBACK_URL = process.env.NEXT_PUBLIC_APP_CALLBACK_URL || 'https://hire.vizuara.ai/api/auth/session';
-
-const LOGIN_URL = `${VIZUARA_URL}/auth/login?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
-const SIGNUP_URL = `${VIZUARA_URL}/auth/signup?redirect=${encodeURIComponent(APP_CALLBACK_URL)}`;
-
 export default function Header() {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
 
   // Don't render Header on dashboard pages (Sidebar handles navigation)
   // or session terminal pages (TerminalToolbar handles navigation)
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/session') || pathname.includes('/terminal')) return null;
+  if (
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/session') ||
+    pathname.startsWith('/reports/shared') ||
+    pathname.includes('/terminal')
+  ) return null;
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl">
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5">
-          <FPLLogo size={30} />
+          <FPLLogo size={30} className="translate-y-0.5" />
           <span className="text-lg font-semibold text-white">
             Arc<span className="text-primary">Eval</span>
           </span>
         </Link>
 
         <div className="hidden md:flex items-center gap-8 text-sm text-neutral-400">
-          <a href="/#how-it-works" className="hover:text-white transition-colors">How it works</a>
-          <a href="/#templates" className="hover:text-white transition-colors">Templates</a>
-          <a href="/#pricing" className="hover:text-white transition-colors">Pricing</a>
-          <a href="/#faq" className="hover:text-white transition-colors">FAQ</a>
+          <Link href="/#how-it-works" className="hover:text-white transition-colors">How it works</Link>
+          <Link href="/#templates" className="hover:text-white transition-colors">Templates</Link>
+          <Link href="/#pricing" className="hover:text-white transition-colors">Pricing</Link>
+          <Link href="/#faq" className="hover:text-white transition-colors">FAQ</Link>
           <Link href="/about" className="hover:text-white transition-colors">About Us</Link>
         </div>
 
@@ -57,18 +56,18 @@ export default function Header() {
             </>
           ) : (
             <>
-              <a
-                href={LOGIN_URL}
+              <Link
+                href="/login"
                 className="text-neutral-400 hover:text-white text-sm transition-colors px-4 py-2"
               >
                 Sign in
-              </a>
-              <a
-                href={SIGNUP_URL}
+              </Link>
+              <Link
+                href="/register"
                 className="bg-primary hover:bg-primary-light text-black font-medium px-5 py-2 rounded-lg text-sm transition-all btn-glow"
               >
                 Get Started
-              </a>
+              </Link>
             </>
           )}
         </div>

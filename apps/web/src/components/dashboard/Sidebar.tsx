@@ -8,11 +8,14 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 const navItems = [
-  { label: 'Challenges', href: '/dashboard', icon: '{}' },
-  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+' },
+  { label: 'Challenges', href: '/dashboard', icon: '{}', companyOnly: true },
+  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true },
   { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
-  { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true },
-  { label: 'Admin', href: '/dashboard/admin', icon: '⚙', adminOnly: true },
+  { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
+  { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
+  { label: 'All Challenges', href: '/dashboard/admin/challenges', icon: '{}', adminOnly: true },
+  { label: 'Usage & Costs', href: '/dashboard/admin/costs', icon: '$', adminOnly: true },
+  { label: 'Feedback', href: '/dashboard/admin/feedback', icon: '!', adminOnly: true },
 ];
 
 const PLAN_LABELS: Record<string, string> = {
@@ -27,7 +30,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const { planStatus } = useSubscription();
   const [now] = useState(() => Date.now());
-
+  
   const planLabel = planStatus ? (PLAN_LABELS[planStatus.plan] || planStatus.plan) : null;
   const isUnlimited = planStatus?.sessionsLimit === -1;
   const usagePercent = planStatus && !isUnlimited && planStatus.sessionsLimit > 0
@@ -40,9 +43,9 @@ export default function Sidebar() {
     : null;
 
   return (
-    <aside className="w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
+    <aside className="print:hidden w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-white/5">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <FPLLogo size={26} />
           <span className="text-lg font-semibold text-white">
             Arc<span className="text-primary">Eval</span>
@@ -54,26 +57,25 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 space-y-1">
         {navItems
           .filter((item) => !item.adminOnly || user?.isAdmin)
-          .filter((item) => !item.companyOnly || !user?.isAdmin)
+          .filter((item) => !item.companyOnly || Boolean(user?.companyId))
           .map((item) => {
-          const isActive = item.href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-neutral-500 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <span className="text-lg font-mono">{item.icon}</span>
-              {item.label}
-            </Link>
-          );
-        })}
+            const isActive = item.href === '/dashboard' || item.href === '/dashboard/admin'
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-neutral-500 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                <span className="text-lg font-mono">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
       </nav>
 
       {/* Plan status section — hidden for admins */}
@@ -99,7 +101,20 @@ export default function Sidebar() {
               )}
             </div>
 
-            {!isUnlimited && (
+            {isBlocked ? (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+                <p className="text-sm font-medium text-red-200">
+                  {planStatus.reason === 'subscription_lapsed'
+                    ? 'Subscription inactive'
+                    : 'Assessments paused'}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-red-200/70">
+                  {planStatus.reason === 'subscription_lapsed'
+                    ? 'Renew to continue creating assessments.'
+                    : 'Upgrade to continue creating assessments.'}
+                </p>
+              </div>
+            ) : !isUnlimited ? (
               <>
                 <div className="flex items-baseline justify-between mb-1.5">
                   <span className="text-sm text-white font-medium">
@@ -109,20 +124,19 @@ export default function Sidebar() {
                 </div>
                 <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${
-                      usagePercent >= 100
+                    className={`h-full rounded-full transition-all ${usagePercent >= 100
                         ? 'bg-red-500'
                         : usagePercent >= 80
                           ? 'bg-amber-400'
                           : 'bg-primary'
-                    }`}
+                      }`}
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
               </>
-            )}
+            ) : null}
 
-            {isUnlimited && (
+            {!isBlocked && isUnlimited && (
               <span className="text-sm text-neutral-400">
                 {planStatus.sessionsUsed} assessments used
               </span>

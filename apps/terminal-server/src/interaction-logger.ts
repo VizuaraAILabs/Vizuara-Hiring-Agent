@@ -18,6 +18,7 @@ const CLAUDE_PROMPT_MARKERS = [
 ];
 
 const SHELL_PROMPT_PATTERN = /^\$\s|^%\s|^#\s|^bash-|^zsh/;
+const MAX_FILE_EDIT_LOG_CHARS = 20_000;
 
 type FlushListener = (sessionId: string, content: string, contentType: string) => void;
 
@@ -29,7 +30,7 @@ export class InteractionLogger {
   private outputBuffer: Map<string, { content: string; timer: NodeJS.Timeout | null }> = new Map();
   private flushTimer: NodeJS.Timeout | null = null;
   private inClaudeSession: Map<string, boolean> = new Map();
-  private flushing: boolean = false;
+  private flushPromise: Promise<void> | null = null;
   /** Listeners called after each successful flush with the flushed interactions. */
   private flushListeners: FlushListener[] = [];
 
@@ -121,6 +122,40 @@ export class InteractionLogger {
     }, hasNewline ? 50 : 500);
   }
 
+  logFileEdit(sessionId: string, filePath: string, content: string) {
+    const truncated = content.length > MAX_FILE_EDIT_LOG_CHARS;
+    const loggedContent = truncated
+      ? `${content.slice(0, MAX_FILE_EDIT_LOG_CHARS)}\n\n[... file edit log truncated at ${MAX_FILE_EDIT_LOG_CHARS} characters ...]`
+      : content;
+
+    this.buffer.push({
+      session_id: sessionId,
+      sequence_num: this.getSequence(sessionId),
+      direction: 'input',
+      content: [
+        `[FILE EDIT] Saved ${filePath}`,
+        `Size: ${Buffer.byteLength(content, 'utf8')} bytes`,
+        truncated ? `Logged: first ${MAX_FILE_EDIT_LOG_CHARS} characters` : 'Logged: full file content',
+        '',
+        '```',
+        loggedContent,
+        '```',
+      ].join('\n'),
+      content_type: 'command',
+      metadata: JSON.stringify({
+        action: 'file_edit',
+        path: filePath,
+        size_bytes: Buffer.byteLength(content, 'utf8'),
+        logged_chars: loggedContent.length,
+        truncated,
+      }),
+    });
+
+    if (this.buffer.length >= 50) {
+      this.flush();
+    }
+  }
+
   logOutput(sessionId: string, data: string) {
     const existing = this.outputBuffer.get(sessionId);
 
@@ -159,14 +194,60 @@ export class InteractionLogger {
     }, 200);
   }
 
-  async flush() {
-    if (this.buffer.length === 0 || this.flushing) return;
+  private drainSessionBuffers(sessionId: string) {
+    const input = this.inputBuffer.get(sessionId);
+    if (input) {
+      if (input.timer) clearTimeout(input.timer);
+      this.inputBuffer.delete(sessionId);
+      if (input.content.trim().length > 0) {
+        this.buffer.push({
+          session_id: sessionId,
+          sequence_num: this.getSequence(sessionId),
+          direction: 'input',
+          content: input.content,
+          content_type: this.classifyInput(input.content, sessionId),
+          metadata: '{}',
+        });
+      }
+    }
 
-    this.flushing = true;
+    const output = this.outputBuffer.get(sessionId);
+    if (output) {
+      if (output.timer) clearTimeout(output.timer);
+      this.outputBuffer.delete(sessionId);
+      if (output.content.trim().length > 0) {
+        this.buffer.push({
+          session_id: sessionId,
+          sequence_num: this.getSequence(sessionId),
+          direction: 'output',
+          content: output.content,
+          content_type: this.classifyOutput(output.content, sessionId),
+          metadata: '{}',
+        });
+      }
+    }
+  }
+
+  async flushSession(sessionId: string) {
+    this.drainSessionBuffers(sessionId);
+    await this.flush();
+  }
+
+  async flush() {
+    if (this.flushPromise) {
+      try {
+        await this.flushPromise;
+      } catch {
+        // The original flush caller restores the buffer and logs the error.
+      }
+    }
+
+    if (this.buffer.length === 0) return;
+
     const toInsert = [...this.buffer];
     this.buffer = [];
 
-    try {
+    this.flushPromise = (async () => {
       for (const item of toInsert) {
         await this.sql`
           INSERT INTO interactions (session_id, sequence_num, timestamp, direction, content, content_type, metadata)
@@ -179,42 +260,25 @@ export class InteractionLogger {
           try { listener(item.session_id, item.content, item.content_type); } catch { /* non-fatal */ }
         }
       }
+    })();
+
+    try {
+      await this.flushPromise;
     } catch (err) {
       console.error('Failed to flush interactions:', err);
-      // Put items back in buffer
       this.buffer.unshift(...toInsert);
     } finally {
-      this.flushing = false;
+      this.flushPromise = null;
     }
   }
 
   async destroy() {
     // Flush remaining buffers
     for (const [sessionId, entry] of this.inputBuffer) {
-      if (entry.timer) clearTimeout(entry.timer);
-      if (entry.content.trim().length > 0) {
-        this.buffer.push({
-          session_id: sessionId,
-          sequence_num: this.getSequence(sessionId),
-          direction: 'input',
-          content: entry.content,
-          content_type: this.classifyInput(entry.content, sessionId),
-          metadata: '{}',
-        });
-      }
+      this.drainSessionBuffers(sessionId);
     }
-    for (const [sessionId, entry] of this.outputBuffer) {
-      if (entry.timer) clearTimeout(entry.timer);
-      if (entry.content.trim().length > 0) {
-        this.buffer.push({
-          session_id: sessionId,
-          sequence_num: this.getSequence(sessionId),
-          direction: 'output',
-          content: entry.content,
-          content_type: this.classifyOutput(entry.content, sessionId),
-          metadata: '{}',
-        });
-      }
+    for (const [sessionId] of this.outputBuffer) {
+      this.drainSessionBuffers(sessionId);
     }
 
     await this.flush();

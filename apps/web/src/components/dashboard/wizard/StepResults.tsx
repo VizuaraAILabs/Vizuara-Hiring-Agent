@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import MarkdownViewer from '@/components/MarkdownViewer';
+import ArcSpinner from '@/components/ArcSpinner';
+import { useSubscription } from '@/context/SubscriptionContext';
 import type { GeneratedChallenge } from './types';
 
 const difficultyColors: Record<string, string> = {
@@ -26,17 +28,24 @@ interface StepResultsProps {
 
 export default function StepResults({ challenges, timeLimitMin, role, techStack, seniority, focusAreas, context, onRegenerate, onBack }: StepResultsProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { planStatus } = useSubscription();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [expandedWhy, setExpandedWhy] = useState<number | null>(null);
   const [creatingIndex, setCreatingIndex] = useState<number | null>(null);
   const [customizingIndex, setCustomizingIndex] = useState<number | null>(null);
   const [sessionsLimits, setSessionsLimits] = useState<Record<number, string>>({});
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [allowedEmails, setAllowedEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
   const [error, setError] = useState('');
   const [fileWarning, setFileWarning] = useState('');
   const [progressMessage, setProgressMessage] = useState('');
+  const availableAssessmentCount = planStatus?.sessionsLimit === -1
+    ? null
+    : planStatus
+      ? Math.max(0, planStatus.sessionsLimit - planStatus.sessionsUsed)
+      : undefined;
 
   function commitEmailDraft() {
     const trimmed = emailDraft.trim().toLowerCase();
@@ -70,6 +79,22 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       return merged;
     });
     setEmailDraft('');
+  }
+
+  function handleSessionLimitChange(index: number, value: string) {
+    if (value === '') {
+      setSessionsLimits((prev) => ({ ...prev, [index]: '' }));
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+
+    const normalized = Math.max(0, Math.floor(parsed));
+    const capped = typeof availableAssessmentCount === 'number'
+      ? Math.min(normalized, availableAssessmentCount)
+      : normalized;
+    setSessionsLimits((prev) => ({ ...prev, [index]: String(capped) }));
   }
 
   async function handleUseChallenge(challenge: GeneratedChallenge, index: number) {
@@ -107,8 +132,10 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
           description: challenge.description,
           time_limit_min: timeLimitMin,
           starter_files: starterFiles,
-          sessions_limit: user?.isAdmin && sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
+          sessions_limit: sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
           allowed_emails: allowedEmails.length > 0 ? allowedEmails : undefined,
+          starts_at: startsAt ? new Date(startsAt).toISOString() : undefined,
+          ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
           role: role || undefined,
           tech_stack: techStack && techStack.length > 0 ? techStack.join(', ') : undefined,
           seniority: seniority || undefined,
@@ -161,8 +188,11 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         title: challenge.title,
         description: challenge.description,
         timeLimit: timeLimitMin,
+        sessionsLimit: sessionsLimits[index] ? parseInt(sessionsLimits[index]) : undefined,
         starterFiles,
         allowedEmails: allowedEmails.length > 0 ? allowedEmails : undefined,
+        startsAt,
+        endsAt,
       })
     );
     setCustomizingIndex(null);
@@ -195,13 +225,13 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         </div>
       )}
 
-      {/* Participant Restrictions */}
+      {/* Candidate access controls */}
       <div className="bg-surface border border-white/10 rounded-xl p-5 mb-6">
-        <p className="text-sm font-medium text-white mb-1">Participant Restrictions</p>
+        <p className="text-sm font-medium text-white mb-1">Candidate Email Allowlist</p>
         <p className="text-xs text-neutral-500 mb-3">
           {allowedEmails.length === 0
-            ? 'Anyone with the link can attempt this assessment. Add emails to restrict access.'
-            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can attempt this assessment.`}
+            ? 'Anyone with the shareable link can register. Personalized invites are added here automatically.'
+            : `Only the ${allowedEmails.length} listed email${allowedEmails.length !== 1 ? 's' : ''} can register through the shareable link.`}
         </p>
         <div
           className="bg-[#0a0a0a] px-3 py-2 min-h-12 flex flex-wrap gap-2 items-center cursor-text"
@@ -243,6 +273,33 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
         </div>
       </div>
 
+      <div className="bg-surface border border-white/10 rounded-xl p-5 mb-6">
+        <p className="text-sm font-medium text-white mb-1">Assessment Window</p>
+        <p className="text-xs text-neutral-500 mb-3">
+          Candidates can enter or start only during this window. Active sessions still use the challenge timer.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Starts</label>
+            <input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Ends</label>
+            <input
+              type="datetime-local"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-4 mb-8">
         {challenges.map((challenge, i) => {
           const isExpanded = expandedIndex === i;
@@ -261,7 +318,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
                   {challenge.difficulty}
                 </span>
                 <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-white/5 text-neutral-400 border border-white/10">
-                  {challenge.duration_minutes} min
+                  {timeLimitMin} min
                 </span>
               </div>
 
@@ -279,9 +336,10 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
 
               {/* Description */}
               <div className="mb-4">
-                <pre className="text-neutral-400 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {isExpanded ? challenge.description : getDescriptionPreview(challenge.description)}
-                </pre>
+                <MarkdownViewer
+                  content={isExpanded ? challenge.description : getDescriptionPreview(challenge.description)}
+                  className="max-w-none"
+                />
                 <button
                   type="button"
                   onClick={() => setExpandedIndex(isExpanded ? null : i)}
@@ -312,22 +370,27 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
                 </div>
               )}
 
-              {/* Admin session limit */}
-              {user?.isAdmin && (
-                <div className="mb-4">
-                  <label className="block text-xs font-medium text-neutral-500 mb-1">
-                    Session limit <span className="text-neutral-600">(leave blank for unlimited)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    placeholder="Unlimited"
-                    value={sessionsLimits[i] ?? ''}
-                    onChange={(e) => setSessionsLimits((prev) => ({ ...prev, [i]: e.target.value }))}
-                    className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
-                  />
-                </div>
-              )}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-neutral-500 mb-1">
+                  Session limit <span className="text-neutral-600">(leave blank for plan limit)</span>
+                </label>
+                <p className="mb-1.5 text-xs text-neutral-600">
+                  {availableAssessmentCount === null
+                    ? 'Available: unlimited'
+                    : availableAssessmentCount === undefined
+                      ? 'Checking availability...'
+                      : `Available: ${availableAssessmentCount} assessment${availableAssessmentCount !== 1 ? 's' : ''}`}
+                </p>
+                <input
+                  type="number"
+                  min={0}
+                  max={typeof availableAssessmentCount === 'number' ? availableAssessmentCount : undefined}
+                  placeholder="Plan limit"
+                  value={sessionsLimits[i] ?? ''}
+                  onChange={(e) => handleSessionLimitChange(i, e.target.value)}
+                  className="w-28 bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+                />
+              </div>
 
               {/* Actions */}
               <div className="flex gap-3 pt-2 border-t border-white/5">
@@ -371,7 +434,7 @@ export default function StepResults({ challenges, timeLimitMin, role, techStack,
       {progressMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-surface border border-white/10 rounded-2xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl">
-            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+            <ArcSpinner label={progressMessage} sizeClassName="h-12 w-12" />
             <p className="text-sm text-neutral-300">{progressMessage}</p>
           </div>
         </div>
