@@ -304,6 +304,105 @@ export async function sendInviteEmail({
   }
 }
 
+export async function sendTeamInviteEmail({
+  to,
+  toName,
+  companyName,
+  role,
+  invitedByName,
+  invitedByEmail,
+  inviteLink,
+}: {
+  to: string;
+  toName: string;
+  companyName: string;
+  role: string;
+  invitedByName: string;
+  invitedByEmail: string;
+  inviteLink: string;
+}): Promise<void> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+
+  const safeToName = escapeHtml(toName);
+  const safeCompanyName = escapeHtml(companyName);
+  const safeRole = escapeHtml(role);
+  const safeInvitedByName = escapeHtml(invitedByName);
+  const safeInvitedByEmail = escapeHtml(invitedByEmail);
+  const safeInviteLink = escapeHtml(inviteLink);
+  const subject = `You have been invited to join ${companyName} on ArcEval`;
+  const safeSubject = escapeHtml(subject);
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Figtree',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:#00a854;padding:32px 40px;">
+              <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">ArcEval</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px;">
+              <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${safeToName},</p>
+              <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">
+                ${safeInvitedByName} has invited you to join <strong>${safeCompanyName}</strong> on ArcEval.
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+                <tr>
+                  <td style="padding:14px 16px;background:#f9fafb;font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;">Role</td>
+                  <td style="padding:14px 16px;font-size:15px;color:#111827;">${safeRole}</td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 16px;background:#f9fafb;font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;border-top:1px solid #e5e7eb;">Invited by</td>
+                  <td style="padding:14px 16px;font-size:15px;color:#111827;border-top:1px solid #e5e7eb;">${safeInvitedByName} &lt;${safeInvitedByEmail}&gt;</td>
+                </tr>
+              </table>
+              <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;">
+                Use the email address this invite was sent to when you create or sign in to your ArcEval account.
+              </p>
+              <p style="margin:0;"><a href="${safeInviteLink}" style="display:inline-block;background:#00a854;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 18px;border-radius:8px;">Accept invite</a></p>
+              <p style="margin:32px 0 0;font-size:15px;color:#6b7280;">Sent by ${safeCompanyName}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">You're receiving this because you were invited to join an ArcEval company account.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: SENDER,
+      to: [{ email: to, name: toName }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API error ${res.status}: ${body}`);
+  }
+}
+
 export async function sendTrialFeedbackEmail(
   email: string,
   name: string,
