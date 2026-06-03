@@ -84,6 +84,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: Manual deployments are easy to forget, repeat inconsistently, or run with unvalidated code. This increases the risk of downtime, missed migrations, stale sandbox images, and unclear rollback steps when production behavior changes.
 - Suggested fix: Add a GitHub Actions workflow for CI checks on pull requests and controlled deployments from the production branch. The pipeline should run lint/typecheck/tests where available, build the web, terminal-server, analysis-engine, and sandbox images, push or transfer deployable artifacts securely, SSH into the GCP VM using repository secrets, run migrations and `scripts/deploy.sh`, perform health checks, and publish deployment logs/status. Include rollback guidance and make production secrets available only through GitHub environments or VM-local `.env.production`, never committed files.
 
+### FEAT-P1-008: Add audit logging for destructive admin actions
+
+- Status: Proposed
+- Area: Admin operations / accountability
+- Evidence: `/dashboard/admin` can delete a company through `DELETE /api/admin/companies/{companyId}`. That route permanently removes the ArcEval company profile, challenges, candidate sessions, interactions, analysis reports, annotations, feedback, and cost settings, while preserving historical usage events as deleted-company records. The action currently returns success to the UI, but there is no durable audit record of which admin performed the deletion, when it happened, which company was affected, or what related records were removed.
+- Impact: Support and operations cannot reliably investigate accidental deletions, disputed changes, or security incidents. Destructive actions become hard to attribute after the target company row has been removed.
+- Suggested fix: Add an `admin_audit_events` table and shared server helper for privileged actions. Log actor Firebase UID/email/role, action type, target type/id/name, request metadata such as IP/user agent when available, before/after snapshots or summary counts, and a timestamp. Start with company deletion, plan/quota changes, challenge deletion/archive state changes, candidate lifecycle overrides, and deployment-sensitive admin settings. Add an admin-only audit viewer with filters by actor, company, action, and date range.
+
 ### FEAT-P1-003: Add candidate lifecycle controls
 
 - Status: Implemented
