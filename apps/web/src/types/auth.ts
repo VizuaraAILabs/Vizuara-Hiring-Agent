@@ -1,6 +1,7 @@
 export interface AuthUser {
   sub: string;
   companyId?: string | null;
+  memberId?: string | null;
   email: string;
   name: string;
   role?: string | null;

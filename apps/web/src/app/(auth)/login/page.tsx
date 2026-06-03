@@ -33,6 +33,10 @@ function getAuthErrorMessage(code: string | undefined): string {
       return 'Please verify your email through the link we sent before signing in.';
     case 'session-setup-failed':
       return 'Unable to create your session. Please try again in a moment.';
+    case 'team-access-removed':
+      return 'Your access to this company account has been removed. Ask the company owner to invite you again.';
+    case 'team-access-associated':
+      return 'This email is already associated with another company account.';
     case 'auth-service-unavailable':
       return 'Sign-in is temporarily unavailable. Please try again later.';
     default:

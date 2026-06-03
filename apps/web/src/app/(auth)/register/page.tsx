@@ -63,6 +63,11 @@ function RegisterPageContent() {
   useEffect(() => {
     const errorCode = searchParams.get('error');
     if (errorCode) setError(getRegisterErrorMessage(errorCode));
+
+    const invitedCompanyName = searchParams.get('company')?.trim();
+    if (invitedCompanyName) {
+      setCompanyName((current) => current || invitedCompanyName);
+    }
   }, [searchParams]);
 
   const getVerificationContinueUrl = () => {
