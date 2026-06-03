@@ -1,5 +1,6 @@
 import { getAdminAuth } from '@/lib/firebase-admin';
 import sql from '@/lib/db';
+import { ensureVizuaraUserDocument } from '@/lib/vizuara-user-profile';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
     `;
 
     if (existingCompany) {
+      await ensureVizuaraUserDocument({
+        firebaseUid: decoded.uid,
+        email,
+        displayName: companyName,
+        photoURL: typeof decoded.picture === 'string' ? decoded.picture : null,
+      });
+
       return NextResponse.json({ ok: true, alreadyExists: true });
     }
 
@@ -42,6 +50,13 @@ export async function POST(request: NextRequest) {
         company_name = EXCLUDED.company_name,
         updated_at = NOW()
     `;
+
+    await ensureVizuaraUserDocument({
+      firebaseUid: decoded.uid,
+      email,
+      displayName: companyName,
+      photoURL: typeof decoded.picture === 'string' ? decoded.picture : null,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

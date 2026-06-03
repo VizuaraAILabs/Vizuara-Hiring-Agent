@@ -1,6 +1,7 @@
 import { createSessionCookie, isAdmin } from '@/lib/auth';
 import sql from '@/lib/db';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { ensureVizuaraUserDocument } from '@/lib/vizuara-user-profile';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -79,10 +80,11 @@ async function createSessionResponse({
     const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';
 
     if (!userIsAdmin) {
-      const [existing] = await sql<{ id: string }[]>`
-        SELECT id FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
+      const [existing] = await sql<{ id: string; name: string }[]>`
+        SELECT id, name FROM companies WHERE firebase_uid = ${firebaseUid} OR email = ${email}
         LIMIT 1
       `;
+      let companyNameForVizuaraProfile = trimmedCompanyName || decoded.name || email.split('@')[0] || 'Unknown company';
 
       if (!existing) {
         const [pendingSignup] = await sql<{ company_name: string }[]>`
@@ -97,6 +99,7 @@ async function createSessionResponse({
           decoded.name ||
           email.split('@')[0] ||
           'Unknown company';
+        companyNameForVizuaraProfile = companyNameForCreate;
 
         const id = uuidv4();
         const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -114,6 +117,8 @@ async function createSessionResponse({
           `;
         });
       } else {
+        companyNameForVizuaraProfile = existing.name || companyNameForVizuaraProfile;
+
         // Keep the local company name as the source of truth after account creation.
         await sql.begin(async (tx) => {
           const trx = tx as unknown as typeof sql;
@@ -128,6 +133,17 @@ async function createSessionResponse({
             WHERE firebase_uid = ${firebaseUid} OR email = ${email}
           `;
         });
+      }
+
+      try {
+        await ensureVizuaraUserDocument({
+          firebaseUid,
+          email,
+          displayName: companyNameForVizuaraProfile,
+          photoURL: typeof decoded.picture === 'string' ? decoded.picture : null,
+        });
+      } catch (error) {
+        console.error('Unable to ensure Vizuara Users profile:', error);
       }
     }
 
