@@ -68,6 +68,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Area: Candidate communication / recruiter operations
 - Implementation notes: Added a saved per-challenge invite email subject/body, merge fields for candidate name, challenge title, assessment link, time limit, access window, and company name, and an optional send-email action in the Invites tab. Personalized invite creation still returns the manual fallback link, sends through the existing Brevo provider when requested, and records `not_sent`, `sent`, or `failed` delivery state on the session.
 
+### FEAT-P1-006: Calibrate report recommendation labels against overall scores
+
+- Status: Proposed
+- Area: Analysis quality / recruiter trust
+- Evidence: Candidate reports can show a high `overall_score` with a contradictory `hiring_recommendation`; for example, a score of 83 displayed with a "Neutral" badge. `apps/web/src/components/report/ReportHeader.tsx` renders the numeric score from `analysis.overall_score`, while the badge comes independently from `analysis.hiring_recommendation`. The analysis prompt in `services/analysis-engine/src/services/claude_analyzer.py` requests both fields but does not define explicit consistency rules between score bands and recommendation labels.
+- Impact: Recruiters may lose confidence in the report when the headline score and recommendation badge appear to disagree, especially in shareable/exported reports.
+- Suggested fix: Decide whether the badge should be score-derived or model-derived. If model-derived, add prompt and/or post-processing calibration rules so recommendations cannot contradict score bands without an explicit rationale, then surface that rationale in the report when exceptions occur.
+
 ### FEAT-P1-003: Add candidate lifecycle controls
 
 - Status: Implemented
