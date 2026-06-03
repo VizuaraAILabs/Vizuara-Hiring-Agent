@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 import { callWithKeyRotation } from '@/lib/gemini';
 
 const GEMINI_URL =
@@ -31,19 +31,19 @@ Every file must have a "path" (string, relative, using forward slashes) and "con
 function validateFiles(files: unknown[]): { path: string; content: string }[] {
   const validated: { path: string; content: string }[] = [];
   for (const file of files) {
-    if (
-      typeof file !== 'object' || file === null ||
-      typeof (file as any).path !== 'string' ||
-      typeof (file as any).content !== 'string'
-    ) {
+    if (typeof file !== 'object' || file === null) {
       continue;
     }
-    const p = (file as any).path as string;
+    const candidate = file as { path?: unknown; content?: unknown };
+    if (typeof candidate.path !== 'string' || typeof candidate.content !== 'string') {
+      continue;
+    }
+    const p = candidate.path;
     // Reject path traversal and absolute paths
     if (p.includes('..') || p.startsWith('/') || p.includes('\0')) {
       continue;
     }
-    validated.push({ path: p, content: (file as any).content });
+    validated.push({ path: p, content: candidate.content });
   }
   return validated;
 }
@@ -117,6 +117,12 @@ export async function POST(request: Request) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (!hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();

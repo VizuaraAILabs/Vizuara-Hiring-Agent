@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser, isAdmin } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole, isAdmin } from '@/lib/auth';
 import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
 import { getChallengeById } from '@/lib/challenge-queries';
 import type { Challenge, Session, StarterFile } from '@/types';
@@ -71,6 +71,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const userIsAdmin = isAdmin(user.email, user.role);
     if (challenge.company_id !== user.companyId && !userIsAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (!userIsAdmin && !hasCompanyRole(user, ['owner', 'recruiter'])) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

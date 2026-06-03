@@ -29,7 +29,8 @@ function resolveSelectValue(title: string): string {
 }
 
 export default function ProfilePage() {
-  const { refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const canEditProfile = user?.role === 'owner';
   const [form, setForm] = useState<ProfileData>({ name: '', contactName: '', contactTitle: '' });
   const [selectValue, setSelectValue] = useState('');
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,7 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Company name is required.'); return; }
+    if (!canEditProfile) { setError('Only owners can edit company profile details.'); return; }
     setSaving(true);
     setError('');
     setSaved(false);
@@ -108,6 +110,7 @@ export default function ProfilePage() {
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="Acme Corp"
+            disabled={!canEditProfile}
             className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
           />
         </div>
@@ -124,6 +127,7 @@ export default function ProfilePage() {
             value={form.contactName}
             onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
             placeholder="Jane Smith"
+            disabled={!canEditProfile}
             className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
           />
           <p className="text-xs text-neutral-600">The person managing this account on behalf of the company.</p>
@@ -137,6 +141,7 @@ export default function ProfilePage() {
           <select
             value={selectValue}
             onChange={(e) => handleSelectChange(e.target.value)}
+            disabled={!canEditProfile}
             className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
           >
             <option value="">Select a title…</option>
@@ -152,6 +157,7 @@ export default function ProfilePage() {
               onChange={(e) => setForm((f) => ({ ...f, contactTitle: e.target.value }))}
               placeholder="Enter your title"
               autoFocus
+              disabled={!canEditProfile}
               className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
             />
           )}
@@ -161,7 +167,7 @@ export default function ProfilePage() {
 
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !canEditProfile}
           className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
         >
           {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Changes'}

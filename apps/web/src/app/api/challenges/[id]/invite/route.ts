@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser, isAdmin } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole, isAdmin } from '@/lib/auth';
 import { sendInviteEmail } from '@/lib/brevo';
 import { generateToken } from '@/lib/utils';
 import { addEmailToAllowlist, normalizeEmail, validateChallengeAccess } from '@/lib/challenge-access';
@@ -28,6 +28,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const userIsAdmin = isAdmin(user.email, user.role);
     if (!user.companyId && !userIsAdmin) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (!userIsAdmin && !hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { id } = await params;
