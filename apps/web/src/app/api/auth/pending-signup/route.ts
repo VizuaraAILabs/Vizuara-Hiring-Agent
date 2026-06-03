@@ -1,5 +1,6 @@
 import { getAdminAuth } from '@/lib/firebase-admin';
 import sql from '@/lib/db';
+import { normalizeIdentityEmail } from '@/lib/email';
 import { ensureVizuaraUserDocument } from '@/lib/vizuara-user-profile';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded = await getAdminAuth().verifyIdToken(token);
-    const email = decoded.email || '';
+    const email = normalizeIdentityEmail(decoded.email || '');
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });

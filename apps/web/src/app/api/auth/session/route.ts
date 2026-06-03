@@ -1,5 +1,6 @@
 import { createSessionCookie, isAdmin } from '@/lib/auth';
 import sql from '@/lib/db';
+import { normalizeIdentityEmail } from '@/lib/email';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { ensureVizuaraUserDocument } from '@/lib/vizuara-user-profile';
 import { NextRequest, NextResponse } from 'next/server';
@@ -74,7 +75,7 @@ async function createSessionResponse({
 
     const firebaseUid = decoded.uid;
     const trimmedCompanyName = companyName?.trim() || '';
-    const email = decoded.email || '';
+    const email = normalizeIdentityEmail(decoded.email || '');
     const role = typeof decoded.role === 'string' ? decoded.role : null;
     const userIsAdmin = isAdmin(email, role);
     const requestedReturnTo = returnTo || request.cookies.get(RETURN_COOKIE)?.value || '/dashboard';

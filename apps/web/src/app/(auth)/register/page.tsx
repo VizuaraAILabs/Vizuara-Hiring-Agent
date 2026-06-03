@@ -130,14 +130,15 @@ function RegisterPageContent() {
     setLoadingMethod('email');
     try {
       const clientAuth = getClientAuth();
-      const credential = await createUserWithEmailAndPassword(clientAuth, email.trim(), password);
+      const normalizedEmail = email.trim().toLowerCase();
+      const credential = await createUserWithEmailAndPassword(clientAuth, normalizedEmail, password);
       await updateProfile(credential.user, { displayName: trimmedCompanyName });
       await savePendingSignup(credential.user, trimmedCompanyName);
       await sendEmailVerification(credential.user, {
         url: getVerificationContinueUrl(),
         handleCodeInApp: false,
       });
-      setVerificationEmail(email.trim());
+      setVerificationEmail(normalizedEmail);
       await signOut(clientAuth);
       setPassword('');
     } catch (err) {

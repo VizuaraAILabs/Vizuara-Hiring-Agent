@@ -1,4 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
+import { normalizeIdentityEmail } from './email';
 import { getAdminFirestore } from './firebase-admin';
 
 function splitDisplayName(name: string): { firstName: string; middleName: string; lastName: string } {
@@ -21,20 +22,21 @@ export async function ensureVizuaraUserDocument({
   displayName: string;
   photoURL?: string | null;
 }) {
+  const normalizedEmail = normalizeIdentityEmail(email);
   const db = getAdminFirestore();
   const userRef = db.collection('Users').doc(firebaseUid);
   const snapshot = await userRef.get();
   if (snapshot.exists) return { created: false };
 
   const { firstName, middleName, lastName } = splitDisplayName(
-    displayName || email.split('@')[0] || 'ArcEval User'
+    displayName || normalizedEmail.split('@')[0] || 'ArcEval User'
   );
 
   try {
     await userRef.create({
       id: firebaseUid,
       username: '',
-      email,
+      email: normalizedEmail,
       firstName,
       middleName,
       lastName,

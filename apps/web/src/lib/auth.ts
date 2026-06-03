@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminFirestore } from './firebase-admin';
 import sql from './db';
+import { normalizeIdentityEmail } from './email';
 
 const COOKIE_NAME = 'vizuara_session';
 const SESSION_EXPIRY = 14 * 24 * 60 * 60 * 1000; // 14 days
@@ -58,7 +59,7 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
     const decoded = await adminAuth.verifySessionCookie(session, true);
 
     const role = typeof decoded.role === 'string' ? decoded.role : null;
-    const email = decoded.email || '';
+    const email = normalizeIdentityEmail(decoded.email || '');
     const name = decoded.name || email.split('@')[0] || 'Admin';
     const userIsAdmin = isAdmin(email, role);
 
