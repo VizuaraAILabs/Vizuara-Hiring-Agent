@@ -81,7 +81,7 @@ export default function SessionPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] px-5 py-8 md:px-8 md:py-10 relative">
       <div className="absolute inset-0 bg-grid opacity-20" />
-      <div className="absolute right-0 top-0 h-96 w-[38rem] rounded-full bg-primary/7 blur-[150px] pointer-events-none" />
+      <div className="absolute right-0 top-0 h-96 w-152 rounded-full bg-primary/7 blur-[150px] pointer-events-none" />
 
       <main className="relative mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-stretch">
         <section className="flex min-h-0 flex-col">
