@@ -21,8 +21,6 @@ interface ChallengeInfo {
   };
 }
 
-const HARD_UNAVAILABLE_REASONS = new Set(['closed', 'not_started', 'expired']);
-
 export default function ApplyPage() {
   const params = useParams();
   const router = useRouter();
@@ -35,11 +33,6 @@ export default function ApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const isUnavailable = Boolean(challenge?.availability && !challenge.availability.ok);
-  const isHardUnavailable = Boolean(
-    challenge?.availability &&
-    !challenge.availability.ok &&
-    HARD_UNAVAILABLE_REASONS.has(challenge.availability.reason)
-  );
 
   function formatWindowDate(value: string | null) {
     if (!value) return null;
@@ -77,6 +70,8 @@ export default function ApplyPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isUnavailable) return;
+
     setSubmitting(true);
     setSubmitError('');
 
@@ -201,7 +196,8 @@ export default function ApplyPage() {
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="Jane Smith"
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
+                  disabled={isUnavailable}
+                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
                   required
                 />
               </div>
@@ -212,7 +208,8 @@ export default function ApplyPage() {
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                   placeholder="jane@example.com"
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700"
+                  disabled={isUnavailable}
+                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-60"
                   required
                 />
               </div>
@@ -223,8 +220,8 @@ export default function ApplyPage() {
 
               <button
                 type="submit"
-                disabled={submitting || isHardUnavailable}
-                className="w-full bg-primary hover:bg-primary-light disabled:opacity-70 text-black py-4 rounded-xl text-sm font-semibold transition-all btn-glow mt-2 disabled:cursor-wait"
+                disabled={submitting || isUnavailable}
+                className="w-full bg-primary hover:bg-primary-light disabled:opacity-70 text-black py-4 rounded-xl text-sm font-semibold transition-all btn-glow mt-2 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Creating your session...' : 'Continue to Assessment'}
               </button>
