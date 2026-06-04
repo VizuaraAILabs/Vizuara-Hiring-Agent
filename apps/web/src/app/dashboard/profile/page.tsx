@@ -129,7 +129,7 @@ export default function ProfilePage() {
         {/* Contact name */}
         <div className="space-y-1.5">
           <label className="text-xs text-neutral-400 uppercase tracking-wider font-medium">
-            Your Name
+            Owner Name
           </label>
           <input
             type="text"
@@ -139,13 +139,13 @@ export default function ProfilePage() {
             disabled={!canEditProfile}
             className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary transition-colors cursor-text"
           />
-          <p className="text-xs text-neutral-600">The person managing this account on behalf of the company.</p>
+          <p className="text-xs text-neutral-600">The company owner managing this account.</p>
         </div>
 
         {/* Contact title */}
         <div className="space-y-1.5">
           <label className="text-xs text-neutral-400 uppercase tracking-wider font-medium">
-            Your Title
+            Owner Title
           </label>
           <select
             value={selectValue}
@@ -153,11 +153,11 @@ export default function ProfilePage() {
             disabled={!canEditProfile}
             className="w-full bg-[#0a0a0a] border-2 border-[#c0c0c0] rounded-2.5 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
           >
-            <option value="">Select a title…</option>
+            <option value="">Select a title...</option>
             {PRESET_TITLES.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
-            <option value="__other__">Other…</option>
+            <option value="__other__">Other...</option>
           </select>
           {selectValue === '__other__' && (
             <input
@@ -179,7 +179,7 @@ export default function ProfilePage() {
           disabled={saving || !canEditProfile}
           className="w-full bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-black font-semibold py-2.5 rounded-xl text-sm transition-colors cursor-pointer"
         >
-          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Changes'}
+          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
         </button>
       </div>
     </div>
