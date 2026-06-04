@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 import type { DecisionLabel, Session } from '@/types';
 
 const DECISION_LABELS = new Set<DecisionLabel>(['shortlisted', 'hold', 'reject', 'hired']);
@@ -39,6 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
     }
     if (!user.companyId) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (!hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { sessionId } = await params;

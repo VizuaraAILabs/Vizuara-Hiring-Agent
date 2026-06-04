@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 import { validateChallengeSessionLimit } from '@/lib/challenge-settings';
 import { getChallengeById } from '@/lib/challenge-queries';
+import { parseAllowedEmails } from '@/lib/challenge-access';
 import { v4 as uuidv4 } from 'uuid';
 
 type ChallengeView = 'active' | 'closed' | 'archived' | 'all';
@@ -80,6 +81,9 @@ export async function POST(request: Request) {
     if (!user.companyId) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
     }
+    if (!hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { title, description, time_limit_min, starter_files_dir, starter_files, sessions_limit, allowed_emails, starts_at, ends_at, role, tech_stack, seniority, focus_areas, context, cohort_label } = await request.json();
 
@@ -116,13 +120,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Assessment end time must be after the start time.' }, { status: 400 });
     }
 
-    // Parse allowed_emails: accept array or comma-separated string
-    const rawEmails: string[] = Array.isArray(allowed_emails)
-      ? allowed_emails
-      : typeof allowed_emails === 'string'
-        ? allowed_emails.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean)
-        : [];
-    const allowedEmailsValue = rawEmails.length > 0 ? rawEmails : null;
+    const allowedEmails = parseAllowedEmails(allowed_emails);
+    const allowedEmailsValue = allowedEmails.length > 0 ? allowedEmails : null;
 
     const focusAreasValue = Array.isArray(focus_areas) && focus_areas.length > 0
       ? focus_areas.join(', ')

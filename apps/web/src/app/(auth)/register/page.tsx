@@ -54,6 +54,7 @@ function RegisterPageContent() {
   const [loadingMethod, setLoadingMethod] = useState<'email' | 'google' | null>(null);
   const [error, setError] = useState('');
   const [verificationEmail, setVerificationEmail] = useState('');
+  const [companyNameLocked, setCompanyNameLocked] = useState(false);
 
   const returnTo = useMemo(
     () => getSafeReturnTo(searchParams.get('returnTo')),
@@ -63,7 +64,20 @@ function RegisterPageContent() {
   useEffect(() => {
     const errorCode = searchParams.get('error');
     if (errorCode) setError(getRegisterErrorMessage(errorCode));
-  }, [searchParams]);
+
+    const invitedCompanyName = searchParams.get('company')?.trim();
+    if (invitedCompanyName) {
+      setCompanyName((current) => current || invitedCompanyName);
+      setCompanyNameLocked(true);
+    }
+
+    const noisyParams = ['_se', 'email'];
+    if (noisyParams.some((param) => searchParams.has(param))) {
+      const cleanUrl = new URL(window.location.href);
+      noisyParams.forEach((param) => cleanUrl.searchParams.delete(param));
+      router.replace(`${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+    }
+  }, [router, searchParams]);
 
   const getVerificationContinueUrl = () => {
     const loginUrl = new URL('/login', window.location.origin);
@@ -130,14 +144,15 @@ function RegisterPageContent() {
     setLoadingMethod('email');
     try {
       const clientAuth = getClientAuth();
-      const credential = await createUserWithEmailAndPassword(clientAuth, email.trim(), password);
+      const normalizedEmail = email.trim().toLowerCase();
+      const credential = await createUserWithEmailAndPassword(clientAuth, normalizedEmail, password);
       await updateProfile(credential.user, { displayName: trimmedCompanyName });
       await savePendingSignup(credential.user, trimmedCompanyName);
       await sendEmailVerification(credential.user, {
         url: getVerificationContinueUrl(),
         handleCodeInApp: false,
       });
-      setVerificationEmail(email.trim());
+      setVerificationEmail(normalizedEmail);
       await signOut(clientAuth);
       setPassword('');
     } catch (err) {
@@ -303,8 +318,9 @@ function RegisterPageContent() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     autoComplete="organization"
+                    disabled={companyNameLocked}
                     required
-                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
+                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/5 disabled:text-neutral-400"
                     placeholder="Acme Inc."
                   />
                 </div>

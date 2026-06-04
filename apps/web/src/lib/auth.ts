@@ -1,9 +1,22 @@
 import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminFirestore } from './firebase-admin';
 import sql from './db';
+import { normalizeIdentityEmail } from './email';
 
 const COOKIE_NAME = 'vizuara_session';
 const SESSION_EXPIRY = 14 * 24 * 60 * 60 * 1000; // 14 days
+const COMPANY_ROLES = ['owner', 'recruiter', 'viewer'] as const;
+
+export type CompanyRole = typeof COMPANY_ROLES[number];
+export type AuthUser = {
+  sub: string;
+  companyId: string | null;
+  memberId: string | null;
+  email: string;
+  name: string;
+  role: string | null;
+  isAdmin: boolean;
+};
 
 function getCookieDomain(): string | undefined {
   if (process.env.NODE_ENV !== 'production') return undefined;
@@ -49,7 +62,7 @@ async function getSessionCookie(): Promise<string | null> {
  * Shape: { sub: companyId, email, name } — matches the old JWT payload
  * so all existing API routes continue working without changes.
  */
-export async function getAuthUser(): Promise<{ sub: string; companyId: string | null; email: string; name: string; role: string | null; isAdmin: boolean } | null> {
+export async function getAuthUser(): Promise<AuthUser | null> {
   const session = await getSessionCookie();
   if (!session) return null;
 
@@ -58,7 +71,7 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
     const decoded = await adminAuth.verifySessionCookie(session, true);
 
     const role = typeof decoded.role === 'string' ? decoded.role : null;
-    const email = decoded.email || '';
+    const email = normalizeIdentityEmail(decoded.email || '');
     const name = decoded.name || email.split('@')[0] || 'Admin';
     const userIsAdmin = isAdmin(email, role);
 
@@ -66,6 +79,7 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
       return {
         sub: decoded.uid,
         companyId: null,
+        memberId: null,
         email,
         name,
         role,
@@ -73,9 +87,44 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
       };
     }
 
-    // Look up the company by firebase_uid for company accounts.
+    const [member] = await sql<{
+      id: string;
+      company_id: string;
+      email: string;
+      name: string | null;
+      role: CompanyRole;
+      company_name: string;
+    }[]>`
+      SELECT
+        cm.id,
+        cm.company_id,
+        cm.email,
+        cm.name,
+        cm.role,
+        c.name AS company_name
+      FROM company_members cm
+      JOIN companies c ON c.id = cm.company_id
+      WHERE cm.firebase_uid = ${decoded.uid}
+        AND cm.status = 'active'
+      LIMIT 1
+    `;
+
+    if (member) {
+      return {
+        sub: member.company_id,
+        companyId: member.company_id,
+        memberId: member.id,
+        email: member.email,
+        name: member.name || member.company_name,
+        role: member.role,
+        isAdmin: false,
+      };
+    }
+
+    // Legacy fallback for databases that have not fully backfilled company_members yet.
     const [company] = await sql<{ id: string; name: string; email: string }[]>`
       SELECT id, name, email FROM companies WHERE firebase_uid = ${decoded.uid}
+      LIMIT 1
     `;
 
     if (!company) return null;
@@ -83,9 +132,10 @@ export async function getAuthUser(): Promise<{ sub: string; companyId: string | 
     return {
       sub: company.id,
       companyId: company.id,
+      memberId: null,
       email: company.email,
       name: company.name,
-      role,
+      role: 'owner',
       isAdmin: false,
     };
   } catch {
@@ -97,6 +147,18 @@ export function isAdmin(_email: string, role?: string | null): boolean {
   const normalizedRole = role?.trim().toUpperCase();
   return normalizedRole === 'SUPER ADMIN'
     || normalizedRole === 'SUPER_ADMIN';
+}
+
+export function isCompanyRole(role: string | null | undefined): role is CompanyRole {
+  return COMPANY_ROLES.includes(role as CompanyRole);
+}
+
+export function hasCompanyRole(
+  user: AuthUser | null,
+  allowedRoles: CompanyRole[]
+): boolean {
+  if (!user?.companyId) return false;
+  return isCompanyRole(user.role) && allowedRoles.includes(user.role);
 }
 
 const ENROLLMENT_ID = process.env.ARCEVAL_ENROLLMENT_ID || '';

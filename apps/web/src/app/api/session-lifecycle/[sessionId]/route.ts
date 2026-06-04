@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser, isAdmin } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole, isAdmin } from '@/lib/auth';
 import { sendInviteEmail } from '@/lib/brevo';
 import {
   DEFAULT_INVITE_EMAIL_BODY,
@@ -133,6 +133,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     }
     if (!user.companyId && !isAdmin(user.email, user.role)) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (user.companyId && !hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { sessionId } = await params;

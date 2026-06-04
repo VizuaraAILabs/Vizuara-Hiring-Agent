@@ -84,6 +84,30 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: Manual deployments are easy to forget, repeat inconsistently, or run with unvalidated code. This increases the risk of downtime, missed migrations, stale sandbox images, and unclear rollback steps when production behavior changes.
 - Suggested fix: Add a GitHub Actions workflow for CI checks on pull requests and controlled deployments from the production branch. The pipeline should run lint/typecheck/tests where available, build the web, terminal-server, analysis-engine, and sandbox images, push or transfer deployable artifacts securely, SSH into the GCP VM using repository secrets, run migrations and `scripts/deploy.sh`, perform health checks, and publish deployment logs/status. Include rollback guidance and make production secrets available only through GitHub environments or VM-local `.env.production`, never committed files.
 
+### FEAT-P1-008: Add audit logging for destructive admin actions
+
+- Status: Proposed
+- Area: Admin operations / accountability
+- Evidence: `/dashboard/admin` can delete a company through `DELETE /api/admin/companies/{companyId}`. That route permanently removes the ArcEval company profile, challenges, candidate sessions, interactions, analysis reports, annotations, feedback, and cost settings, while preserving historical usage events as deleted-company records. The action currently returns success to the UI, but there is no durable audit record of which admin performed the deletion, when it happened, which company was affected, or what related records were removed.
+- Impact: Support and operations cannot reliably investigate accidental deletions, disputed changes, or security incidents. Destructive actions become hard to attribute after the target company row has been removed.
+- Suggested fix: Add an `admin_audit_events` table and shared server helper for privileged actions. Log actor Firebase UID/email/role, action type, target type/id/name, request metadata such as IP/user agent when available, before/after snapshots or summary counts, and a timestamp. Start with company deletion, plan/quota changes, challenge deletion/archive state changes, candidate lifecycle overrides, and deployment-sensitive admin settings. Add an admin-only audit viewer with filters by actor, company, action, and date range.
+
+### FEAT-P1-009: Add company team invite landing page
+
+- Status: Proposed
+- Area: Team accounts / onboarding
+- Evidence: Company team invites currently send teammates to the normal signup page with a decorative `company` query parameter. Membership is safely claimed by invited email during session creation, but there is no invite-specific landing experience that confirms the company, role, invited email, or next step.
+- Impact: Invited teammates may not understand whether they should sign in, sign up, or which email address must be used. This can create avoidable support questions during team onboarding.
+- Suggested fix: Add a lightweight invite landing page that shows the company name, invited role, and invited email, then routes the user to login or signup. Keep the secure join logic server-side by email claim; do not trust the query string for authorization.
+
+### FEAT-P1-010: Add team membership audit logging
+
+- Status: Proposed
+- Area: Team accounts / accountability
+- Evidence: Owners can invite teammates, change roles, remove members, and re-invite removed members from Team Settings. These actions affect company access but currently do not create a durable audit trail.
+- Impact: Companies and support cannot answer who invited a teammate, who changed a role, or who removed access after the fact.
+- Suggested fix: Add audit events for team invite created, invite email sent/failed, invite resent, invite canceled, member joined, role changed, member removed, and member re-invited. Store actor member/user identity, target email/member id, old/new role or status, company id, timestamp, and request metadata where appropriate. Reuse or align with the broader admin audit event model when it exists.
+
 ### FEAT-P1-003: Add candidate lifecycle controls
 
 - Status: Implemented
@@ -141,6 +165,30 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Evidence: Plan/quota enforcement exists through enrollment checks, and admin lists companies with plan labels, sessions, costs, and pending counts. There is no visible admin UI for changing a company's plan, extending trial, granting extra assessments, or viewing quota history.
 - Impact: Support and sales workflows require database/manual intervention for common customer requests.
 - Suggested fix: Add admin controls for plan tier, trial extension, one-off quota grants, period reset, and a quota/audit history table.
+
+### FEAT-P2-006: Add team seat limit management
+
+- Status: Proposed
+- Area: Team accounts / subscriptions
+- Evidence: Team accounts add `companies.team_member_limit`, but the value defaults to `1` and there is no product or admin surface to change it by plan, company, or sales override.
+- Impact: Team Settings can be present but unusable for most companies unless support manually updates the database. This also makes plan packaging unclear for Starter, Growth, and Enterprise tiers.
+- Suggested fix: Tie `team_member_limit` to plan configuration or add an admin control for company-specific seat limits. Show clear owner-facing copy when the limit is reached, including upgrade/contact-sales guidance.
+
+### FEAT-P2-007: Improve removed-member and blocked-account messaging
+
+- Status: Proposed
+- Area: Team accounts / user support
+- Evidence: Removed members are blocked from logging in or creating a new owner account with the same email. The current message safely tells them access was removed and to ask the company owner to invite them again, but it does not distinguish support-owned remediation from company-owned access decisions.
+- Impact: Removed users may contact platform support for an access decision that belongs to their company owner, or may not understand why normal signup does not create a new workspace.
+- Suggested fix: Refine login/signup blocked states for removed members, cross-company membership conflicts, and already-associated emails. Include company-safe guidance without exposing private company details unnecessarily.
+
+### FEAT-P2-008: Add owner transfer for company accounts
+
+- Status: Proposed
+- Area: Team accounts / account administration
+- Evidence: The MVP intentionally locks each company to one owner. Owners cannot invite another owner, change the owner role, remove themselves, or transfer ownership.
+- Impact: If the owner leaves the company or changes responsibilities, support must intervene manually to keep the account administrable.
+- Suggested fix: Add an owner-transfer flow that lets the current owner promote an active member to owner and demote themselves to recruiter, with confirmation, audit logging, and guardrails so every company always has exactly one owner.
 
 ## P3
 

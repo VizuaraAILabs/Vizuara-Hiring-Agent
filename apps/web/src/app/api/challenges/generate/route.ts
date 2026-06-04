@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 import { callWithKeyRotation } from '@/lib/gemini';
 
 const GEMINI_URL =
@@ -208,6 +208,12 @@ export async function POST(request: Request) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (!hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();

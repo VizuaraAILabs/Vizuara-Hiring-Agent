@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import sql from '@/lib/db';
-import { getAuthUser, isAdmin } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole, isAdmin } from '@/lib/auth';
 import type { ReportShareLink } from '@/types';
 
 type SessionOwnershipRow = {
@@ -63,6 +63,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     const { sessionId } = await params;
     const auth = await getAuthorizedSession(sessionId);
     if (auth.error) return auth.error;
+    if (auth.user.companyId && !hasCompanyRole(auth.user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (auth.session.status !== 'analyzed') {
       return NextResponse.json({ error: 'Only analyzed reports can be shared.' }, { status: 400 });
     }
@@ -115,6 +118,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { sessionId } = await params;
     const auth = await getAuthorizedSession(sessionId);
     if (auth.error) return auth.error;
+    if (auth.user.companyId && !hasCompanyRole(auth.user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     await sql.begin(async (tx) => {
       const trx = tx as unknown as typeof sql;

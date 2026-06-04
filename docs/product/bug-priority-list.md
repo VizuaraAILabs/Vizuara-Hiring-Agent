@@ -163,6 +163,30 @@ This first iteration covers bugs found by scanning the analysis engine and the w
 - Impact: A growth or enterprise purchase can be under-allocated as starter, or a downgraded/cancelled tier can continue receiving the old local quota. Remaining-session calculations and candidate admission can diverge from what the customer actually paid for.
 - Suggested fix: Store the purchased plan tier from the billing/subscription source of truth and reconcile `companies.plan` on every subscription status check or webhook. Avoid defaulting paid trial upgrades to starter unless the subscription explicitly says starter.
 
+### WEB-P1-004: Subscription status checks use different Firestore sources of truth
+
+- Status: Open
+- Area: Subscription access consistency
+- Evidence: Paid-plan quota enforcement in `checkEnrollmentStatus()` treats an active Firestore `Subscriptions` document as the source of truth for paid access and billing-period quota anchors (`apps/web/src/lib/enrollment.ts:198`). However, `/api/subscription/status` reports enrollment by reading `Enrollments/{firebase_uid}_{ARCEVAL_ENROLLMENT_ID}` instead (`apps/web/src/app/api/subscription/status/route.ts:31`).
+- Impact: A company can appear paid for candidate-session quota while the subscription status endpoint reports not enrolled, or appear enrolled in the UI while quota enforcement treats the subscription as lapsed. This is especially risky because Vizuara's subscription activation webhook creates the `Enrollments` document only after successfully loading `Users/{uid}`; locally-created ArcEval accounts may have an active `Subscriptions` document but no matching `Enrollments` document if the Vizuara `Users` profile is missing.
+- Suggested fix: Pick one canonical source for paid ArcEval access. Prefer `Subscriptions` for paid-plan enforcement because it contains `status`, `currentPeriodStart`, and `currentPeriodEnd` for billing-period quota resets. Update `/api/subscription/status` to use the same subscription reader, optionally returning matching `Enrollments` data as secondary/debug context, and add tests for `Subscriptions ACTIVE / Enrollments missing` and `Enrollments ACTIVE / Subscriptions missing` cases.
+
+### WEB-P1-005: Private GitHub repository blocks repeatable VM deployments
+
+- Status: Open
+- Area: Deployment operations / release reliability
+- Evidence: The production system is hosted on a GCP VM, while the GitHub repository is private. Manual VM updates require an authenticated way to fetch private repository changes, but the current deployment process does not yet have a finalized private-repo access strategy or CI/CD path. Deploy keys may not be available in the target environment, and relying on ad hoc personal credentials on the VM is operationally risky.
+- Impact: Production can lag behind committed fixes, deployment steps become person-dependent, and emergency updates can be blocked by missing credentials. Workarounds such as making the repository public or storing broad personal tokens on the VM would weaken security.
+- Suggested fix: Keep the repository private and implement a controlled deployment path. Prefer GitHub Actions CI/CD that checks out the private repo inside GitHub, validates/builds the system, then deploys to the VM using scoped VM SSH credentials stored in GitHub environments/secrets. If VM-side pulls remain necessary, use a fine-grained read-only token or GitHub App installation token scoped to this repository, with rotation and revocation documented.
+
+### WEB-P1-006: ArcEval local auth can create Firebase users without Vizuara `Users` documents
+
+- Status: Implemented
+- Area: Auth integration / subscription enrollment
+- Evidence: Vizuara AI Labs' signup flow creates a Firebase Auth user and then writes a Firestore `Users/{uid}` profile through `userService.createUser()` (`D:\Vizuara Projects\Vizuara-AI-Labs\src\services\authService.ts:363`, `D:\Vizuara Projects\Vizuara-AI-Labs\src\services\userService.ts:74`). Google signup also creates `Users/{uid}` when missing (`D:\Vizuara Projects\Vizuara-AI-Labs\src\services\authService.ts:435`). ArcEval's local signup path creates a Firebase Auth user, updates `displayName`, stores a Postgres `pending_signups`/`companies` record, and creates the ArcEval session, but it does not write a Vizuara Firestore `Users/{uid}` document (`apps/web/src/app/(auth)/register/page.tsx:133`, `apps/web/src/app/api/auth/pending-signup/route.ts:38`, `apps/web/src/app/api/auth/session/route.ts:107`).
+- Impact: Users created through ArcEval local auth can have valid Firebase Auth and ArcEval company records but no Vizuara `Users` profile. Vizuara subscription activation and regular paid-order enrollment paths call `userService.getUserById()` before creating `Enrollments`; if `Users/{uid}` is missing, enrollment creation is skipped. This can block starter/non-trial plan access even after successful authentication or payment.
+- Resolution: Added shared Vizuara profile creation in `apps/web/src/lib/vizuara-user-profile.ts`. ArcEval email/password signup now creates a minimal Vizuara-compatible Firestore `Users/{uid}` document during `/api/auth/pending-signup`, matching Vizuara's signup-side profile creation. `/api/auth/session` also calls the same helper after the local company row is created or found, so existing Firebase Auth users without a `Users` document are repaired on next login. Existing Vizuara profiles are left untouched, and login-time repair failures are logged without blocking login. A one-time backfill for existing `companies.firebase_uid` rows may still be useful operationally.
+
 ## P2
 
 ### AE-P2-001: Analysis engine error details are swallowed by web API responses

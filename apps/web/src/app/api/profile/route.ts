@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 
 export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+  if (!hasCompanyRole(user, ['owner'])) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const [company] = await sql`
     SELECT name, contact_name, contact_title
@@ -26,6 +27,7 @@ export async function PATCH(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+  if (!hasCompanyRole(user, ['owner'])) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json();
   const name = typeof body.name === 'string' ? body.name.trim() : null;

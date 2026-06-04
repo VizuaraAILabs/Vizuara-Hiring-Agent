@@ -9,8 +9,10 @@ import { useState } from 'react';
 
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}', companyOnly: true },
-  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true },
-  { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
+  { label: 'Assessments', href: '/dashboard/assessments', icon: '[]', companyOnly: true },
+  { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true, writeOnly: true },
+  { label: 'Company Profile', href: '/dashboard/profile', icon: '○', companyOnly: true, roles: ['owner'] },
+  { label: 'Team', href: '/dashboard/team', icon: 'TM', companyOnly: true, roles: ['owner', 'recruiter'] },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
   { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
   { label: 'All Challenges', href: '/dashboard/admin/challenges', icon: '{}', adminOnly: true },
@@ -58,6 +60,8 @@ export default function Sidebar() {
         {navItems
           .filter((item) => !item.adminOnly || user?.isAdmin)
           .filter((item) => !item.companyOnly || Boolean(user?.companyId))
+          .filter((item) => !item.writeOnly || user?.role === 'owner' || user?.role === 'recruiter')
+          .filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
           .map((item) => {
             const isActive = item.href === '/dashboard' || item.href === '/dashboard/admin'
               ? pathname === item.href

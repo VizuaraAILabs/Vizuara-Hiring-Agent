@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import sql from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, hasCompanyRole } from '@/lib/auth';
 import { callWithKeyRotation } from '@/lib/gemini';
 import { getChallengeById } from '@/lib/challenge-queries';
 
@@ -125,6 +125,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     if (!user.companyId) {
       return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+    }
+    if (!hasCompanyRole(user, ['owner', 'recruiter'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { id } = await params;
