@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 const PRESET_TITLES = [
   'Founder',
@@ -30,6 +31,7 @@ function resolveSelectValue(title: string): string {
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
+  const router = useRouter();
   const canEditProfile = user?.role === 'owner';
   const [form, setForm] = useState<ProfileData>({ name: '', contactName: '', contactTitle: '' });
   const [selectValue, setSelectValue] = useState('');
@@ -39,6 +41,13 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (user && user.role !== 'owner') {
+      router.replace('/dashboard');
+      return;
+    }
+
+    if (!user) return;
+
     fetch('/api/profile')
       .then((r) => r.json())
       .then((d) => {
@@ -48,7 +57,7 @@ export default function ProfilePage() {
       })
       .catch(() => setError('Failed to load profile.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [router, user]);
 
   const handleSelectChange = (val: string) => {
     setSelectValue(val);
@@ -94,8 +103,8 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-serif italic text-white">Profile</h1>
-        <p className="text-neutral-500 mt-1">Manage your company and account details</p>
+        <h1 className="text-2xl font-serif italic text-white">Company Profile</h1>
+        <p className="text-neutral-500 mt-1">Manage company account details shown across ArcEval</p>
       </div>
 
       <div className="bg-surface border border-white/5 rounded-2xl p-6 space-y-6">

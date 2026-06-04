@@ -11,7 +11,7 @@ const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}', companyOnly: true },
   { label: 'Assessments', href: '/dashboard/assessments', icon: '[]', companyOnly: true },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true, writeOnly: true },
-  { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
+  { label: 'Company Profile', href: '/dashboard/profile', icon: '○', companyOnly: true, roles: ['owner'] },
   { label: 'Team', href: '/dashboard/team', icon: 'TM', companyOnly: true, roles: ['owner', 'recruiter'] },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
   { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
