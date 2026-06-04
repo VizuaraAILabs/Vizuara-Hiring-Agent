@@ -68,7 +68,14 @@ function RegisterPageContent() {
     if (invitedCompanyName) {
       setCompanyName((current) => current || invitedCompanyName);
     }
-  }, [searchParams]);
+
+    const noisyParams = ['_se', 'email'];
+    if (noisyParams.some((param) => searchParams.has(param))) {
+      const cleanUrl = new URL(window.location.href);
+      noisyParams.forEach((param) => cleanUrl.searchParams.delete(param));
+      router.replace(`${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+    }
+  }, [router, searchParams]);
 
   const getVerificationContinueUrl = () => {
     const loginUrl = new URL('/login', window.location.origin);
