@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Archive, Copy, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { formatDate } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 function stripMarkdown(text: string): string {
   return text
@@ -71,9 +72,11 @@ export default function ChallengeCard({
   onArchiveToggle,
   onDuplicate,
 }: ChallengeCardProps) {
+  const { user } = useAuth();
   const [now] = useState(() => Date.now());
   const isActive = Boolean(is_active);
   const isArchived = Boolean(archived_at);
+  const canManageActions = Boolean(user?.isAdmin || user?.role === 'owner' || user?.role === 'recruiter');
   const isExpired = !isArchived && Boolean(ends_at) && new Date(ends_at as string).getTime() <= now;
   const statusLabel = isArchived ? 'Archived' : isExpired ? 'Expired' : isActive ? 'Active' : 'Closed';
   const statusClass = isArchived
@@ -104,7 +107,7 @@ export default function ChallengeCard({
           <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}`}>
             {statusLabel}
           </span>
-          {onArchiveToggle && (
+          {canManageActions && onArchiveToggle && (
             <button
               type="button"
               onClick={(event) => {
@@ -119,7 +122,7 @@ export default function ChallengeCard({
               {isArchived ? <RotateCcw className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
             </button>
           )}
-          {onDuplicate && (
+          {canManageActions && onDuplicate && (
             <button
               type="button"
               onClick={(event) => {

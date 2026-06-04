@@ -1,18 +1,29 @@
 'use client';
 
-import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import CreateChallengeForm from '@/components/dashboard/CreateChallengeForm';
 import WizardContainer from '@/components/dashboard/wizard/WizardContainer';
 import TemplateGallery from '@/components/dashboard/TemplateGallery';
+import { useAuth } from '@/context/AuthContext';
 
 type Tab = 'ai' | 'manual' | 'template';
 
 export default function NewChallengePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>(
     searchParams.get('tab') === 'manual' ? 'manual' : 'ai'
   );
+  const canCreateChallenge = Boolean(user?.isAdmin || user?.role === 'owner' || user?.role === 'recruiter');
+
+  useEffect(() => {
+    if (authLoading || canCreateChallenge) return;
+    router.replace('/dashboard');
+  }, [authLoading, canCreateChallenge, router]);
+
+  if (authLoading || !canCreateChallenge) return null;
 
   return (
     <div>

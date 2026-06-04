@@ -12,6 +12,7 @@ import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
 import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
 import ArcSpinner from '@/components/ArcSpinner';
 import { useSubscription } from '@/context/SubscriptionContext';
+import { useAuth } from '@/context/AuthContext';
 import type { CandidateLifecycleStatus, Challenge, Session, StarterFile } from '@/types';
 
 interface ChallengeDetail extends Challenge {
@@ -301,6 +302,7 @@ export default function ChallengeDetailPage() {
   const searchParams = useSearchParams();
   const challengeId = params.id as string;
   const { planStatus, refreshSubscription } = useSubscription();
+  const { user, loading: authLoading } = useAuth();
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ChallengeTab>(() => parseChallengeTab(searchParams.get('tab')));
@@ -505,15 +507,24 @@ export default function ChallengeDetailPage() {
 
   const assessmentUrl = typeof window !== 'undefined' ? `${window.location.origin}/apply/${challengeId}` : `/apply/${challengeId}`;
 
+  const canManageChallenge = Boolean(user?.isAdmin || user?.role === 'owner' || user?.role === 'recruiter');
+
   const tabs = [
     { id: 'description' as const, label: 'Description', icon: FileText },
-    { id: 'starter-files' as const, label: 'Starter Files', icon: FolderCode, badge: starterFileCount },
-    { id: 'distribution' as const, label: 'Access Control', icon: Link2 },
-    { id: 'invites' as const, label: 'Invites', icon: MailPlus },
+    { id: 'starter-files' as const, label: 'Starter Files', icon: FolderCode, badge: starterFileCount, writeOnly: true },
+    { id: 'distribution' as const, label: 'Access Control', icon: Link2, writeOnly: true },
+    { id: 'invites' as const, label: 'Invites', icon: MailPlus, writeOnly: true },
     { id: 'candidates' as const, label: 'Candidates', icon: Users, badge: challenge?.sessions.length ?? 0 },
     { id: 'analytics' as const, label: 'Analytics', icon: BarChart3 },
-    { id: 'settings' as const, label: 'Settings', icon: SettingsIcon },
-  ];
+    { id: 'settings' as const, label: 'Settings', icon: SettingsIcon, writeOnly: true },
+  ].filter((tab) => canManageChallenge || !tab.writeOnly);
+
+  useEffect(() => {
+    if (authLoading || canManageChallenge) return;
+    if (activeTab === 'starter-files' || activeTab === 'distribution' || activeTab === 'invites' || activeTab === 'settings') {
+      setActiveTab('description');
+    }
+  }, [activeTab, authLoading, canManageChallenge]);
 
   const statusColors: Record<string, string> = {
     pending: 'bg-amber-500/10 text-amber-400',
@@ -1086,7 +1097,7 @@ export default function ChallengeDetailPage() {
   const selectedVisibleStatus = selectedCandidate
     ? analysisStartingIds.has(selectedCandidate.id) ? 'queued' : selectedCandidate.status
     : null;
-  const selectedCanUsePendingActions = selectedCandidate ? canManagePendingInvite(selectedCandidate) : false;
+  const selectedCanUsePendingActions = selectedCandidate && canManageChallenge ? canManagePendingInvite(selectedCandidate) : false;
   const selectedSendBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'send_invite_email')) : false;
   const selectedRegenerateBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'regenerate_link')) : false;
   const selectedRevokeBusy = selectedCandidate ? lifecycleBusyIds.has(lifecycleBusyKey(selectedCandidate.id, 'revoke')) : false;
@@ -1097,8 +1108,8 @@ export default function ChallengeDetailPage() {
   const selectedAnalyzeBusy = selectedCandidate ? analysisStartingIds.has(selectedCandidate.id) : false;
   const selectedCopyBusy = selectedCandidate ? copyingSessionId === selectedCandidate.id : false;
   const selectedCandidateStatus = selectedCandidate?.candidate_lifecycle_status ?? null;
-  const selectedCanMarkNoShow = selectedCandidate ? selectedCandidate.status === 'pending' && !selectedCandidate.started_at : false;
-  const selectedCanCopyInviteLink = selectedCandidate ? !selectedCandidate.candidate_lifecycle_status : false;
+  const selectedCanMarkNoShow = selectedCandidate && canManageChallenge ? selectedCandidate.status === 'pending' && !selectedCandidate.started_at : false;
+  const selectedCanCopyInviteLink = selectedCandidate && canManageChallenge ? !selectedCandidate.candidate_lifecycle_status : false;
 
   const selectedActionButtonClass = 'inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-neutral-600';
 
@@ -1131,6 +1142,7 @@ export default function ChallengeDetailPage() {
             <p className="mt-1 text-neutral-500">Assessment duration</p>
           </div>
 
+          {canManageChallenge && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -1153,6 +1165,7 @@ export default function ChallengeDetailPage() {
               {challenge.archived_at ? 'Unarchive' : 'Archive'}
             </button>
           </div>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -1192,7 +1205,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {activeTab === 'starter-files' && (
+      {canManageChallenge && activeTab === 'starter-files' && (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1233,7 +1246,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {activeTab === 'distribution' && (
+      {canManageChallenge && activeTab === 'distribution' && (
         <div className="space-y-5">
             <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
               <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1501,7 +1514,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {activeTab === 'invites' && (
+      {canManageChallenge && activeTab === 'invites' && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <div className="space-y-6">
             <div className="rounded-2xl border border-white/5 bg-surface">
@@ -1712,7 +1725,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {activeTab === 'settings' && (
+      {canManageChallenge && activeTab === 'settings' && (
         <form onSubmit={handleSaveSettings} className="space-y-6">
           <div className="flex flex-col gap-3 rounded-2xl border border-white/5 bg-surface p-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -2154,7 +2167,7 @@ export default function ChallengeDetailPage() {
                           View Report
                         </Link>
                       )}
-                      {(selectedVisibleStatus === 'completed' || selectedAnalyzeBusy) && (
+                      {canManageChallenge && (selectedVisibleStatus === 'completed' || selectedAnalyzeBusy) && (
                         <button
                           type="button"
                           disabled={selectedAnalyzeBusy}
@@ -2274,7 +2287,7 @@ export default function ChallengeDetailPage() {
                           )}
                         </button>
                       )}
-                      {selectedCandidateStatus !== 'withdrawn' && (
+                      {canManageChallenge && selectedCandidateStatus !== 'withdrawn' && (
                         <button
                           type="button"
                           disabled={selectedWithdrawnBusy}
@@ -2294,7 +2307,7 @@ export default function ChallengeDetailPage() {
                           )}
                         </button>
                       )}
-                      {selectedCandidateStatus !== 'disqualified' && (
+                      {canManageChallenge && selectedCandidateStatus !== 'disqualified' && (
                         <button
                           type="button"
                           disabled={selectedDisqualifiedBusy}
@@ -2314,7 +2327,7 @@ export default function ChallengeDetailPage() {
                           )}
                         </button>
                       )}
-                      {selectedCandidate.candidate_lifecycle_status && (
+                      {canManageChallenge && selectedCandidate.candidate_lifecycle_status && (
                         <button
                           type="button"
                           disabled={selectedClearBusy}
@@ -2605,61 +2618,65 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      <ConfirmationModal
-        open={closeAccessModalOpen}
-        title="Close Assessment?"
-        description="Closing blocks new candidate registration, recruiter invite generation, and pending candidates from starting. Active sessions are not ended automatically, and completed reports remain available."
-        confirmLabel="Stage Close"
-        cancelLabel="Keep Open"
-        variant="danger"
-        onConfirm={() => {
-          setAccessIsActive(false);
-          setAccessSaved(false);
-          setCloseAccessModalOpen(false);
-        }}
-        onClose={() => setCloseAccessModalOpen(false)}
-      />
+      {canManageChallenge && (
+        <>
+          <ConfirmationModal
+            open={closeAccessModalOpen}
+            title="Close Assessment?"
+            description="Closing blocks new candidate registration, recruiter invite generation, and pending candidates from starting. Active sessions are not ended automatically, and completed reports remain available."
+            confirmLabel="Stage Close"
+            cancelLabel="Keep Open"
+            variant="danger"
+            onConfirm={() => {
+              setAccessIsActive(false);
+              setAccessSaved(false);
+              setCloseAccessModalOpen(false);
+            }}
+            onClose={() => setCloseAccessModalOpen(false)}
+          />
 
-      <ConfirmationModal
-        open={archiveModalOpen}
-        title={challenge.archived_at ? 'Unarchive Assessment?' : 'Archive Assessment?'}
-        description={
-          challenge.archived_at
-            ? `"${challenge.title}" will return to the dashboard according to its current access state.`
-            : Boolean(challenge.is_active)
-              ? `"${challenge.title}" may still accept candidates. Archiving only hides it from the main dashboard unless you close it too.`
-              : `"${challenge.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
-        }
-        confirmLabel={challenge.archived_at ? 'Unarchive' : 'Archive Only'}
-        cancelLabel="Cancel"
-        onConfirm={() => handleArchiveChallenge(false)}
-        onClose={() => setArchiveModalOpen(false)}
-        secondaryAction={
-          !challenge.archived_at && Boolean(challenge.is_active)
-            ? {
-              label: 'Close and Archive',
-              onClick: () => handleArchiveChallenge(true),
+          <ConfirmationModal
+            open={archiveModalOpen}
+            title={challenge.archived_at ? 'Unarchive Assessment?' : 'Archive Assessment?'}
+            description={
+              challenge.archived_at
+                ? `"${challenge.title}" will return to the dashboard according to its current access state.`
+                : Boolean(challenge.is_active)
+                  ? `"${challenge.title}" may still accept candidates. Archiving only hides it from the main dashboard unless you close it too.`
+                  : `"${challenge.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
             }
-            : undefined
-        }
-      />
+            confirmLabel={challenge.archived_at ? 'Unarchive' : 'Archive Only'}
+            cancelLabel="Cancel"
+            onConfirm={() => handleArchiveChallenge(false)}
+            onClose={() => setArchiveModalOpen(false)}
+            secondaryAction={
+              !challenge.archived_at && Boolean(challenge.is_active)
+                ? {
+                  label: 'Close and Archive',
+                  onClick: () => handleArchiveChallenge(true),
+                }
+                : undefined
+            }
+          />
 
-      <DuplicateChallengeModal
-        open={duplicateModalOpen}
-        source={{
-          id: challenge.id,
-          title: challenge.title,
-          hasStarterFiles: starterFileCount > 0,
-          hasAllowedEmails: Boolean(challenge.allowed_emails?.length),
-          hasAccessWindow: Boolean(challenge.starts_at || challenge.ends_at),
-          hasCohortLabel: Boolean(challenge.cohort_label),
-        }}
-        onClose={() => setDuplicateModalOpen(false)}
-        onDuplicated={(duplicatedChallengeId) => {
-          setDuplicateModalOpen(false);
-          router.push(`/dashboard/challenges/${duplicatedChallengeId}`);
-        }}
-      />
+          <DuplicateChallengeModal
+            open={duplicateModalOpen}
+            source={{
+              id: challenge.id,
+              title: challenge.title,
+              hasStarterFiles: starterFileCount > 0,
+              hasAllowedEmails: Boolean(challenge.allowed_emails?.length),
+              hasAccessWindow: Boolean(challenge.starts_at || challenge.ends_at),
+              hasCohortLabel: Boolean(challenge.cohort_label),
+            }}
+            onClose={() => setDuplicateModalOpen(false)}
+            onDuplicated={(duplicatedChallengeId) => {
+              setDuplicateModalOpen(false);
+              router.push(`/dashboard/challenges/${duplicatedChallengeId}`);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

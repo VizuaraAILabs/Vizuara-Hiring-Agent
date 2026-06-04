@@ -241,6 +241,7 @@ export default function DashboardPage() {
   }
 
   const emptyCopy = emptyStateCopy[view];
+  const canCreateChallenge = Boolean(user?.isAdmin || user?.role === 'owner' || user?.role === 'recruiter');
 
   return (
     <div>
@@ -251,12 +252,14 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-serif italic text-white">Challenges</h1>
           <p className="text-neutral-500 mt-1">Manage your AI-collaboration assessments</p>
         </div>
-        <Link
-          href="/dashboard/challenges/new"
-          className="bg-primary hover:bg-primary-light text-black px-5 py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
-        >
-          New Challenge
-        </Link>
+        {canCreateChallenge && (
+          <Link
+            href="/dashboard/challenges/new"
+            className="bg-primary hover:bg-primary-light text-black px-5 py-2.5 rounded-xl text-sm font-semibold transition-all btn-glow"
+          >
+            New Challenge
+          </Link>
+        )}
       </div>
 
       <AnalysisAlertsPanel />
@@ -291,18 +294,20 @@ export default function DashboardPage() {
       ) : challenges.length === 0 ? (
         <div className="text-center py-20">
           <p className="text-neutral-600 text-lg mb-4">{emptyCopy.title}</p>
-          <Link
-            href={view === 'active' || view === 'all' ? '/dashboard/challenges/new' : '#'}
-            onClick={(event) => {
-              if (view === 'closed' || view === 'archived') {
-                event.preventDefault();
-                setView('active');
-              }
-            }}
-            className="text-primary hover:text-primary-light text-sm"
-          >
-            {emptyCopy.action}
-          </Link>
+          {(canCreateChallenge || view === 'closed' || view === 'archived') && (
+            <Link
+              href={view === 'active' || view === 'all' ? '/dashboard/challenges/new' : '#'}
+              onClick={(event) => {
+                if (view === 'closed' || view === 'archived') {
+                  event.preventDefault();
+                  setView('active');
+                }
+              }}
+              className="text-primary hover:text-primary-light text-sm"
+            >
+              {canCreateChallenge ? emptyCopy.action : 'View active assessments'}
+            </Link>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -310,53 +315,57 @@ export default function DashboardPage() {
             <ChallengeCard
               key={challenge.id}
               {...challenge}
-              onArchiveToggle={(target) => {
+              onArchiveToggle={canCreateChallenge ? (target) => {
                 setArchiveError(null);
                 setArchiveTarget(target);
-              }}
-              onDuplicate={setDuplicateSource}
+              } : undefined}
+              onDuplicate={canCreateChallenge ? setDuplicateSource : undefined}
             />
           ))}
         </div>
       )}
 
-      <ConfirmationModal
-        open={Boolean(archiveTarget)}
-        title={archiveTarget?.isArchived ? 'Unarchive Assessment?' : 'Archive Assessment?'}
-        description={
-          archiveTarget?.isArchived
-            ? `"${archiveTarget.title}" will return to the dashboard according to its current access state.`
-            : archiveTarget?.isActive
-              ? `"${archiveTarget?.title}" may still accept candidates. Archiving only hides it from this list unless you close it too.`
-              : `"${archiveTarget?.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
-        }
-        confirmLabel={archiveTarget?.isArchived ? 'Unarchive' : 'Archive Only'}
-        cancelLabel="Cancel"
-        isLoading={archiveSaving}
-        error={archiveError}
-        onConfirm={() => handleArchiveConfirm(false)}
-        onClose={() => {
-          setArchiveTarget(null);
-          setArchiveError(null);
-        }}
-        secondaryAction={
-          archiveTarget && !archiveTarget.isArchived && archiveTarget.isActive
-            ? {
+      {canCreateChallenge && (
+        <>
+          <ConfirmationModal
+            open={Boolean(archiveTarget)}
+            title={archiveTarget?.isArchived ? 'Unarchive Assessment?' : 'Archive Assessment?'}
+            description={
+              archiveTarget?.isArchived
+                ? `"${archiveTarget.title}" will return to the dashboard according to its current access state.`
+                : archiveTarget?.isActive
+                  ? `"${archiveTarget?.title}" may still accept candidates. Archiving only hides it from this list unless you close it too.`
+                  : `"${archiveTarget?.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
+            }
+            confirmLabel={archiveTarget?.isArchived ? 'Unarchive' : 'Archive Only'}
+            cancelLabel="Cancel"
+            isLoading={archiveSaving}
+            error={archiveError}
+            onConfirm={() => handleArchiveConfirm(false)}
+            onClose={() => {
+              setArchiveTarget(null);
+              setArchiveError(null);
+            }}
+            secondaryAction={
+              archiveTarget && !archiveTarget.isArchived && archiveTarget.isActive
+                ? {
                 label: 'Close and Archive',
                 onClick: () => handleArchiveConfirm(true),
               }
-            : undefined
-          }
-      />
-      <DuplicateChallengeModal
-        open={Boolean(duplicateSource)}
-        source={duplicateSource}
-        onClose={() => setDuplicateSource(null)}
-        onDuplicated={(challengeId) => {
-          setDuplicateSource(null);
-          router.push(`/dashboard/challenges/${challengeId}`);
-        }}
-      />
+                : undefined
+            }
+          />
+          <DuplicateChallengeModal
+            open={Boolean(duplicateSource)}
+            source={duplicateSource}
+            onClose={() => setDuplicateSource(null)}
+            onDuplicated={(challengeId) => {
+              setDuplicateSource(null);
+              router.push(`/dashboard/challenges/${challengeId}`);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
