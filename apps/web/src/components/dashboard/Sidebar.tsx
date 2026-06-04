@@ -9,6 +9,7 @@ import { useState } from 'react';
 
 const navItems = [
   { label: 'Challenges', href: '/dashboard', icon: '{}', companyOnly: true },
+  { label: 'Assessments', href: '/dashboard/assessments', icon: '[]', companyOnly: true },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true, writeOnly: true },
   { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
   { label: 'Team', href: '/dashboard/team', icon: 'TM', companyOnly: true },

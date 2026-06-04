@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Archive, Ban, BarChart3, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Trash2, UserMinus, UserX, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
@@ -19,6 +19,20 @@ interface ChallengeDetail extends Challenge {
 }
 
 type ChallengeTab = 'description' | 'starter-files' | 'distribution' | 'invites' | 'candidates' | 'analytics' | 'settings';
+
+function parseChallengeTab(value: string | null): ChallengeTab {
+  switch (value) {
+    case 'starter-files':
+    case 'distribution':
+    case 'invites':
+    case 'candidates':
+    case 'analytics':
+    case 'settings':
+      return value;
+    default:
+      return 'description';
+  }
+}
 
 type AnalyticsItem = {
   key?: string;
@@ -284,11 +298,12 @@ function AnalyticsRows({
 export default function ChallengeDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const challengeId = params.id as string;
   const { planStatus, refreshSubscription } = useSubscription();
   const [challenge, setChallenge] = useState<ChallengeDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ChallengeTab>('description');
+  const [activeTab, setActiveTab] = useState<ChallengeTab>(() => parseChallengeTab(searchParams.get('tab')));
   const [inviteForm, setInviteForm] = useState({ name: '', email: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
@@ -336,7 +351,7 @@ export default function ChallengeDetailPage() {
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(() => searchParams.get('candidateId'));
   const [analytics, setAnalytics] = useState<ChallengeAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState('');
@@ -446,6 +461,12 @@ export default function ChallengeDetailPage() {
       void fetchChallengeAnalytics();
     }
   }, [activeTab, analytics, analyticsError, analyticsLoading, fetchChallengeAnalytics]);
+
+  useEffect(() => {
+    if (activeTab !== 'candidates' || !selectedCandidateId || !challenge) return;
+    const row = document.getElementById(`candidate-row-${selectedCandidateId}`);
+    row?.scrollIntoView({ block: 'center' });
+  }, [activeTab, challenge, selectedCandidateId]);
 
   const starterFileCount = starterFiles.filter((file) => file.path && !file.path.endsWith('/.gitkeep')).length;
   const hasStarterFileChanges = useMemo(
@@ -2344,6 +2365,7 @@ export default function ChallengeDetailPage() {
                     return (
                       <tr
                         key={session.id}
+                        id={`candidate-row-${session.id}`}
                         onClick={() => setSelectedCandidateId((current) => current === session.id ? null : session.id)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
