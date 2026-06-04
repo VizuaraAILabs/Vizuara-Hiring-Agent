@@ -3,6 +3,11 @@
 ALTER TABLE companies
   ADD COLUMN IF NOT EXISTS team_member_limit INTEGER NOT NULL DEFAULT 1;
 
+UPDATE companies
+SET team_member_limit = 3
+WHERE plan = 'starter'
+  AND team_member_limit = 1;
+
 CREATE TABLE IF NOT EXISTS company_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
