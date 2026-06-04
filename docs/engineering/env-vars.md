@@ -51,6 +51,7 @@ Required for local email/password login in the web app.
 | `COOKIE_DOMAIN` | *(unset)* | Set to `.vizuara.ai` if you need cross-subdomain cookies |
 | `ARCEVAL_ENROLLMENT_ID` | *(empty)* | Vizuara course ID for subscription gating |
 | `ARCEVAL_PAYMENT_URL` | *(empty)* | Optional payment URL used by subscription checks |
+| `ARCEVAL_PLAN_STATUS_URL` | `https://us-central1-vizuara-ai-labs.cloudfunctions.net/getEffectivePlanForArcEval` | Labs function used to resolve ArcEval paid plan tier and billing period |
 
 ## Analysis Engine
 

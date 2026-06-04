@@ -190,6 +190,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: If the owner leaves the company or changes responsibilities, support must intervene manually to keep the account administrable.
 - Suggested fix: Add an owner-transfer flow that lets the current owner promote an active member to owner and demote themselves to recruiter, with confirmation, audit logging, and guardrails so every company always has exactly one owner.
 
+### FEAT-P2-009: Send internal email notifications for new in-app feedback
+
+- Status: Proposed
+- Area: Feedback / support operations
+- Evidence: The in-app feedback endpoint stores submissions in `feedback` and `feedback_tags`, and admin replies can be sent back to the company contact through Brevo. There is no email notification when a new feedback item is submitted, so the team must actively check the admin feedback dashboard.
+- Impact: Bugs, suggestions, and customer concerns submitted through the built-in feedback tab can sit unnoticed, especially outside regular admin dashboard review.
+- Suggested fix: On new feedback submission, send an internal notification email to a configured recipient list such as `FEEDBACK_NOTIFICATION_EMAILS`. Include company name/email, feedback type/category/rating, comment, page URL, tags, and a link to the admin feedback dashboard. Treat notification failure as non-blocking so feedback is still saved.
+
 ## P3
 
 ### FEAT-P3-001: Add archived/completed grouping for old assessments
