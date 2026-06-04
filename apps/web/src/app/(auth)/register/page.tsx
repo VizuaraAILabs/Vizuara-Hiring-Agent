@@ -54,6 +54,7 @@ function RegisterPageContent() {
   const [loadingMethod, setLoadingMethod] = useState<'email' | 'google' | null>(null);
   const [error, setError] = useState('');
   const [verificationEmail, setVerificationEmail] = useState('');
+  const [companyNameLocked, setCompanyNameLocked] = useState(false);
 
   const returnTo = useMemo(
     () => getSafeReturnTo(searchParams.get('returnTo')),
@@ -67,6 +68,7 @@ function RegisterPageContent() {
     const invitedCompanyName = searchParams.get('company')?.trim();
     if (invitedCompanyName) {
       setCompanyName((current) => current || invitedCompanyName);
+      setCompanyNameLocked(true);
     }
 
     const noisyParams = ['_se', 'email'];
@@ -316,8 +318,9 @@ function RegisterPageContent() {
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     autoComplete="organization"
+                    disabled={companyNameLocked}
                     required
-                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary"
+                    className="h-12 w-full rounded-lg border border-white/10 bg-white/3 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-neutral-700 focus:border-primary disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/5 disabled:text-neutral-400"
                     placeholder="Acme Inc."
                   />
                 </div>

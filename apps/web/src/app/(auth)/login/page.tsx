@@ -16,7 +16,8 @@ function getSafeReturnTo(value: string | null): string {
   return value;
 }
 
-function getAuthErrorMessage(code: string | undefined): string {
+function getAuthErrorMessage(code: string | undefined, companyName?: string | null): string {
+  const safeCompanyName = companyName?.trim();
   switch (code) {
     case 'auth/invalid-credential':
     case 'auth/invalid-login-credentials':
@@ -34,7 +35,9 @@ function getAuthErrorMessage(code: string | undefined): string {
     case 'session-setup-failed':
       return 'Unable to create your session. Please try again in a moment.';
     case 'team-access-removed':
-      return 'Your access to this company account has been removed. Ask the company owner to invite you again.';
+      return safeCompanyName
+        ? `Your access to ${safeCompanyName} has been removed. Ask the company owner to invite you again.`
+        : 'Your access to this company account has been removed. Ask the company owner to invite you again.';
     case 'team-access-associated':
       return 'This email is already associated with another company account.';
     case 'auth-service-unavailable':
@@ -62,7 +65,7 @@ function LoginPageContent() {
 
   useEffect(() => {
     const errorCode = searchParams.get('error');
-    if (errorCode) setError(getAuthErrorMessage(errorCode));
+    if (errorCode) setError(getAuthErrorMessage(errorCode, searchParams.get('company')));
 
     if (searchParams.get('verified') === '1') {
       setNotice('Email verified. Sign in to continue to ArcEval.');

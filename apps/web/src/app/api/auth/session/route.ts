@@ -27,6 +27,7 @@ type ClaimedMemberRow = {
 
 type MemberByEmailRow = {
   id: string;
+  company_name: string;
   status: 'invited' | 'active' | 'removed';
 };
 
@@ -125,9 +126,10 @@ async function createSessionResponse({
         LIMIT 1
       `;
       const [memberByEmail] = await sql<MemberByEmailRow[]>`
-        SELECT id, status
-        FROM company_members
-        WHERE email = ${email}
+        SELECT cm.id, c.name AS company_name, cm.status
+        FROM company_members cm
+        JOIN companies c ON c.id = cm.company_id
+        WHERE cm.email = ${email}
         LIMIT 1
       `;
       let companyNameForVizuaraProfile = trimmedCompanyName || decoded.name || email.split('@')[0] || 'Unknown company';
@@ -181,17 +183,21 @@ async function createSessionResponse({
           companyNameForVizuaraProfile = claimedMember.company_name || companyNameForVizuaraProfile;
         } else if (memberByEmail) {
           const removed = memberByEmail.status === 'removed';
+          const companyName = memberByEmail.company_name || 'this company';
           if (redirect) {
-            return NextResponse.redirect(new URL(
-              removed ? '/login?error=team-access-removed' : '/login?error=team-access-associated',
-              getExternalOrigin(request)
-            ));
+            const loginUrl = new URL('/login', getExternalOrigin(request));
+            loginUrl.searchParams.set('error', removed ? 'team-access-removed' : 'team-access-associated');
+            if (removed && companyName) {
+              loginUrl.searchParams.set('company', companyName);
+            }
+            return NextResponse.redirect(loginUrl);
           }
           return NextResponse.json({
             error: removed
-              ? 'Your access to this company account has been removed. Ask the company owner to invite you again.'
+              ? `Your access to ${companyName} has been removed. Ask the company owner to invite you again.`
               : 'This email is already associated with another company account.',
             code: removed ? 'team_access_removed' : 'team_access_associated',
+            companyName: removed ? companyName : undefined,
           }, { status: 403 });
         } else if (!existing) {
           const [pendingSignup] = await sql<{ company_name: string }[]>`
