@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type TeamRole = 'owner' | 'recruiter' | 'viewer';
 type TeamStatus = 'invited' | 'active';
@@ -43,6 +45,8 @@ function formatDate(value: string | null) {
 }
 
 export default function TeamPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [teamMemberLimit, setTeamMemberLimit] = useState(1);
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export default function TeamPage() {
   );
   const seatsAvailable = Math.max(0, teamMemberLimit - usedSeats);
 
-  async function loadTeam() {
+  const loadTeam = useCallback(async function loadTeam() {
     setLoading(true);
     setError('');
     try {
@@ -77,11 +81,16 @@ export default function TeamPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (user?.role === 'viewer') {
+      router.replace('/dashboard');
+      return;
+    }
     loadTeam();
-  }, []);
+  }, [authLoading, loadTeam, router, user?.role]);
 
   async function inviteMember(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -12,7 +12,7 @@ const navItems = [
   { label: 'Assessments', href: '/dashboard/assessments', icon: '[]', companyOnly: true },
   { label: 'New Challenge', href: '/dashboard/challenges/new', icon: '+', companyOnly: true, writeOnly: true },
   { label: 'Profile', href: '/dashboard/profile', icon: '○', companyOnly: true },
-  { label: 'Team', href: '/dashboard/team', icon: 'TM', companyOnly: true },
+  { label: 'Team', href: '/dashboard/team', icon: 'TM', companyOnly: true, roles: ['owner', 'recruiter'] },
   { label: 'Costs', href: '/dashboard/costs', icon: '$', adminOnly: true, companyOnly: true },
   { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
   { label: 'All Challenges', href: '/dashboard/admin/challenges', icon: '{}', adminOnly: true },
@@ -61,6 +61,7 @@ export default function Sidebar() {
           .filter((item) => !item.adminOnly || user?.isAdmin)
           .filter((item) => !item.companyOnly || Boolean(user?.companyId))
           .filter((item) => !item.writeOnly || user?.role === 'owner' || user?.role === 'recruiter')
+          .filter((item) => !item.roles || (user?.role && item.roles.includes(user.role)))
           .map((item) => {
             const isActive = item.href === '/dashboard' || item.href === '/dashboard/admin'
               ? pathname === item.href

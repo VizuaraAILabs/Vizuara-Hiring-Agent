@@ -10,6 +10,7 @@ import ReportSummary from '@/components/report/ReportSummary';
 import ScoreSummary from '@/components/report/ScoreSummary';
 import TranscriptViewer from '@/components/report/TranscriptViewer';
 import WorkspaceViewer from '@/components/report/WorkspaceViewer';
+import { useAuth } from '@/context/AuthContext';
 import type { AnalysisResult, Challenge, IntegritySummary, Interaction, Session, WorkspaceSnapshot } from '@/types';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -29,6 +30,7 @@ type Tab = 'summary' | 'overview' | 'timeline' | 'analysis' | 'ownership' | 'tra
 
 export default function ReportPage() {
   const params = useParams();
+  const { user } = useAuth();
   const sessionId = params.subId as string;
   const challengeId = params.id as string;
 
@@ -246,6 +248,7 @@ export default function ReportPage() {
     { key: 'transcript', label: 'Narrative' },
     { key: 'files', label: 'Files' },
   ];
+  const canEditReview = user?.role === 'owner' || user?.role === 'recruiter';
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -266,7 +269,11 @@ export default function ReportPage() {
 
         {/* Header */}
         <ReportHeader session={session} analysis={analysis} />
-        <RecruiterReviewPanel session={session} onSessionUpdated={handleSessionUpdated} />
+        <RecruiterReviewPanel
+          session={session}
+          onSessionUpdated={handleSessionUpdated}
+          canEditReview={canEditReview}
+        />
       </div>
 
       {/* Tabs */}

@@ -9,6 +9,7 @@ import type { DecisionLabel, Session } from '@/types';
 interface RecruiterReviewPanelProps {
   session: Session;
   onSessionUpdated: (session: Session) => void;
+  canEditReview?: boolean;
 }
 
 const decisionOptions: { value: '' | DecisionLabel; label: string }[] = [
@@ -19,7 +20,7 @@ const decisionOptions: { value: '' | DecisionLabel; label: string }[] = [
   { value: 'hired', label: 'Hired' },
 ];
 
-export default function RecruiterReviewPanel({ session, onSessionUpdated }: RecruiterReviewPanelProps) {
+export default function RecruiterReviewPanel({ session, onSessionUpdated, canEditReview = true }: RecruiterReviewPanelProps) {
   const [decisionLabel, setDecisionLabel] = useState<'' | DecisionLabel>(session.decision_label ?? '');
   const [notes, setNotes] = useState(session.recruiter_notes ?? '');
   const [saving, setSaving] = useState(false);
@@ -113,17 +114,19 @@ export default function RecruiterReviewPanel({ session, onSessionUpdated }: Recr
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openReviewModal}
-          className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light"
-        >
-          <Pencil className="h-4 w-4" aria-hidden="true" />
-          {session.reviewed_at ? 'Edit Review' : 'Add Review'}
-        </button>
+        {canEditReview && (
+          <button
+            type="button"
+            onClick={openReviewModal}
+            className="inline-flex w-fit items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            {session.reviewed_at ? 'Edit Review' : 'Add Review'}
+          </button>
+        )}
       </div>
 
-      {reviewModalOpen && (
+      {canEditReview && reviewModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {

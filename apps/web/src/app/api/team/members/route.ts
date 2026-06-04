@@ -45,6 +45,7 @@ export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
+  if (!hasCompanyRole(user, ['owner', 'recruiter'])) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const [company] = await sql<{ team_member_limit: number }[]>`
     SELECT team_member_limit FROM companies WHERE id = ${user.companyId}
