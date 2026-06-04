@@ -4,6 +4,9 @@ import type { PlanTier, PlanStatus } from '@/types';
 
 const ENROLLMENT_ID = process.env.ARCEVAL_ENROLLMENT_ID || '';
 const PAYMENT_URL = process.env.ARCEVAL_PAYMENT_URL || '';
+const PLAN_STATUS_URL =
+  process.env.ARCEVAL_PLAN_STATUS_URL ||
+  'https://us-central1-vizuara-ai-labs.cloudfunctions.net/getEffectivePlanForArcEval';
 
 const PLAN_LIMITS: Record<PlanTier, number> = {
   trial: 5,
@@ -15,6 +18,14 @@ const PLAN_LIMITS: Record<PlanTier, number> = {
 interface ActiveSubscription {
   currentPeriodStart: Date | null;
   currentPeriodEnd: Date | null;
+  plan: Exclude<PlanTier, 'trial'>;
+}
+
+interface LabsPlanResponse {
+  isEnrolled?: boolean;
+  plan?: unknown;
+  currentPeriodStart?: unknown;
+  currentPeriodEnd?: unknown;
 }
 
 /**
@@ -47,13 +58,12 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
 
   const trialEndsAt = company.trial_ends_at;
 
-  // 2. Trial plans: check Firestore for an active subscription, then fall through
+  // 2. Trial plans: check for an active paid subscription, then fall through
   if (company.plan === 'trial') {
     if (company.firebase_uid) {
       const subscription = await readActiveSubscription(company.firebase_uid);
       if (subscription) {
-        // Default to starter plan when newly enrolled
-        const newPlan: PlanTier = 'starter';
+        const newPlan = subscription.plan;
         await sql`UPDATE companies SET plan = ${newPlan}, trial_ends_at = NULL WHERE id = ${companyId}`;
         const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
         return checkPaidPlan(newPlan, sessionsUsed, null);
@@ -117,7 +127,10 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
       };
     }
     const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
-    return checkPaidPlan(company.plan, sessionsUsed, null);
+    if (subscription.plan !== company.plan) {
+      await sql`UPDATE companies SET plan = ${subscription.plan}, trial_ends_at = NULL WHERE id = ${companyId}`;
+    }
+    return checkPaidPlan(subscription.plan, sessionsUsed, null);
   }
 
   const sessionsUsed = await countSessionsSince(companyId, null);
@@ -186,14 +199,19 @@ async function countSessionsSince(companyId: string, since: Date | null): Promis
 }
 
 /**
- * Find the active subscription for this user + course in the `subscriptions` Firestore
- * collection. Returns null if none is currently active. If multiple actives exist
- * (shouldn't, but defensively), the one with the latest currentPeriodStart wins.
+ * Find the active ArcEval subscription for this user. Labs is the primary source
+ * for purchased tier and billing-period dates; the direct Firestore read remains
+ * as a fallback while the integration settles.
  *
  * The `currentPeriodStart` field is the source of truth for the billing-period anchor —
  * Razorpay's webhook bumps it on each renewal, which automatically resets the quota.
  */
 async function readActiveSubscription(firebaseUid: string): Promise<ActiveSubscription | null> {
+  const labsSubscription = await readLabsPlanStatus(firebaseUid);
+  if (labsSubscription || labsSubscription === null) {
+    return labsSubscription;
+  }
+
   try {
     const db = getAdminFirestore();
     const snap = await db
@@ -211,6 +229,7 @@ async function readActiveSubscription(firebaseUid: string): Promise<ActiveSubscr
       const sub = {
         currentPeriodStart: toDate(data.currentPeriodStart),
         currentPeriodEnd: toDate(data.currentPeriodEnd),
+        plan: 'starter' as const,
       };
       if (
         !latest ||
@@ -226,6 +245,46 @@ async function readActiveSubscription(firebaseUid: string): Promise<ActiveSubscr
     console.error('Error reading active subscription:', err);
     return null;
   }
+}
+
+async function readLabsPlanStatus(firebaseUid: string): Promise<ActiveSubscription | null | undefined> {
+  if (!PLAN_STATUS_URL) return undefined;
+
+  try {
+    const res = await fetch(PLAN_STATUS_URL, {
+      headers: {
+        Authorization: `Bearer ${firebaseUid}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      console.error(`Labs plan status returned ${res.status}`);
+      return undefined;
+    }
+
+    const data = (await res.json()) as LabsPlanResponse;
+    if (!data.isEnrolled) return null;
+
+    const plan = parsePaidPlan(data.plan);
+    if (!plan) {
+      console.error('Labs plan status returned an unsupported plan:', data.plan);
+      return undefined;
+    }
+
+    return {
+      plan,
+      currentPeriodStart: toDate(data.currentPeriodStart),
+      currentPeriodEnd: toDate(data.currentPeriodEnd),
+    };
+  } catch (err) {
+    console.error('Error reading Labs plan status:', err);
+    return undefined;
+  }
+}
+
+function parsePaidPlan(raw: unknown): Exclude<PlanTier, 'trial'> | null {
+  return raw === 'starter' || raw === 'growth' || raw === 'enterprise' ? raw : null;
 }
 
 function toDate(raw: unknown): Date | null {
