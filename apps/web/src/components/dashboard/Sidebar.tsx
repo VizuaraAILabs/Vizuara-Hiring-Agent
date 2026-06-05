@@ -27,6 +27,19 @@ const PLAN_LABELS: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
+const periodDateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+function formatPeriodDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return periodDateFormatter.format(date);
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -43,6 +56,15 @@ export default function Sidebar() {
   const trialDaysLeft = planStatus?.plan === 'trial' && planStatus.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(planStatus.trialEndsAt).getTime() - now) / (1000 * 60 * 60 * 24)))
     : null;
+  const periodStart = formatPeriodDate(planStatus?.currentPeriodStart);
+  const periodEnd = formatPeriodDate(planStatus?.currentPeriodEnd);
+  const periodLabel = periodStart && periodEnd
+    ? `${periodStart} - ${periodEnd}`
+    : periodStart
+      ? `From ${periodStart}`
+      : periodEnd
+        ? `Until ${periodEnd}`
+        : null;
 
   return (
     <aside className="print:hidden w-64 bg-surface border-r border-white/5 flex flex-col h-screen sticky top-0">
@@ -106,18 +128,30 @@ export default function Sidebar() {
             </div>
 
             {isBlocked ? (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
-                <p className="text-sm font-medium text-red-200">
-                  {planStatus.reason === 'subscription_lapsed'
-                    ? 'Subscription inactive'
-                    : 'Assessments paused'}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-red-200/70">
-                  {planStatus.reason === 'subscription_lapsed'
-                    ? 'Renew to continue creating assessments.'
-                    : 'Upgrade to continue creating assessments.'}
-                </p>
-              </div>
+              <>
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2">
+                  <p className="text-sm font-medium text-red-200">
+                    {planStatus.reason === 'subscription_lapsed'
+                      ? 'Subscription inactive'
+                      : 'Assessments paused'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-red-200/70">
+                    {planStatus.reason === 'subscription_lapsed'
+                      ? 'Renew to continue creating assessments.'
+                      : 'Upgrade to continue creating assessments.'}
+                  </p>
+                </div>
+                {periodLabel && (
+                  <div className="mt-3 border-t border-white/5 pt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+                      Period
+                    </p>
+                    <p className="mt-0.5 text-xs leading-4 text-neutral-400">
+                      {periodLabel}
+                    </p>
+                  </div>
+                )}
+              </>
             ) : !isUnlimited ? (
               <>
                 <div className="flex items-baseline justify-between mb-1.5">
@@ -137,13 +171,35 @@ export default function Sidebar() {
                     style={{ width: `${usagePercent}%` }}
                   />
                 </div>
+                {periodLabel && (
+                  <div className="mt-3 border-t border-white/5 pt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+                      Period
+                    </p>
+                    <p className="mt-0.5 text-xs leading-4 text-neutral-400">
+                      {periodLabel}
+                    </p>
+                  </div>
+                )}
               </>
             ) : null}
 
             {!isBlocked && isUnlimited && (
-              <span className="text-sm text-neutral-400">
-                {planStatus.sessionsUsed} assessments used
-              </span>
+              <>
+                <span className="text-sm text-neutral-400">
+                  {planStatus.sessionsUsed} assessments used
+                </span>
+                {periodLabel && (
+                  <div className="mt-3 border-t border-white/5 pt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-600">
+                      Period
+                    </p>
+                    <p className="mt-0.5 text-xs leading-4 text-neutral-400">
+                      {periodLabel}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {isBlocked && planStatus.paymentUrl && (

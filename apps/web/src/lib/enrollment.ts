@@ -66,7 +66,7 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
         const newPlan = subscription.plan;
         await sql`UPDATE companies SET plan = ${newPlan}, trial_ends_at = NULL WHERE id = ${companyId}`;
         const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
-        return checkPaidPlan(newPlan, sessionsUsed, null);
+        return checkPaidPlan(newPlan, sessionsUsed, null, subscription);
       }
     }
 
@@ -130,7 +130,7 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
     if (subscription.plan !== company.plan) {
       await sql`UPDATE companies SET plan = ${subscription.plan}, trial_ends_at = NULL WHERE id = ${companyId}`;
     }
-    return checkPaidPlan(subscription.plan, sessionsUsed, null);
+    return checkPaidPlan(subscription.plan, sessionsUsed, null, subscription);
   }
 
   const sessionsUsed = await countSessionsSince(companyId, null);
@@ -140,10 +140,12 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
 function checkPaidPlan(
   plan: PlanTier,
   sessionsUsed: number,
-  trialEndsAt: string | null
+  trialEndsAt: string | null,
+  subscription?: Pick<ActiveSubscription, 'currentPeriodStart' | 'currentPeriodEnd'> | null
 ): PlanStatus {
   const limit = PLAN_LIMITS[plan];
   const paymentUrl = `${process.env.NEXT_PUBLIC_VIZUARA_URL || 'https://vizuara.ai'}/pricing`;
+  const period = formatSubscriptionPeriod(subscription);
 
   if (sessionsUsed >= limit) {
     return {
@@ -153,6 +155,7 @@ function checkPaidPlan(
       sessionsLimit: limit === Infinity ? -1 : limit,
       plan,
       trialEndsAt,
+      ...period,
       paymentUrl,
     };
   }
@@ -164,6 +167,16 @@ function checkPaidPlan(
     sessionsLimit: limit === Infinity ? -1 : limit,
     plan,
     trialEndsAt,
+    ...period,
+  };
+}
+
+function formatSubscriptionPeriod(
+  subscription?: Pick<ActiveSubscription, 'currentPeriodStart' | 'currentPeriodEnd'> | null
+): Pick<PlanStatus, 'currentPeriodStart' | 'currentPeriodEnd'> {
+  return {
+    currentPeriodStart: subscription?.currentPeriodStart?.toISOString() ?? null,
+    currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
   };
 }
 
