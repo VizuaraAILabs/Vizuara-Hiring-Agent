@@ -304,5 +304,7 @@ export interface PlanStatus {
   sessionsLimit: number;
   plan: PlanTier;
   trialEndsAt: string | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
   paymentUrl?: string;
 }
