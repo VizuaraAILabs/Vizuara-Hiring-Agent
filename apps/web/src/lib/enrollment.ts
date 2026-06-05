@@ -1,5 +1,6 @@
 import sql from './db';
 import { getAdminFirestore } from './firebase-admin';
+import { PLAN_LIMITS, PLAN_TEAM_MEMBER_LIMITS } from './plan-limits';
 import type { PlanTier, PlanStatus } from '@/types';
 
 const ENROLLMENT_ID = process.env.ARCEVAL_ENROLLMENT_ID || '';
@@ -7,13 +8,6 @@ const PAYMENT_URL = process.env.ARCEVAL_PAYMENT_URL || '';
 const PLAN_STATUS_URL =
   process.env.ARCEVAL_PLAN_STATUS_URL ||
   'https://us-central1-vizuara-ai-labs.cloudfunctions.net/getEffectivePlanForArcEval';
-
-const PLAN_LIMITS: Record<PlanTier, number> = {
-  trial: 5,
-  starter: 50,
-  growth: 250,
-  enterprise: Infinity,
-};
 
 interface ActiveSubscription {
   currentPeriodStart: Date | null;
@@ -40,8 +34,9 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
     firebase_uid: string | null;
     plan: PlanTier;
     trial_ends_at: string | null;
+    team_member_limit: number;
   }[]>`
-    SELECT firebase_uid, plan, trial_ends_at FROM companies WHERE id = ${companyId}
+    SELECT firebase_uid, plan, trial_ends_at, team_member_limit FROM companies WHERE id = ${companyId}
   `;
 
   if (!company) {
@@ -64,7 +59,7 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
       const subscription = await readActiveSubscription(company.firebase_uid);
       if (subscription) {
         const newPlan = subscription.plan;
-        await sql`UPDATE companies SET plan = ${newPlan}, trial_ends_at = NULL WHERE id = ${companyId}`;
+        await updateCompanyPaidPlan(companyId, newPlan);
         const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
         return checkPaidPlan(newPlan, sessionsUsed, null, subscription);
       }
@@ -127,8 +122,8 @@ export async function checkEnrollmentStatus(companyId: string): Promise<PlanStat
       };
     }
     const sessionsUsed = await countSessionsSince(companyId, subscription.currentPeriodStart);
-    if (subscription.plan !== company.plan) {
-      await sql`UPDATE companies SET plan = ${subscription.plan}, trial_ends_at = NULL WHERE id = ${companyId}`;
+    if (subscription.plan !== company.plan || shouldUpdateTeamMemberLimit(subscription.plan, company.team_member_limit)) {
+      await updateCompanyPaidPlan(companyId, subscription.plan);
     }
     return checkPaidPlan(subscription.plan, sessionsUsed, null, subscription);
   }
@@ -169,6 +164,29 @@ function checkPaidPlan(
     trialEndsAt,
     ...period,
   };
+}
+
+function shouldUpdateTeamMemberLimit(plan: Exclude<PlanTier, 'trial'>, currentLimit: number): boolean {
+  const expectedLimit = PLAN_TEAM_MEMBER_LIMITS[plan];
+  return expectedLimit !== undefined && currentLimit !== expectedLimit;
+}
+
+async function updateCompanyPaidPlan(companyId: string, plan: Exclude<PlanTier, 'trial'>): Promise<void> {
+  const teamMemberLimit = PLAN_TEAM_MEMBER_LIMITS[plan];
+  if (teamMemberLimit) {
+    await sql`
+      UPDATE companies
+      SET plan = ${plan}, trial_ends_at = NULL, team_member_limit = ${teamMemberLimit}
+      WHERE id = ${companyId}
+    `;
+    return;
+  }
+
+  await sql`
+    UPDATE companies
+    SET plan = ${plan}, trial_ends_at = NULL
+    WHERE id = ${companyId}
+  `;
 }
 
 function formatSubscriptionPeriod(

@@ -3,6 +3,8 @@ import { getAuthUser, hasCompanyRole, type CompanyRole } from '@/lib/auth';
 import { sendTeamInviteEmail } from '@/lib/brevo';
 import sql from '@/lib/db';
 import { normalizeIdentityEmail } from '@/lib/email';
+import { getPlanTeamMemberLimit } from '@/lib/plan-limits';
+import type { PlanTier } from '@/types';
 
 const INVITABLE_ROLES: CompanyRole[] = ['recruiter', 'viewer'];
 
@@ -47,9 +49,12 @@ export async function GET() {
   if (!user.companyId) return NextResponse.json({ error: 'Company workspace required' }, { status: 403 });
   if (!hasCompanyRole(user, ['owner', 'recruiter'])) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const [company] = await sql<{ team_member_limit: number }[]>`
-    SELECT team_member_limit FROM companies WHERE id = ${user.companyId}
+  const [company] = await sql<{ plan: PlanTier; team_member_limit: number }[]>`
+    SELECT plan, team_member_limit FROM companies WHERE id = ${user.companyId}
   `;
+  const teamMemberLimit = company
+    ? getPlanTeamMemberLimit(company.plan, company.team_member_limit)
+    : 1;
 
   const members = await sql`
     SELECT id, email, name, role, status, invited_at, invite_email_status, invite_email_sent_at, invite_email_error, joined_at, created_at
@@ -63,7 +68,7 @@ export async function GET() {
 
   return NextResponse.json({
     members,
-    teamMemberLimit: company?.team_member_limit ?? 1,
+    teamMemberLimit,
     canManageTeam: hasCompanyRole(user, ['owner']),
     currentMemberId: user.memberId,
   });
@@ -94,11 +99,12 @@ export async function POST(request: NextRequest) {
   try {
     result = await sql.begin(async (tx): Promise<InviteResult> => {
       const trx = tx as unknown as typeof sql;
-      const [company] = await trx<{ name: string; team_member_limit: number }[]>`
-        SELECT name, team_member_limit FROM companies WHERE id = ${user.companyId}
+      const [company] = await trx<{ name: string; plan: PlanTier; team_member_limit: number }[]>`
+        SELECT name, plan, team_member_limit FROM companies WHERE id = ${user.companyId}
         FOR UPDATE
       `;
       if (!company) return { error: 'Company not found', status: 404 };
+      const teamMemberLimit = getPlanTeamMemberLimit(company.plan, company.team_member_limit);
 
       const [existingMember] = await trx<{ id: string; company_id: string; status: string }[]>`
         SELECT id, company_id, status
@@ -119,7 +125,7 @@ export async function POST(request: NextRequest) {
         WHERE company_id = ${user.companyId}
           AND status IN ('active', 'invited')
       `;
-      if (count >= company.team_member_limit) {
+      if (count >= teamMemberLimit) {
         return { error: 'Team member limit reached.', status: 400 };
       }
 
