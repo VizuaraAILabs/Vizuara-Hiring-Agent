@@ -4,6 +4,7 @@ import { sendTeamInviteEmail } from '@/lib/brevo';
 import sql from '@/lib/db';
 import { normalizeIdentityEmail } from '@/lib/email';
 import { getPlanTeamMemberLimit } from '@/lib/plan-limits';
+import { getPublicOrigin } from '@/lib/public-url';
 import type { PlanTier } from '@/types';
 
 const INVITABLE_ROLES: CompanyRole[] = ['recruiter', 'viewer'];
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  const inviteLink = new URL('/register', new URL(request.url).origin);
+  const inviteLink = new URL('/register', getPublicOrigin(request));
   inviteLink.searchParams.set('company', result.companyName);
 
   try {

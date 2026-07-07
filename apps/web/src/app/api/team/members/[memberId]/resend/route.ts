@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser, hasCompanyRole, type CompanyRole } from '@/lib/auth';
 import { sendTeamInviteEmail } from '@/lib/brevo';
 import sql from '@/lib/db';
+import { getPublicOrigin } from '@/lib/public-url';
 
 type InvitedMemberRow = {
   id: string;
@@ -53,7 +54,7 @@ export async function POST(
     return NextResponse.json({ error: 'Pending invite not found.' }, { status: 404 });
   }
 
-  const inviteLink = new URL('/register', new URL(request.url).origin);
+  const inviteLink = new URL('/register', getPublicOrigin(request));
   inviteLink.searchParams.set('company', target.company_name);
 
   try {

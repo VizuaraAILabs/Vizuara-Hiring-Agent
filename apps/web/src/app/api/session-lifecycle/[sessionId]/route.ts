@@ -8,6 +8,7 @@ import {
   renderInviteEmailTemplate,
 } from '@/lib/invite-email';
 import { generateToken } from '@/lib/utils';
+import { getPublicOrigin } from '@/lib/public-url';
 import type { CandidateLifecycleStatus, Session } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -202,8 +203,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
         return NextResponse.json({ error: 'Invite email is only available for pending candidates who have not started, and no send can already be in progress.' }, { status: 409 });
       }
 
-      const origin = new URL(request.url).origin;
-      const assessmentLink = `${origin}/session/${sendableSession.token}`;
+      const assessmentLink = `${getPublicOrigin(request)}/session/${sendableSession.token}`;
       const companyName = session.company_name || 'ArcEval';
       const mergeData = {
         candidateName: session.candidate_name,
