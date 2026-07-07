@@ -44,6 +44,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 - Impact: Companies cannot self-serve participant caps for a campus drive or role-specific assessment, and personalized invites can exceed the intended challenge capacity, creating quota/licensing surprises.
 - Implementation notes: Session creation paths serialize duplicate lookup, capacity/quota validation, and insert with advisory transaction locks to avoid simultaneous requests exceeding the cap. Existing pending/active sessions are reused rather than consuming additional capacity.
 
+### FEAT-P0-005: Reduce idle analysis-engine database polling to prevent compute-quota exhaustion
+
+- Status: Proposed
+- Area: Operations / database cost control
+- Evidence: The production `analysis` service starts background queue workers on startup and polls Postgres for queued `analysis_jobs`. The default `ANALYSIS_QUEUE_POLL_SECONDS` is `2` in `docker-compose.yml`, so the service can keep a serverless/compute-metered database awake even when no candidates are using the product. Production hit a database error stating, "Your account or project has exceeded the compute time quota. Upgrade your plan to increase limits," after showing 112 CU-hours despite low human usage.
+- Impact: ArcEval can exhaust database compute quota and return 500s on admin/recruiter pages even with light customer traffic. This turns an internal background worker into a production availability and cost risk.
+- Suggested fix: Increase the production idle polling interval immediately, for example `ANALYSIS_QUEUE_POLL_SECONDS=60` or `120`, and consider stopping the analysis service when not needed on very small deployments. Longer term, add exponential backoff when no jobs are found, wake the worker explicitly when `/analyze/start` enqueues a job, or move analysis dispatch to an event/queue mechanism that does not poll Postgres continuously. Add an operations note and alert for database compute quota consumption.
+
 ## P1
 
 ### FEAT-P1-001: Add editable challenge settings after creation

@@ -3,6 +3,7 @@ import sql from '@/lib/db';
 import { getAuthUser, hasCompanyRole, isAdmin } from '@/lib/auth';
 import { sendInviteEmail } from '@/lib/brevo';
 import { generateToken } from '@/lib/utils';
+import { getPublicOrigin } from '@/lib/public-url';
 import { addEmailToAllowlist, normalizeEmail, validateChallengeAccess } from '@/lib/challenge-access';
 import { getChallengeById } from '@/lib/challenge-queries';
 import {
@@ -157,8 +158,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     if (shouldSendEmail && result.sessionId && result.token && !result.body.error) {
-      const origin = new URL(request.url).origin;
-      const assessmentLink = `${origin}/session/${result.token}`;
+      const assessmentLink = `${getPublicOrigin(request)}/session/${result.token}`;
       const subjectTemplate = typeof email_subject === 'string' && email_subject.trim()
         ? email_subject.trim()
         : challenge.invite_email_subject || DEFAULT_INVITE_EMAIL_SUBJECT;

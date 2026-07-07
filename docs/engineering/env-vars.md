@@ -6,7 +6,7 @@ All variables go in `.env.production` at the project root. Start from `.env.exam
 
 | Variable | Value | Notes |
 |---|---|---|
-| `DOMAIN` | `hire.vizuara.ai` | Used by Caddy and for building public URLs |
+| `DOMAIN` | `hire.vizuara.ai` | Used by Caddy and for building public URLs, including assessment/team invite links in emails (`https://${DOMAIN}/...`). Must be set for the web service or emailed links fall back to the server's request origin |
 | `DATABASE_URL` | *(set in environment)* | Postgres connection string used by web, terminal, analysis, migrations |
 | `NODE_ENV` | `production` | Set automatically in docker-compose |
 
