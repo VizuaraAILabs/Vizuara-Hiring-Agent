@@ -89,7 +89,8 @@ SQL
 
 echo ""
 echo "4. Building and starting services..."
-docker compose --env-file .env.production up -d --build
+docker compose --env-file .env.production build
+docker compose --env-file .env.production up -d --remove-orphans
 
 echo ""
 echo "=== Deployment complete! ==="
