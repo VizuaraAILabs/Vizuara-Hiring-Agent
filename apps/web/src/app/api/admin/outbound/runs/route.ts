@@ -50,6 +50,11 @@ export async function GET() {
           WHERE d.prospect_id = p.id
         ) AS draft_count,
         (
+          SELECT COUNT(m.id)::int
+          FROM outbound_messages m
+          WHERE m.prospect_id = p.id
+        ) AS message_count,
+        (
           SELECT COALESCE(
             json_agg(
               json_build_object(
@@ -94,6 +99,27 @@ export async function GET() {
           FROM outbound_drafts d
           WHERE d.prospect_id = p.id
         ) AS drafts,
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object(
+                'id', m.id,
+                'draftId', m.draft_id,
+                'contactId', m.contact_id,
+                'channel', m.channel,
+                'provider', m.provider,
+                'status', m.status,
+                'sentByEmail', m.sent_by_email,
+                'sentAt', m.sent_at,
+                'metadata', m.metadata
+              )
+              ORDER BY m.sent_at DESC NULLS LAST
+            ),
+            '[]'
+          )
+          FROM outbound_messages m
+          WHERE m.prospect_id = p.id
+        ) AS messages,
         COALESCE(
           json_agg(
             json_build_object(

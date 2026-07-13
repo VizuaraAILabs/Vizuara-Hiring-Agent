@@ -65,8 +65,37 @@ export interface DraftOutreachResultInput {
   drafts?: OutboundDraftInput[];
 }
 
+export interface ReplyClassificationResultInput {
+  classification?: string | null;
+  suggestedNextAction?: string | null;
+  confidence?: number | null;
+  summary?: string | null;
+  followUpSuggestion?: string | null;
+}
+
 const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
 const DRAFT_CHANNELS = new Set(['email', 'linkedin_manual']);
+const REPLY_CLASSIFICATIONS = new Set([
+  'interested',
+  'not_now',
+  'wrong_person',
+  'unsubscribe',
+  'objection',
+  'meeting_requested',
+  'negative',
+  'auto_reply',
+  'unknown',
+]);
+const NEXT_ACTIONS = new Set([
+  'book_meeting',
+  'send_answer',
+  'follow_up_later',
+  'ask_for_referral',
+  'suppress_contact',
+  'suppress_domain',
+  'no_action',
+  'review_manually',
+]);
 
 function cleanEmailStatus(value?: string | null) {
   return value && EMAIL_STATUSES.has(value) ? value : 'unknown';
@@ -74,6 +103,14 @@ function cleanEmailStatus(value?: string | null) {
 
 function cleanDraftChannel(value?: string | null) {
   return value && DRAFT_CHANNELS.has(value) ? value : 'email';
+}
+
+function cleanReplyClassification(value?: string | null) {
+  return value && REPLY_CLASSIFICATIONS.has(value) ? value : 'unknown';
+}
+
+function cleanNextAction(value?: string | null) {
+  return value && NEXT_ACTIONS.has(value) ? value : 'review_manually';
 }
 
 export function defaultDiscoveryConfig() {
@@ -220,6 +257,46 @@ export function mockDraftOutreachResult(
         },
       },
     ],
+  };
+}
+
+export function mockReplyClassificationResult(replyText: string): ReplyClassificationResultInput {
+  const normalized = replyText.toLowerCase();
+  if (normalized.includes('unsubscribe') || normalized.includes('remove me')) {
+    return {
+      classification: 'unsubscribe',
+      suggestedNextAction: 'suppress_contact',
+      confidence: 90,
+      summary: 'The reply asks to stop future outreach.',
+      followUpSuggestion: null,
+    };
+  }
+  if (normalized.includes('meeting') || normalized.includes('calendar') || normalized.includes('interested')) {
+    return {
+      classification: 'meeting_requested',
+      suggestedNextAction: 'book_meeting',
+      confidence: 82,
+      summary: 'The reply shows interest and asks for a next conversation.',
+      followUpSuggestion: 'Send a short scheduling reply with two suggested time windows.',
+    };
+  }
+  return {
+    classification: 'unknown',
+    suggestedNextAction: 'review_manually',
+    confidence: 55,
+    summary: 'No clear buying intent was detected.',
+    followUpSuggestion: 'Review the reply manually before responding.',
+  };
+}
+
+export function cleanReplyClassificationResult(result: ReplyClassificationResultInput) {
+  const confidence = Number(result.confidence ?? 50);
+  return {
+    classification: cleanReplyClassification(result.classification),
+    suggestedNextAction: cleanNextAction(result.suggestedNextAction),
+    confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(100, Math.round(confidence))) : 50,
+    summary: result.summary?.trim() || 'Reply classification needs manual review.',
+    followUpSuggestion: result.followUpSuggestion?.trim() || null,
   };
 }
 
