@@ -39,6 +39,32 @@ export async function GET() {
         p.created_at,
         p.updated_at,
         COUNT(e.id)::int AS evidence_count,
+        (
+          SELECT COUNT(c.id)::int
+          FROM outbound_contacts c
+          WHERE c.prospect_id = p.id
+        ) AS contact_count,
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object(
+                'id', c.id,
+                'fullName', c.full_name,
+                'roleTitle', c.role_title,
+                'email', c.email,
+                'emailStatus', c.email_status,
+                'linkedinUrl', c.linkedin_url,
+                'source', c.source,
+                'confidence', c.confidence,
+                'metadata', c.metadata
+              )
+              ORDER BY c.created_at DESC
+            ),
+            '[]'
+          )
+          FROM outbound_contacts c
+          WHERE c.prospect_id = p.id
+        ) AS contacts,
         COALESCE(
           json_agg(
             json_build_object(

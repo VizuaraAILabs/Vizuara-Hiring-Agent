@@ -28,6 +28,33 @@ export interface DiscoveryResultInput {
   rejected?: { companyName: string; reason: string }[];
 }
 
+export interface OutboundContactInput {
+  fullName?: string | null;
+  roleTitle?: string | null;
+  department?: string | null;
+  email?: string | null;
+  emailStatus?: string | null;
+  linkedinUrl?: string | null;
+  source?: string | null;
+  confidence?: number | null;
+}
+
+export interface EnrichmentResultInput {
+  company?: {
+    domain?: string | null;
+    employeeCountEstimate?: string | null;
+    industry?: string | null;
+    region?: string | null;
+  };
+  contacts?: OutboundContactInput[];
+}
+
+const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
+
+function cleanEmailStatus(value?: string | null) {
+  return value && EMAIL_STATUSES.has(value) ? value : 'unknown';
+}
+
 export function defaultDiscoveryConfig() {
   return {
     maxProspects: 10,
@@ -103,6 +130,37 @@ export function mockDiscoveryResult(): DiscoveryResultInput {
       {
         companyName: 'Generic Staffing Co',
         reason: 'Mock rejection: hiring activity found but no technical assessment fit.',
+      },
+    ],
+  };
+}
+
+export function mockEnrichmentResult(companyName: string, domain?: string | null): EnrichmentResultInput {
+  const safeDomain = domain || `${companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.example`;
+  return {
+    company: {
+      domain: safeDomain,
+      employeeCountEstimate: '100-500',
+      industry: 'Technical hiring',
+      region: 'US',
+    },
+    contacts: [
+      {
+        fullName: 'Alex Morgan',
+        roleTitle: 'Head of Talent',
+        department: 'Talent',
+        email: `alex@${safeDomain}`,
+        emailStatus: 'guessed',
+        source: 'Mock public company research',
+        confidence: 62,
+      },
+      {
+        fullName: 'Priya Shah',
+        roleTitle: 'VP Engineering',
+        department: 'Engineering',
+        emailStatus: 'unknown',
+        source: 'Mock leadership page',
+        confidence: 70,
       },
     ],
   };
@@ -207,6 +265,75 @@ export async function storeDiscoveryResult(runId: string, result: DiscoveryResul
           evidenceFound: evidenceCount,
           rejected: Array.isArray(result.rejected) ? result.rejected.length : 0,
         })}::jsonb
+      WHERE id = ${runId}
+    `;
+  });
+}
+
+export async function storeEnrichmentResult(runId: string, prospectId: string, result: EnrichmentResultInput) {
+  const contacts = Array.isArray(result.contacts) ? result.contacts : [];
+  const company = result.company ?? {};
+  const metadata = Object.fromEntries(
+    Object.entries({
+      industry: company.industry,
+      region: company.region,
+      employeeCountEstimate: company.employeeCountEstimate,
+    }).filter(([, value]) => value !== null && value !== undefined && value !== '')
+  );
+
+  await sql.begin(async (tx) => {
+    const trx = tx as unknown as typeof sql;
+
+    await trx`
+      UPDATE outbound_prospects
+      SET
+        domain = COALESCE(${company.domain ?? null}, domain),
+        metadata = metadata || ${JSON.stringify(metadata)}::jsonb,
+        status = 'enriched',
+        source_run_id = ${runId},
+        updated_at = NOW()
+      WHERE id = ${prospectId}
+    `;
+
+    await trx`
+      DELETE FROM outbound_contacts
+      WHERE prospect_id = ${prospectId}
+    `;
+
+    let storedContacts = 0;
+    for (const contact of contacts) {
+      const fullName = contact.fullName?.trim() || null;
+      const roleTitle = contact.roleTitle?.trim() || null;
+      const email = contact.email?.trim().toLowerCase() || null;
+      const linkedinUrl = contact.linkedinUrl?.trim() || null;
+      if (!fullName && !roleTitle && !email && !linkedinUrl) continue;
+
+      await trx`
+        INSERT INTO outbound_contacts (
+          prospect_id, full_name, role_title, email, email_status, linkedin_url, source, confidence, metadata
+        )
+        VALUES (
+          ${prospectId},
+          ${fullName},
+          ${roleTitle},
+          ${email},
+          ${cleanEmailStatus(contact.emailStatus)},
+          ${linkedinUrl},
+          ${contact.source ?? null},
+          ${contact.confidence ?? null},
+          ${JSON.stringify({ department: contact.department ?? null })}::jsonb
+        )
+      `;
+      storedContacts += 1;
+    }
+
+    await trx`
+      UPDATE outbound_agent_runs
+      SET
+        status = 'completed',
+        completed_at = NOW(),
+        last_heartbeat_at = NOW(),
+        stats = ${JSON.stringify({ contactsFound: storedContacts })}::jsonb
       WHERE id = ${runId}
     `;
   });
