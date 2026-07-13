@@ -1,0 +1,17 @@
+{
+  "name": "outbound-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  }
+}
