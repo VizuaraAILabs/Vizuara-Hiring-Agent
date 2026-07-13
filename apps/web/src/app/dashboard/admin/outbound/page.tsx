@@ -2,9 +2,9 @@
 
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import { useAuth } from '@/context/AuthContext';
-import { RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Ban, CheckCircle2, ExternalLink, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 interface OutboundRun {
   id: string;
@@ -34,6 +34,15 @@ interface OutboundProspect {
     region?: string | null;
     employeeCountEstimate?: string | null;
   } | null;
+  evidence: Array<{
+    id: string;
+    sourceType: string;
+    sourceUrl: string;
+    signalType: string;
+    summary: string;
+    quotedText: string | null;
+    confidence: number | null;
+  }>;
   evidence_count: number;
   created_at: string;
 }
@@ -51,8 +60,12 @@ function fmtDate(value?: string | null) {
 function StatusPill({ status }: { status: string }) {
   const cls: Record<string, string> = {
     completed: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    approved: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
     running: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
     failed: 'border-red-500/20 bg-red-500/10 text-red-300',
+    rejected: 'border-red-500/20 bg-red-500/10 text-red-300',
+    disqualified: 'border-neutral-500/20 bg-neutral-500/10 text-neutral-300',
+    reviewed: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     new: 'border-primary/20 bg-primary/10 text-primary',
   };
   return (
@@ -79,6 +92,7 @@ export default function OutboundAdminPage() {
   const [prospects, setProspects] = useState<OutboundProspect[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,6 +136,27 @@ export default function OutboundAdminPage() {
       setError(e instanceof Error ? e.message : 'Failed to start discovery');
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function reviewProspect(prospectId: string, status: 'approved' | 'rejected' | 'disqualified') {
+    setReviewingId(prospectId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/prospects/${prospectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to review prospect');
+      setProspects((current) => current.map((prospect) => (
+        prospect.id === prospectId ? { ...prospect, status } : prospect
+      )));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to review prospect');
+    } finally {
+      setReviewingId(null);
     }
   }
 
@@ -180,7 +215,7 @@ export default function OutboundAdminPage() {
         <MetricCard label="Runs" value={String(runs.length)} sub={`${totals.completed} completed`} />
         <MetricCard label="Prospects" value={String(prospects.length)} sub="stored companies" />
         <MetricCard label="Evidence" value={String(totals.evidence)} sub="source-backed signals" />
-        <MetricCard label="Avg fit" value={prospects.length ? `${totals.avgFit}` : '-'} sub="mock score for Phase 1" />
+        <MetricCard label="Avg fit" value={prospects.length ? `${totals.avgFit}` : '-'} sub="review score" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_1.4fr]">
@@ -248,30 +283,92 @@ export default function OutboundAdminPage() {
                     <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Fit</th>
                     <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Evidence</th>
                     <th className="px-5 py-3 text-xs font-medium text-neutral-500">Status</th>
+                    <th className="px-5 py-3 text-xs font-medium text-neutral-500 text-right">Review</th>
                   </tr>
                 </thead>
                 <tbody>
                   {prospects.map((prospect) => (
-                    <tr key={prospect.id} className="border-b border-white/5 last:border-0">
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-white">{prospect.company_name}</p>
-                        <p className="mt-1 text-xs text-neutral-500">{prospect.domain || 'No domain'}{prospect.metadata?.region ? ` - ${prospect.metadata.region}` : ''}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex max-w-md flex-wrap gap-1.5">
-                          {(prospect.signals ?? []).slice(0, 3).map((signal) => (
-                            <span key={signal} className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-300">
-                              {signal.replace(/_/g, ' ')}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-right font-mono text-neutral-200">{prospect.fit_score ?? '-'}</td>
-                      <td className="px-5 py-4 text-right text-neutral-300">{prospect.evidence_count}</td>
-                      <td className="px-5 py-4">
-                        <StatusPill status={prospect.status} />
-                      </td>
-                    </tr>
+                    <Fragment key={prospect.id}>
+                      <tr className="border-b border-white/5">
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-white">{prospect.company_name}</p>
+                          <p className="mt-1 text-xs text-neutral-500">{prospect.domain || 'No domain'}{prospect.metadata?.region ? ` - ${prospect.metadata.region}` : ''}</p>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex max-w-md flex-wrap gap-1.5">
+                            {(prospect.signals ?? []).slice(0, 3).map((signal) => (
+                              <span key={signal} className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-neutral-300">
+                                {signal.replace(/_/g, ' ')}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-right font-mono text-neutral-200">{prospect.fit_score ?? '-'}</td>
+                        <td className="px-5 py-4 text-right text-neutral-300">{prospect.evidence_count}</td>
+                        <td className="px-5 py-4">
+                          <StatusPill status={prospect.status} />
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void reviewProspect(prospect.id, 'approved')}
+                              disabled={reviewingId === prospect.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
+                              title="Approve"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void reviewProspect(prospect.id, 'rejected')}
+                              disabled={reviewingId === prospect.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+                              title="Reject"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void reviewProspect(prospect.id, 'disqualified')}
+                              disabled={reviewingId === prospect.id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-neutral-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+                              title="Disqualify"
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr className="border-b border-white/5 last:border-0">
+                        <td colSpan={6} className="px-5 pb-5 pt-0">
+                          <div className="grid gap-2 lg:grid-cols-2">
+                            {(prospect.evidence ?? []).slice(0, 2).map((evidence) => (
+                              <div key={evidence.id} className="rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p className="text-xs font-medium text-neutral-300">{evidence.signalType.replace(/_/g, ' ')}</p>
+                                  <a
+                                    href={evidence.sourceUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-light"
+                                  >
+                                    Source
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                </div>
+                                <p className="mt-1.5 text-xs leading-5 text-neutral-500">{evidence.summary}</p>
+                                {evidence.quotedText && (
+                                  <p className="mt-2 border-l border-white/10 pl-2 text-xs italic leading-5 text-neutral-400">
+                                    {evidence.quotedText}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

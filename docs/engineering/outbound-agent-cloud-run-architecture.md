@@ -113,7 +113,12 @@ Required:
 ```text
 ANTHROPIC_API_KEY
 ARCEVAL_AGENT_SECRET
-ARCEVAL_API_BASE
+```
+
+Optional Cloud Run runner controls:
+
+```text
+OUTBOUND_AGENT_USE_MOCK=true
 ```
 
 Add provider keys only when a connector is implemented:
@@ -563,7 +568,6 @@ Claude Code must return structured JSON:
         {
           "sourceType": "ats",
           "sourceUrl": "https://example.ai/careers",
-          "sourceTitle": "Example AI Careers",
           "signalType": "active_engineering_hiring",
           "summary": "Company lists eight engineering roles including ML infrastructure.",
           "quotedText": "Senior ML Infrastructure Engineer",
