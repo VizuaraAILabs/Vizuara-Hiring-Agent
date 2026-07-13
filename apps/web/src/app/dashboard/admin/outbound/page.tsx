@@ -2,7 +2,7 @@
 
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import { useAuth } from '@/context/AuthContext';
-import { Ban, CheckCircle2, ExternalLink, FileText, RefreshCw, Save, Search, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
+import { Ban, CheckCircle2, ExternalLink, FileText, RefreshCw, Save, Search, Send, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 
@@ -95,6 +95,8 @@ function StatusPill({ status }: { status: string }) {
     enrichment_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
     drafted: 'border-violet-500/20 bg-violet-500/10 text-violet-300',
     draft_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
+    contacted: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    sent: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
     reviewed: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     new: 'border-primary/20 bg-primary/10 text-primary',
   };
@@ -126,6 +128,7 @@ export default function OutboundAdminPage() {
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
+  const [sendingDraftId, setSendingDraftId] = useState<string | null>(null);
   const [draftEdits, setDraftEdits] = useState<Record<string, { subject: string; body: string }>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -250,6 +253,23 @@ export default function OutboundAdminPage() {
       setError(e instanceof Error ? e.message : 'Failed to update draft');
     } finally {
       setSavingDraftId(null);
+    }
+  }
+
+  async function sendDraft(draftId: string) {
+    setSendingDraftId(draftId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/drafts/${draftId}/send`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send draft');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send draft');
+    } finally {
+      setSendingDraftId(null);
     }
   }
 
@@ -556,7 +576,7 @@ export default function OutboundAdminPage() {
                                       <button
                                         type="button"
                                         onClick={() => void updateDraft(draft.id)}
-                                        disabled={savingDraftId === draft.id}
+                                        disabled={savingDraftId === draft.id || draft.status === 'sent'}
                                         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-xs text-neutral-300 transition-colors hover:bg-white/5 disabled:opacity-40"
                                       >
                                         <Save className="h-3.5 w-3.5" />
@@ -565,7 +585,7 @@ export default function OutboundAdminPage() {
                                       <button
                                         type="button"
                                         onClick={() => void updateDraft(draft.id, 'approved')}
-                                        disabled={savingDraftId === draft.id}
+                                        disabled={savingDraftId === draft.id || draft.status === 'sent'}
                                         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/20 px-2.5 text-xs text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
                                       >
                                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -574,11 +594,20 @@ export default function OutboundAdminPage() {
                                       <button
                                         type="button"
                                         onClick={() => void updateDraft(draft.id, 'rejected')}
-                                        disabled={savingDraftId === draft.id}
+                                        disabled={savingDraftId === draft.id || draft.status === 'sent'}
                                         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-500/20 px-2.5 text-xs text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-40"
                                       >
                                         <XCircle className="h-3.5 w-3.5" />
                                         Reject
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void sendDraft(draft.id)}
+                                        disabled={sendingDraftId === draft.id || draft.status !== 'approved'}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-primary/20 px-2.5 text-xs text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30"
+                                      >
+                                        <Send className="h-3.5 w-3.5" />
+                                        {draft.channel === 'email' ? 'Send' : 'Mark sent'}
                                       </button>
                                     </div>
                                   </div>
