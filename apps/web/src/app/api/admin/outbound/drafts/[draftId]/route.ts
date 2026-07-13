@@ -32,6 +32,9 @@ export async function PATCH(
     LIMIT 1
   `;
   if (!current) return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
+  if (current.status === 'sent') {
+    return NextResponse.json({ error: 'Sent drafts cannot be edited' }, { status: 400 });
+  }
 
   const subject = typeof body?.subject === 'string' ? body.subject.trim() || null : current.subject;
   const draftBody = typeof body?.body === 'string' ? body.body.trim() : current.body;

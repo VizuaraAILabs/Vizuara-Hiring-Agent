@@ -403,6 +403,87 @@ export async function sendTeamInviteEmail({
   }
 }
 
+export async function sendOutboundEmail({
+  to,
+  toName,
+  subject,
+  bodyText,
+}: {
+  to: string;
+  toName: string;
+  subject: string;
+  bodyText: string;
+}): Promise<{ messageId: string | null }> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+
+  const safeSubject = escapeHtml(subject);
+  const safeBody = escapeHtml(bodyText);
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeSubject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Figtree',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:#00a854;padding:32px 40px;">
+              <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">ArcEval</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px;">
+              <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${safeBody}</p>
+              <p style="margin:32px 0 0;font-size:15px;color:#6b7280;">The ArcEval Team</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;">
+              <p style="margin:0 0 8px;font-size:12px;color:#9ca3af;">You're receiving this because ArcEval thought this may be relevant to your team's technical hiring.</p>
+              <p style="margin:0;font-size:12px;color:#9ca3af;">Reply with "unsubscribe" and we will suppress your email or domain from future outreach.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: SENDER,
+      to: [{ email: to, name: toName }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`Brevo API error ${res.status}: ${raw}`);
+  }
+
+  let data: { messageId?: string } = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as { messageId?: string };
+    } catch {
+      data = {};
+    }
+  }
+  return { messageId: data.messageId ?? null };
+}
+
 export async function sendTrialFeedbackEmail(
   email: string,
   name: string,
