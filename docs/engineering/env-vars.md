@@ -68,6 +68,13 @@ Required for local email/password login in the web app.
 | `ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS` | `75` | Deadline for dimension enrichment |
 | `ANALYSIS_NARRATIVE_TIMEOUT_SECONDS` | `105` | Deadline for transcript narrative generation |
 
+## Outbound Agent
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OUTBOUND_AGENT_URL` | *(empty)* | Optional Cloud Run service URL for `arceval-outbound-agent`. When empty, Phase 1 discovery uses the local mock result |
+| `ARCEVAL_AGENT_SECRET` | *(empty)* | Shared bearer secret used between ArcEval and the Cloud Run outbound agent. Set the same value on both services before enabling `OUTBOUND_AGENT_URL` |
+
 ## Terminal/Sandbox
 
 | Variable | Default | Notes |
