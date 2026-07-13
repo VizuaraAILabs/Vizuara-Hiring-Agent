@@ -31,6 +31,27 @@ export interface DiscoveryResult {
   rejected: Array<{ companyName: string; reason: string }>;
 }
 
+export interface EnrichmentContact {
+  fullName: string | null;
+  roleTitle: string | null;
+  department?: string | null;
+  email: string | null;
+  emailStatus: 'unknown' | 'guessed' | 'verified' | 'invalid' | 'risky';
+  linkedinUrl?: string | null;
+  source: string | null;
+  confidence: number | null;
+}
+
+export interface EnrichmentResult {
+  company: {
+    domain: string | null;
+    employeeCountEstimate: string | null;
+    industry: string | null;
+    region: string | null;
+  };
+  contacts: EnrichmentContact[];
+}
+
 const SOURCE_TYPES = new Set(['web', 'news', 'reddit', 'hacker_news', 'ats', 'manual', 'linkedin_manual']);
 const SIGNAL_TYPES = new Set([
   'active_engineering_hiring',
@@ -40,6 +61,7 @@ const SIGNAL_TYPES = new Set([
   'funding_or_growth',
   'manual_signal',
 ]);
+const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
 
 function cleanString(value: unknown, field: string, max = 500) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -133,5 +155,37 @@ export function validateDiscoveryResult(value: unknown, maxProspects = 10): Disc
         reason: cleanString(rejected.reason, 'rejected.reason', 1000),
       };
     }),
+  };
+}
+
+export function validateEnrichmentResult(value: unknown, maxContacts = 8): EnrichmentResult {
+  const root = asObject(value, 'result');
+  const company = asObject(root.company ?? {}, 'company');
+  const rawContacts = Array.isArray(root.contacts) ? root.contacts : [];
+
+  return {
+    company: {
+      domain: cleanOptionalString(company.domain, 200),
+      employeeCountEstimate: cleanOptionalString(company.employeeCountEstimate, 80),
+      industry: cleanOptionalString(company.industry, 200),
+      region: cleanOptionalString(company.region, 120),
+    },
+    contacts: rawContacts.slice(0, maxContacts).map((rawContact, index) => {
+      const contact = asObject(rawContact, `contacts[${index}]`);
+      const emailStatus = cleanOptionalString(contact.emailStatus, 40) || 'unknown';
+      if (!EMAIL_STATUSES.has(emailStatus)) throw new Error(`unsupported emailStatus: ${emailStatus}`);
+      return {
+        fullName: cleanOptionalString(contact.fullName, 200),
+        roleTitle: cleanOptionalString(contact.roleTitle, 200),
+        department: cleanOptionalString(contact.department, 120),
+        email: cleanOptionalString(contact.email, 300),
+        emailStatus: emailStatus as EnrichmentContact['emailStatus'],
+        linkedinUrl: cleanOptionalString(contact.linkedinUrl, 1000),
+        source: cleanOptionalString(contact.source, 200),
+        confidence: contact.confidence === null || contact.confidence === undefined
+          ? null
+          : cleanScore(contact.confidence, 'contact.confidence'),
+      };
+    }).filter((contact) => contact.fullName || contact.roleTitle || contact.email || contact.linkedinUrl),
   };
 }

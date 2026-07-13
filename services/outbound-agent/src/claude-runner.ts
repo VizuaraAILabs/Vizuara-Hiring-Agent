@@ -3,7 +3,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateDiscoveryResult, type DiscoveryResult, type RunRequest } from './schemas.js';
+import {
+  validateDiscoveryResult,
+  validateEnrichmentResult,
+  type DiscoveryResult,
+  type EnrichmentResult,
+  type RunRequest,
+} from './schemas.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -76,6 +82,46 @@ function mockDiscoveryResult(): DiscoveryResult {
   };
 }
 
+function mockEnrichmentResult(request: RunRequest): EnrichmentResult {
+  const companyName = typeof request.config?.companyName === 'string'
+    ? request.config.companyName
+    : 'Northstar Robotics';
+  const domain = typeof request.config?.domain === 'string'
+    ? request.config.domain
+    : 'northstar-robotics.example';
+
+  return {
+    company: {
+      domain,
+      employeeCountEstimate: '100-500',
+      industry: 'Robotics software',
+      region: 'US',
+    },
+    contacts: [
+      {
+        fullName: 'Alex Morgan',
+        roleTitle: 'Head of Talent',
+        department: 'Talent',
+        email: `alex@${domain}`,
+        emailStatus: 'guessed',
+        linkedinUrl: null,
+        source: `Mock public company research for ${companyName}`,
+        confidence: 62,
+      },
+      {
+        fullName: 'Priya Shah',
+        roleTitle: 'VP Engineering',
+        department: 'Engineering',
+        email: null,
+        emailStatus: 'unknown',
+        linkedinUrl: null,
+        source: `Mock leadership page for ${companyName}`,
+        confidence: 70,
+      },
+    ],
+  };
+}
+
 function safeRunId(runId: string) {
   return runId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 }
@@ -89,6 +135,11 @@ function maxRuntimeMs(request: RunRequest) {
 function maxProspects(request: RunRequest) {
   const raw = Number(request.config?.maxProspects ?? 10);
   return Number.isFinite(raw) ? Math.max(1, Math.min(25, Math.round(raw))) : 10;
+}
+
+function maxContacts(request: RunRequest) {
+  const raw = Number(request.config?.maxContacts ?? 8);
+  return Number.isFinite(raw) ? Math.max(1, Math.min(15, Math.round(raw))) : 8;
 }
 
 function extractJsonObject(text: string) {
@@ -197,18 +248,44 @@ Required JSON shape:
 Return only valid JSON. Do not include markdown or commentary.`;
 }
 
-export async function runDiscovery(request: RunRequest): Promise<DiscoveryResult> {
-  if (process.env.OUTBOUND_AGENT_USE_MOCK === 'true') {
-    return mockDiscoveryResult();
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is required unless OUTBOUND_AGENT_USE_MOCK=true');
-  }
+async function buildEnrichmentPrompt(request: RunRequest) {
+  const basePrompt = await readFile(join(here, 'prompts', 'enrichment.md'), 'utf8');
+  return `${basePrompt}
 
+Run ID: ${request.runId}
+
+Prospect and evidence:
+${JSON.stringify(request.config ?? {}, null, 2)}
+
+Required JSON shape:
+{
+  "company": {
+    "domain": "example.ai",
+    "employeeCountEstimate": "100-500",
+    "industry": "AI infrastructure",
+    "region": "US"
+  },
+  "contacts": [
+    {
+      "fullName": "Jane Doe",
+      "roleTitle": "Head of Talent",
+      "department": "Talent",
+      "email": "jane@example.ai",
+      "emailStatus": "guessed",
+      "linkedinUrl": null,
+      "source": "Public company page",
+      "confidence": 70
+    }
+  ]
+}
+
+Return only valid JSON. Do not include markdown or commentary.`;
+}
+
+async function runClaudeJson(request: RunRequest, prompt: string) {
   const workspace = join(tmpdir(), 'arceval-outbound', safeRunId(request.runId));
   await mkdir(workspace, { recursive: true });
 
-  const prompt = await buildDiscoveryPrompt(request);
   await writeFile(join(workspace, 'input.json'), JSON.stringify(request, null, 2));
   await writeFile(join(workspace, 'prompt.md'), prompt);
 
@@ -223,8 +300,35 @@ export async function runDiscovery(request: RunRequest): Promise<DiscoveryResult
   await writeFile(join(workspace, 'stdout.txt'), stdout);
   if (stderr.trim()) await writeFile(join(workspace, 'stderr.txt'), stderr);
 
-  const parsed = JSON.parse(extractJsonObject(stdout));
+  return { workspace, parsed: JSON.parse(extractJsonObject(stdout)) };
+}
+
+export async function runDiscovery(request: RunRequest): Promise<DiscoveryResult> {
+  if (process.env.OUTBOUND_AGENT_USE_MOCK === 'true') {
+    return mockDiscoveryResult();
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is required unless OUTBOUND_AGENT_USE_MOCK=true');
+  }
+
+  const prompt = await buildDiscoveryPrompt(request);
+  const { workspace, parsed } = await runClaudeJson(request, prompt);
   const result = validateDiscoveryResult(parsed, maxProspects(request));
+  await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
+  return result;
+}
+
+export async function runEnrichment(request: RunRequest): Promise<EnrichmentResult> {
+  if (process.env.OUTBOUND_AGENT_USE_MOCK === 'true') {
+    return mockEnrichmentResult(request);
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is required unless OUTBOUND_AGENT_USE_MOCK=true');
+  }
+
+  const prompt = await buildEnrichmentPrompt(request);
+  const { workspace, parsed } = await runClaudeJson(request, prompt);
+  const result = validateEnrichmentResult(parsed, maxContacts(request));
   await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
   return result;
 }

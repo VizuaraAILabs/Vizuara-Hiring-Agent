@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { isAuthorized, rejectUnauthorized } from './auth.js';
-import { runDiscovery } from './claude-runner.js';
+import { runDiscovery, runEnrichment } from './claude-runner.js';
 import type { RunRequest } from './schemas.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -32,12 +32,17 @@ async function handleRun(req: IncomingMessage, res: ServerResponse) {
     return sendJson(res, 400, { error: 'runId and supported mode are required' });
   }
 
-  if (body.mode !== 'discovery') {
-    return sendJson(res, 501, { runId: body.runId, status: 'failed', error: `${body.mode} is not implemented yet` });
+  if (body.mode === 'discovery') {
+    const result = await runDiscovery(body);
+    return sendJson(res, 200, { runId: body.runId, status: 'completed', result });
   }
 
-  const result = await runDiscovery(body);
-  return sendJson(res, 200, { runId: body.runId, status: 'completed', result });
+  if (body.mode === 'enrichment') {
+    const result = await runEnrichment(body);
+    return sendJson(res, 200, { runId: body.runId, status: 'completed', result });
+  }
+
+  return sendJson(res, 501, { runId: body.runId, status: 'failed', error: `${body.mode} is not implemented yet` });
 }
 
 const server = createServer(async (req, res) => {
