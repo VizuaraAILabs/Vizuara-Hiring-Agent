@@ -52,6 +52,22 @@ export interface EnrichmentResult {
   contacts: EnrichmentContact[];
 }
 
+export interface OutreachDraft {
+  contactId?: string | null;
+  channel: 'email' | 'linkedin_manual';
+  sequenceStep: number;
+  subject: string | null;
+  body: string;
+  personalizationBasis: {
+    evidenceIds: string[];
+    reasoning: string[];
+  };
+}
+
+export interface DraftOutreachResult {
+  drafts: OutreachDraft[];
+}
+
 const SOURCE_TYPES = new Set(['web', 'news', 'reddit', 'hacker_news', 'ats', 'manual', 'linkedin_manual']);
 const SIGNAL_TYPES = new Set([
   'active_engineering_hiring',
@@ -62,6 +78,7 @@ const SIGNAL_TYPES = new Set([
   'manual_signal',
 ]);
 const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
+const DRAFT_CHANNELS = new Set(['email', 'linkedin_manual']);
 
 function cleanString(value: unknown, field: string, max = 500) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -187,5 +204,37 @@ export function validateEnrichmentResult(value: unknown, maxContacts = 8): Enric
           : cleanScore(contact.confidence, 'contact.confidence'),
       };
     }).filter((contact) => contact.fullName || contact.roleTitle || contact.email || contact.linkedinUrl),
+  };
+}
+
+export function validateDraftOutreachResult(value: unknown, maxDrafts = 8): DraftOutreachResult {
+  const root = asObject(value, 'result');
+  const rawDrafts = Array.isArray(root.drafts) ? root.drafts : [];
+
+  return {
+    drafts: rawDrafts.slice(0, maxDrafts).map((rawDraft, index) => {
+      const draft = asObject(rawDraft, `drafts[${index}]`);
+      const channel = cleanString(draft.channel, 'draft.channel', 40);
+      if (!DRAFT_CHANNELS.has(channel)) throw new Error(`unsupported draft channel: ${channel}`);
+
+      const basis = asObject(draft.personalizationBasis ?? {}, 'draft.personalizationBasis');
+      const sequenceStep = Number(draft.sequenceStep ?? 1);
+
+      return {
+        contactId: cleanOptionalString(draft.contactId, 120),
+        channel: channel as OutreachDraft['channel'],
+        sequenceStep: Number.isFinite(sequenceStep) ? Math.max(1, Math.min(5, Math.round(sequenceStep))) : 1,
+        subject: channel === 'email' ? cleanString(draft.subject, 'draft.subject', 200) : cleanOptionalString(draft.subject, 200),
+        body: cleanString(draft.body, 'draft.body', 4000),
+        personalizationBasis: {
+          evidenceIds: Array.isArray(basis.evidenceIds)
+            ? basis.evidenceIds.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean).slice(0, 10)
+            : [],
+          reasoning: Array.isArray(basis.reasoning)
+            ? basis.reasoning.map((reason) => (typeof reason === 'string' ? reason.trim().slice(0, 500) : '')).filter(Boolean).slice(0, 10)
+            : [],
+        },
+      };
+    }).filter((draft) => draft.body),
   };
 }

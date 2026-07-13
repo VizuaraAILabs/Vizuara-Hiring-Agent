@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  validateDraftOutreachResult,
   validateDiscoveryResult,
   validateEnrichmentResult,
+  type DraftOutreachResult,
   type DiscoveryResult,
   type EnrichmentResult,
   type RunRequest,
@@ -122,6 +124,65 @@ function mockEnrichmentResult(request: RunRequest): EnrichmentResult {
   };
 }
 
+function mockDraftOutreachResult(request: RunRequest): DraftOutreachResult {
+  const companyName = typeof request.config?.companyName === 'string'
+    ? request.config.companyName
+    : 'Northstar Robotics';
+  const contacts = Array.isArray(request.config?.contacts)
+    ? request.config.contacts as Array<Record<string, unknown>>
+    : [];
+  const contact = contacts[0] ?? {};
+  const contactId = typeof contact.id === 'string' ? contact.id : null;
+  const firstName = typeof contact.fullName === 'string' && contact.fullName.trim()
+    ? contact.fullName.trim().split(/\s+/)[0]
+    : 'there';
+  const evidence = Array.isArray(request.config?.evidence)
+    ? request.config.evidence as Array<Record<string, unknown>>
+    : [];
+  const evidenceIds = evidence
+    .map((item) => (typeof item.id === 'string' ? item.id : ''))
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return {
+    drafts: [
+      {
+        contactId,
+        channel: 'email',
+        sequenceStep: 1,
+        subject: 'AI-native technical hiring',
+        body: `Hi ${firstName},\n\nI noticed ${companyName} is hiring for technical roles and has signals around adapting hiring for AI-assisted candidates.\n\nArcEval helps teams evaluate candidates in a real AI-assisted coding environment, so reviewers can see how they reason, prompt, debug, and ship.\n\nWorth a quick look next week?`,
+        personalizationBasis: {
+          evidenceIds,
+          reasoning: ['References stored hiring and AI-assessment signals supplied by ArcEval.'],
+        },
+      },
+      {
+        contactId,
+        channel: 'email',
+        sequenceStep: 2,
+        subject: 'Quick follow-up',
+        body: `Hi ${firstName},\n\nQuick follow-up in case this is timely for ${companyName}. ArcEval is built for teams that want signal on real AI-native work instead of resume filters or trivia screens.\n\nHappy to send a short example assessment flow if useful.`,
+        personalizationBasis: {
+          evidenceIds,
+          reasoning: ['Follow-up keeps the same evidence-backed hiring context without adding unsupported claims.'],
+        },
+      },
+      {
+        contactId,
+        channel: 'linkedin_manual',
+        sequenceStep: 1,
+        subject: null,
+        body: `Noticed ${companyName} is hiring technical roles. I am working on ArcEval, which helps teams evaluate real AI-assisted engineering work. Thought it might be relevant.`,
+        personalizationBasis: {
+          evidenceIds,
+          reasoning: ['Manual LinkedIn note references only company-level hiring context.'],
+        },
+      },
+    ],
+  };
+}
+
 function safeRunId(runId: string) {
   return runId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 }
@@ -140,6 +201,11 @@ function maxProspects(request: RunRequest) {
 function maxContacts(request: RunRequest) {
   const raw = Number(request.config?.maxContacts ?? 8);
   return Number.isFinite(raw) ? Math.max(1, Math.min(15, Math.round(raw))) : 8;
+}
+
+function maxDrafts(request: RunRequest) {
+  const raw = Number(request.config?.maxDrafts ?? 8);
+  return Number.isFinite(raw) ? Math.max(1, Math.min(12, Math.round(raw))) : 8;
 }
 
 function extractJsonObject(text: string) {
@@ -282,6 +348,46 @@ Required JSON shape:
 Return only valid JSON. Do not include markdown or commentary.`;
 }
 
+async function buildDraftOutreachPrompt(request: RunRequest) {
+  const basePrompt = await readFile(join(here, 'prompts', 'outreach-draft.md'), 'utf8');
+  return `${basePrompt}
+
+Run ID: ${request.runId}
+
+Prospect, contacts, and evidence:
+${JSON.stringify(request.config ?? {}, null, 2)}
+
+Required JSON shape:
+{
+  "drafts": [
+    {
+      "contactId": "contact-uuid-or-null",
+      "channel": "email",
+      "sequenceStep": 1,
+      "subject": "Short subject",
+      "body": "Plain text body",
+      "personalizationBasis": {
+        "evidenceIds": ["evidence-uuid"],
+        "reasoning": ["Why the personalized claim is supported by stored evidence."]
+      }
+    },
+    {
+      "contactId": "contact-uuid-or-null",
+      "channel": "linkedin_manual",
+      "sequenceStep": 1,
+      "subject": null,
+      "body": "Manual LinkedIn note or DM draft",
+      "personalizationBasis": {
+        "evidenceIds": ["evidence-uuid"],
+        "reasoning": ["Why the note is supported by stored evidence."]
+      }
+    }
+  ]
+}
+
+Return only valid JSON. Do not include markdown or commentary.`;
+}
+
 async function runClaudeJson(request: RunRequest, prompt: string) {
   const workspace = join(tmpdir(), 'arceval-outbound', safeRunId(request.runId));
   await mkdir(workspace, { recursive: true });
@@ -329,6 +435,21 @@ export async function runEnrichment(request: RunRequest): Promise<EnrichmentResu
   const prompt = await buildEnrichmentPrompt(request);
   const { workspace, parsed } = await runClaudeJson(request, prompt);
   const result = validateEnrichmentResult(parsed, maxContacts(request));
+  await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
+  return result;
+}
+
+export async function runDraftOutreach(request: RunRequest): Promise<DraftOutreachResult> {
+  if (process.env.OUTBOUND_AGENT_USE_MOCK === 'true') {
+    return mockDraftOutreachResult(request);
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is required unless OUTBOUND_AGENT_USE_MOCK=true');
+  }
+
+  const prompt = await buildDraftOutreachPrompt(request);
+  const { workspace, parsed } = await runClaudeJson(request, prompt);
+  const result = validateDraftOutreachResult(parsed, maxDrafts(request));
   await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
   return result;
 }
