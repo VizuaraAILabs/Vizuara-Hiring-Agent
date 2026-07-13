@@ -33,7 +33,7 @@ async function handleRun(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (body.mode !== 'discovery') {
-    return sendJson(res, 501, { runId: body.runId, status: 'failed', error: `${body.mode} is not implemented in Phase 1` });
+    return sendJson(res, 501, { runId: body.runId, status: 'failed', error: `${body.mode} is not implemented yet` });
   }
 
   const result = await runDiscovery(body);
