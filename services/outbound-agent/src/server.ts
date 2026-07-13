@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { isAuthorized, rejectUnauthorized } from './auth.js';
-import { runDiscovery, runDraftOutreach, runEnrichment } from './claude-runner.js';
+import { runDiscovery, runDraftOutreach, runEnrichment, runReplyClassification } from './claude-runner.js';
 import type { RunRequest } from './schemas.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -44,6 +44,11 @@ async function handleRun(req: IncomingMessage, res: ServerResponse) {
 
   if (body.mode === 'draft_outreach') {
     const result = await runDraftOutreach(body);
+    return sendJson(res, 200, { runId: body.runId, status: 'completed', result });
+  }
+
+  if (body.mode === 'reply_classification') {
+    const result = await runReplyClassification(body);
     return sendJson(res, 200, { runId: body.runId, status: 'completed', result });
   }
 

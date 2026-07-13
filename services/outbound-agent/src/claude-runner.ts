@@ -7,9 +7,11 @@ import {
   validateDraftOutreachResult,
   validateDiscoveryResult,
   validateEnrichmentResult,
+  validateReplyClassificationResult,
   type DraftOutreachResult,
   type DiscoveryResult,
   type EnrichmentResult,
+  type ReplyClassificationResult,
   type RunRequest,
 } from './schemas.js';
 
@@ -180,6 +182,37 @@ function mockDraftOutreachResult(request: RunRequest): DraftOutreachResult {
         },
       },
     ],
+  };
+}
+
+function mockReplyClassificationResult(request: RunRequest): ReplyClassificationResult {
+  const replyText = typeof request.config?.replyText === 'string'
+    ? request.config.replyText.toLowerCase()
+    : '';
+  if (replyText.includes('unsubscribe') || replyText.includes('remove me')) {
+    return {
+      classification: 'unsubscribe',
+      suggestedNextAction: 'suppress_contact',
+      confidence: 90,
+      summary: 'The reply asks to stop future outreach.',
+      followUpSuggestion: null,
+    };
+  }
+  if (replyText.includes('meeting') || replyText.includes('calendar') || replyText.includes('interested')) {
+    return {
+      classification: 'meeting_requested',
+      suggestedNextAction: 'book_meeting',
+      confidence: 82,
+      summary: 'The reply shows interest and asks for a next conversation.',
+      followUpSuggestion: 'Send a short scheduling reply with two suggested time windows.',
+    };
+  }
+  return {
+    classification: 'unknown',
+    suggestedNextAction: 'review_manually',
+    confidence: 55,
+    summary: 'Mock classification could not infer a clear buying intent.',
+    followUpSuggestion: 'Review the reply manually before responding.',
   };
 }
 
@@ -388,6 +421,33 @@ Required JSON shape:
 Return only valid JSON. Do not include markdown or commentary.`;
 }
 
+async function buildReplyClassificationPrompt(request: RunRequest) {
+  const basePrompt = await readFile(join(here, 'prompts', 'reply-classifier.md'), 'utf8');
+  return `${basePrompt}
+
+Run ID: ${request.runId}
+
+Reply context:
+${JSON.stringify(request.config ?? {}, null, 2)}
+
+Required JSON shape:
+{
+  "classification": "interested",
+  "suggestedNextAction": "send_answer",
+  "confidence": 80,
+  "summary": "One-sentence classification rationale.",
+  "followUpSuggestion": "A short admin-reviewed follow-up suggestion, or null."
+}
+
+Allowed classifications:
+interested, not_now, wrong_person, unsubscribe, objection, meeting_requested, negative, auto_reply, unknown
+
+Allowed suggestedNextAction:
+book_meeting, send_answer, follow_up_later, ask_for_referral, suppress_contact, suppress_domain, no_action, review_manually
+
+Return only valid JSON. Do not include markdown or commentary.`;
+}
+
 async function runClaudeJson(request: RunRequest, prompt: string) {
   const workspace = join(tmpdir(), 'arceval-outbound', safeRunId(request.runId));
   await mkdir(workspace, { recursive: true });
@@ -450,6 +510,21 @@ export async function runDraftOutreach(request: RunRequest): Promise<DraftOutrea
   const prompt = await buildDraftOutreachPrompt(request);
   const { workspace, parsed } = await runClaudeJson(request, prompt);
   const result = validateDraftOutreachResult(parsed, maxDrafts(request));
+  await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
+  return result;
+}
+
+export async function runReplyClassification(request: RunRequest): Promise<ReplyClassificationResult> {
+  if (process.env.OUTBOUND_AGENT_USE_MOCK === 'true') {
+    return mockReplyClassificationResult(request);
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is required unless OUTBOUND_AGENT_USE_MOCK=true');
+  }
+
+  const prompt = await buildReplyClassificationPrompt(request);
+  const { workspace, parsed } = await runClaudeJson(request, prompt);
+  const result = validateReplyClassificationResult(parsed);
   await writeFile(join(workspace, 'result.json'), JSON.stringify(result, null, 2));
   return result;
 }

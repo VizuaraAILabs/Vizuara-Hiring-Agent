@@ -68,6 +68,31 @@ export interface DraftOutreachResult {
   drafts: OutreachDraft[];
 }
 
+export interface ReplyClassificationResult {
+  classification:
+    | 'interested'
+    | 'not_now'
+    | 'wrong_person'
+    | 'unsubscribe'
+    | 'objection'
+    | 'meeting_requested'
+    | 'negative'
+    | 'auto_reply'
+    | 'unknown';
+  suggestedNextAction:
+    | 'book_meeting'
+    | 'send_answer'
+    | 'follow_up_later'
+    | 'ask_for_referral'
+    | 'suppress_contact'
+    | 'suppress_domain'
+    | 'no_action'
+    | 'review_manually';
+  confidence: number;
+  summary: string;
+  followUpSuggestion: string | null;
+}
+
 const SOURCE_TYPES = new Set(['web', 'news', 'reddit', 'hacker_news', 'ats', 'manual', 'linkedin_manual']);
 const SIGNAL_TYPES = new Set([
   'active_engineering_hiring',
@@ -79,6 +104,27 @@ const SIGNAL_TYPES = new Set([
 ]);
 const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
 const DRAFT_CHANNELS = new Set(['email', 'linkedin_manual']);
+const REPLY_CLASSIFICATIONS = new Set([
+  'interested',
+  'not_now',
+  'wrong_person',
+  'unsubscribe',
+  'objection',
+  'meeting_requested',
+  'negative',
+  'auto_reply',
+  'unknown',
+]);
+const NEXT_ACTIONS = new Set([
+  'book_meeting',
+  'send_answer',
+  'follow_up_later',
+  'ask_for_referral',
+  'suppress_contact',
+  'suppress_domain',
+  'no_action',
+  'review_manually',
+]);
 
 function cleanString(value: unknown, field: string, max = 500) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -236,5 +282,25 @@ export function validateDraftOutreachResult(value: unknown, maxDrafts = 8): Draf
         },
       };
     }).filter((draft) => draft.body),
+  };
+}
+
+export function validateReplyClassificationResult(value: unknown): ReplyClassificationResult {
+  const root = asObject(value, 'result');
+  const classification = cleanString(root.classification, 'classification', 80);
+  const suggestedNextAction = cleanString(root.suggestedNextAction, 'suggestedNextAction', 80);
+  if (!REPLY_CLASSIFICATIONS.has(classification)) {
+    throw new Error(`unsupported reply classification: ${classification}`);
+  }
+  if (!NEXT_ACTIONS.has(suggestedNextAction)) {
+    throw new Error(`unsupported suggestedNextAction: ${suggestedNextAction}`);
+  }
+
+  return {
+    classification: classification as ReplyClassificationResult['classification'],
+    suggestedNextAction: suggestedNextAction as ReplyClassificationResult['suggestedNextAction'],
+    confidence: cleanScore(root.confidence ?? 50, 'confidence'),
+    summary: cleanString(root.summary, 'summary', 1000),
+    followUpSuggestion: cleanOptionalString(root.followUpSuggestion, 1200),
   };
 }
