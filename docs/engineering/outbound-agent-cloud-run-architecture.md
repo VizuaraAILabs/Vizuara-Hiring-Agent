@@ -233,11 +233,13 @@ Add admin routes:
 apps/web/src/app/api/admin/outbound/runs/route.ts
 apps/web/src/app/api/admin/outbound/prospects/[prospectId]/route.ts
 apps/web/src/app/api/admin/outbound/prospects/[prospectId]/enrich/route.ts
+apps/web/src/app/api/admin/outbound/prospects/[prospectId]/drafts/route.ts
+apps/web/src/app/api/admin/outbound/drafts/[draftId]/route.ts
 ```
 
 All admin routes use existing ArcEval admin auth through `getAuthUser()` and `isAdmin(...)`.
 
-Later phases can add focused routes for drafts, sending, suppression, and optional asynchronous callbacks.
+Later phases can add focused routes for sending, suppression, and optional asynchronous callbacks.
 
 ## Admin UI
 

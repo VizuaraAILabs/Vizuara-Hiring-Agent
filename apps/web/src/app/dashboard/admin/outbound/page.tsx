@@ -2,7 +2,7 @@
 
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import { useAuth } from '@/context/AuthContext';
-import { Ban, CheckCircle2, ExternalLink, RefreshCw, Search, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
+import { Ban, CheckCircle2, ExternalLink, FileText, RefreshCw, Save, Search, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 
@@ -18,6 +18,7 @@ interface OutboundRun {
     prospectsFound?: number;
     evidenceFound?: number;
     contactsFound?: number;
+    draftsFound?: number;
     rejected?: number;
   } | null;
   created_at: string;
@@ -57,8 +58,18 @@ interface OutboundProspect {
       department?: string | null;
     } | null;
   }>;
+  drafts: Array<{
+    id: string;
+    contactId: string | null;
+    channel: string;
+    sequenceStep: number;
+    subject: string | null;
+    body: string;
+    status: string;
+  }>;
   evidence_count: number;
   contact_count: number;
+  draft_count: number;
   created_at: string;
 }
 
@@ -82,6 +93,8 @@ function StatusPill({ status }: { status: string }) {
     disqualified: 'border-neutral-500/20 bg-neutral-500/10 text-neutral-300',
     enriched: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300',
     enrichment_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
+    drafted: 'border-violet-500/20 bg-violet-500/10 text-violet-300',
+    draft_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
     reviewed: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     new: 'border-primary/20 bg-primary/10 text-primary',
   };
@@ -111,6 +124,9 @@ export default function OutboundAdminPage() {
   const [starting, setStarting] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
+  const [draftingId, setDraftingId] = useState<string | null>(null);
+  const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
+  const [draftEdits, setDraftEdits] = useState<Record<string, { subject: string; body: string }>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -195,14 +211,64 @@ export default function OutboundAdminPage() {
     }
   }
 
+  async function draftProspect(prospectId: string) {
+    setDraftingId(prospectId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/prospects/${prospectId}/drafts`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to draft outreach');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to draft outreach');
+    } finally {
+      setDraftingId(null);
+    }
+  }
+
+  async function updateDraft(draftId: string, status?: 'approved' | 'rejected') {
+    const edit = draftEdits[draftId];
+    setSavingDraftId(draftId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...edit, status }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update draft');
+      setDraftEdits((current) => {
+        const next = { ...current };
+        delete next[draftId];
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update draft');
+    } finally {
+      setSavingDraftId(null);
+    }
+  }
+
+  function updateDraftEdit(draft: OutboundProspect['drafts'][number], changes: Partial<{ subject: string; body: string }>) {
+    setDraftEdits((current) => {
+      const existing = current[draft.id] ?? { subject: draft.subject ?? '', body: draft.body };
+      return {
+        ...current,
+        [draft.id]: { ...existing, ...changes },
+      };
+    });
+  }
+
   const totals = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length;
     const evidence = prospects.reduce((sum, prospect) => sum + Number(prospect.evidence_count || 0), 0);
     const contacts = prospects.reduce((sum, prospect) => sum + Number(prospect.contact_count || 0), 0);
-    const avgFit = prospects.length
-      ? Math.round(prospects.reduce((sum, prospect) => sum + Number(prospect.fit_score || 0), 0) / prospects.length)
-      : 0;
-    return { completed, evidence, contacts, avgFit };
+    const drafts = prospects.reduce((sum, prospect) => sum + Number(prospect.draft_count || 0), 0);
+    return { completed, evidence, contacts, drafts };
   }, [prospects, runs]);
 
   if (authLoading || !user?.isAdmin) return null;
@@ -251,7 +317,7 @@ export default function OutboundAdminPage() {
         <MetricCard label="Runs" value={String(runs.length)} sub={`${totals.completed} completed`} />
         <MetricCard label="Prospects" value={String(prospects.length)} sub="stored companies" />
         <MetricCard label="Evidence" value={String(totals.evidence)} sub="source-backed signals" />
-        <MetricCard label="Contacts" value={String(totals.contacts)} sub={prospects.length ? `avg fit ${totals.avgFit}` : 'ready after enrichment'} />
+        <MetricCard label="Contacts" value={String(totals.contacts)} sub={`${totals.drafts} drafts`} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_1.4fr]">
@@ -280,7 +346,7 @@ export default function OutboundAdminPage() {
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <p className="text-neutral-600">Output</p>
-                      <p className="mt-0.5 text-neutral-300">{run.stats?.prospectsFound ?? run.stats?.contactsFound ?? '-'}</p>
+                      <p className="mt-0.5 text-neutral-300">{run.stats?.prospectsFound ?? run.stats?.contactsFound ?? run.stats?.draftsFound ?? '-'}</p>
                     </div>
                     <div>
                       <p className="text-neutral-600">Evidence</p>
@@ -382,12 +448,21 @@ export default function OutboundAdminPage() {
                             >
                               <UserPlus className="h-4 w-4" />
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => void draftProspect(prospect.id)}
+                              disabled={draftingId === prospect.id || !['enriched', 'drafted'].includes(prospect.status)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/20 text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-30"
+                              title="Draft outreach"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
                       <tr className="border-b border-white/5 last:border-0">
                         <td colSpan={6} className="px-5 pb-5 pt-0">
-                          <div className="grid gap-2 xl:grid-cols-2">
+                          <div className="grid gap-2 xl:grid-cols-3">
                             <div className="space-y-2">
                               {(prospect.evidence ?? []).slice(0, 2).map((evidence) => (
                                 <div key={evidence.id} className="rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
@@ -441,6 +516,77 @@ export default function OutboundAdminPage() {
                               {(prospect.contacts ?? []).length === 0 && (
                                 <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-4 text-center text-xs text-neutral-600">
                                   No contacts yet
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              {(prospect.drafts ?? []).map((draft) => {
+                                const edit = draftEdits[draft.id];
+                                const subject = edit?.subject ?? draft.subject ?? '';
+                                const body = edit?.body ?? draft.body;
+                                const contact = prospect.contacts.find((item) => item.id === draft.contactId);
+                                return (
+                                  <div key={draft.id} className="rounded-xl border border-violet-500/10 bg-violet-500/[0.04] px-3 py-2.5">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-medium text-neutral-200">
+                                          {draft.channel.replace(/_/g, ' ')} step {draft.sequenceStep}
+                                        </p>
+                                        <p className="mt-0.5 truncate text-xs text-neutral-500">
+                                          {contact?.fullName || contact?.roleTitle || 'Company level'}
+                                        </p>
+                                      </div>
+                                      <StatusPill status={draft.status} />
+                                    </div>
+                                    {draft.channel === 'email' && (
+                                      <input
+                                        value={subject}
+                                        onChange={(event) => updateDraftEdit(draft, { subject: event.target.value })}
+                                        className="mt-2 h-9 w-full rounded-lg border border-white/10 bg-black/20 px-3 text-xs text-neutral-200 outline-none transition-colors focus:border-violet-400/50"
+                                        placeholder="Subject"
+                                      />
+                                    )}
+                                    <textarea
+                                      value={body}
+                                      onChange={(event) => updateDraftEdit(draft, { body: event.target.value })}
+                                      rows={6}
+                                      className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-neutral-300 outline-none transition-colors focus:border-violet-400/50"
+                                    />
+                                    <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void updateDraft(draft.id)}
+                                        disabled={savingDraftId === draft.id}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-xs text-neutral-300 transition-colors hover:bg-white/5 disabled:opacity-40"
+                                      >
+                                        <Save className="h-3.5 w-3.5" />
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void updateDraft(draft.id, 'approved')}
+                                        disabled={savingDraftId === draft.id}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/20 px-2.5 text-xs text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void updateDraft(draft.id, 'rejected')}
+                                        disabled={savingDraftId === draft.id}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-500/20 px-2.5 text-xs text-red-300 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                        Reject
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {(prospect.drafts ?? []).length === 0 && (
+                                <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-4 text-center text-xs text-neutral-600">
+                                  No drafts yet
                                 </div>
                               )}
                             </div>
