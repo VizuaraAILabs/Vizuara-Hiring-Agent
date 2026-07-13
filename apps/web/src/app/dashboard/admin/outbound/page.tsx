@@ -2,7 +2,7 @@
 
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import { useAuth } from '@/context/AuthContext';
-import { Ban, CheckCircle2, ExternalLink, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { Ban, CheckCircle2, ExternalLink, RefreshCw, Search, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 
@@ -17,6 +17,7 @@ interface OutboundRun {
   stats: {
     prospectsFound?: number;
     evidenceFound?: number;
+    contactsFound?: number;
     rejected?: number;
   } | null;
   created_at: string;
@@ -43,7 +44,21 @@ interface OutboundProspect {
     quotedText: string | null;
     confidence: number | null;
   }>;
+  contacts: Array<{
+    id: string;
+    fullName: string | null;
+    roleTitle: string | null;
+    email: string | null;
+    emailStatus: string;
+    linkedinUrl: string | null;
+    source: string | null;
+    confidence: number | null;
+    metadata: {
+      department?: string | null;
+    } | null;
+  }>;
   evidence_count: number;
+  contact_count: number;
   created_at: string;
 }
 
@@ -65,6 +80,8 @@ function StatusPill({ status }: { status: string }) {
     failed: 'border-red-500/20 bg-red-500/10 text-red-300',
     rejected: 'border-red-500/20 bg-red-500/10 text-red-300',
     disqualified: 'border-neutral-500/20 bg-neutral-500/10 text-neutral-300',
+    enriched: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300',
+    enrichment_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
     reviewed: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     new: 'border-primary/20 bg-primary/10 text-primary',
   };
@@ -93,6 +110,7 @@ export default function OutboundAdminPage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -160,13 +178,31 @@ export default function OutboundAdminPage() {
     }
   }
 
+  async function enrichProspect(prospectId: string) {
+    setEnrichingId(prospectId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/prospects/${prospectId}/enrich`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to enrich prospect');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to enrich prospect');
+    } finally {
+      setEnrichingId(null);
+    }
+  }
+
   const totals = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length;
     const evidence = prospects.reduce((sum, prospect) => sum + Number(prospect.evidence_count || 0), 0);
+    const contacts = prospects.reduce((sum, prospect) => sum + Number(prospect.contact_count || 0), 0);
     const avgFit = prospects.length
       ? Math.round(prospects.reduce((sum, prospect) => sum + Number(prospect.fit_score || 0), 0) / prospects.length)
       : 0;
-    return { completed, evidence, avgFit };
+    return { completed, evidence, contacts, avgFit };
   }, [prospects, runs]);
 
   if (authLoading || !user?.isAdmin) return null;
@@ -215,7 +251,7 @@ export default function OutboundAdminPage() {
         <MetricCard label="Runs" value={String(runs.length)} sub={`${totals.completed} completed`} />
         <MetricCard label="Prospects" value={String(prospects.length)} sub="stored companies" />
         <MetricCard label="Evidence" value={String(totals.evidence)} sub="source-backed signals" />
-        <MetricCard label="Avg fit" value={prospects.length ? `${totals.avgFit}` : '-'} sub="review score" />
+        <MetricCard label="Contacts" value={String(totals.contacts)} sub={prospects.length ? `avg fit ${totals.avgFit}` : 'ready after enrichment'} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_1.4fr]">
@@ -243,8 +279,8 @@ export default function OutboundAdminPage() {
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <p className="text-neutral-600">Prospects</p>
-                      <p className="mt-0.5 text-neutral-300">{run.stats?.prospectsFound ?? '-'}</p>
+                      <p className="text-neutral-600">Output</p>
+                      <p className="mt-0.5 text-neutral-300">{run.stats?.prospectsFound ?? run.stats?.contactsFound ?? '-'}</p>
                     </div>
                     <div>
                       <p className="text-neutral-600">Evidence</p>
@@ -337,34 +373,77 @@ export default function OutboundAdminPage() {
                             >
                               <Ban className="h-4 w-4" />
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => void enrichProspect(prospect.id)}
+                              disabled={enrichingId === prospect.id || !['approved', 'enriched'].includes(prospect.status)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/20 text-cyan-300 transition-colors hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-30"
+                              title="Enrich"
+                            >
+                              <UserPlus className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
                       <tr className="border-b border-white/5 last:border-0">
                         <td colSpan={6} className="px-5 pb-5 pt-0">
-                          <div className="grid gap-2 lg:grid-cols-2">
-                            {(prospect.evidence ?? []).slice(0, 2).map((evidence) => (
-                              <div key={evidence.id} className="rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
-                                <div className="flex items-start justify-between gap-3">
-                                  <p className="text-xs font-medium text-neutral-300">{evidence.signalType.replace(/_/g, ' ')}</p>
-                                  <a
-                                    href={evidence.sourceUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-light"
-                                  >
-                                    Source
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
+                          <div className="grid gap-2 xl:grid-cols-2">
+                            <div className="space-y-2">
+                              {(prospect.evidence ?? []).slice(0, 2).map((evidence) => (
+                                <div key={evidence.id} className="rounded-xl border border-white/5 bg-black/20 px-3 py-2.5">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <p className="text-xs font-medium text-neutral-300">{evidence.signalType.replace(/_/g, ' ')}</p>
+                                    <a
+                                      href={evidence.sourceUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-light"
+                                    >
+                                      Source
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  </div>
+                                  <p className="mt-1.5 text-xs leading-5 text-neutral-500">{evidence.summary}</p>
+                                  {evidence.quotedText && (
+                                    <p className="mt-2 border-l border-white/10 pl-2 text-xs italic leading-5 text-neutral-400">
+                                      {evidence.quotedText}
+                                    </p>
+                                  )}
                                 </div>
-                                <p className="mt-1.5 text-xs leading-5 text-neutral-500">{evidence.summary}</p>
-                                {evidence.quotedText && (
-                                  <p className="mt-2 border-l border-white/10 pl-2 text-xs italic leading-5 text-neutral-400">
-                                    {evidence.quotedText}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
+                              ))}
+                            </div>
+                            <div className="space-y-2">
+                              {(prospect.contacts ?? []).slice(0, 3).map((contact) => (
+                                <div key={contact.id} className="rounded-xl border border-cyan-500/10 bg-cyan-500/[0.04] px-3 py-2.5">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-xs font-medium text-neutral-200">
+                                        {contact.fullName || contact.roleTitle || 'Unnamed contact'}
+                                      </p>
+                                      <p className="mt-0.5 truncate text-xs text-neutral-500">
+                                        {contact.roleTitle || 'Role unknown'}{contact.metadata?.department ? ` - ${contact.metadata.department}` : ''}
+                                      </p>
+                                    </div>
+                                    <span className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-neutral-400">
+                                      {contact.emailStatus}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
+                                    {contact.email && <span>{contact.email}</span>}
+                                    {contact.linkedinUrl && (
+                                      <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="text-primary hover:text-primary-light">
+                                        LinkedIn
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              {(prospect.contacts ?? []).length === 0 && (
+                                <div className="rounded-xl border border-white/5 bg-black/20 px-3 py-4 text-center text-xs text-neutral-600">
+                                  No contacts yet
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
