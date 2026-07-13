@@ -38,7 +38,22 @@ export async function GET() {
         p.metadata,
         p.created_at,
         p.updated_at,
-        COUNT(e.id)::int AS evidence_count
+        COUNT(e.id)::int AS evidence_count,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', e.id,
+              'sourceType', e.source_type,
+              'sourceUrl', e.source_url,
+              'signalType', e.signal_type,
+              'summary', e.summary,
+              'quotedText', e.quoted_text,
+              'confidence', e.confidence
+            )
+            ORDER BY e.created_at DESC
+          ) FILTER (WHERE e.id IS NOT NULL),
+          '[]'
+        ) AS evidence
       FROM outbound_prospects p
       LEFT JOIN outbound_evidence e ON e.prospect_id = p.id
       GROUP BY p.id

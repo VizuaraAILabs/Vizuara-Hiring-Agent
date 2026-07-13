@@ -118,6 +118,10 @@ export async function storeDiscoveryResult(runId: string, result: DiscoveryResul
     for (const prospect of prospects) {
       const companyName = String(prospect.companyName || '').trim();
       if (!companyName) continue;
+      const usableEvidence = (prospect.evidence ?? []).filter((evidence) => (
+        evidence.sourceUrl && evidence.summary && evidence.signalType
+      ));
+      if (usableEvidence.length === 0) continue;
       const domain = prospect.domain ? String(prospect.domain).trim().toLowerCase() : null;
 
       const existing = domain
@@ -172,8 +176,7 @@ export async function storeDiscoveryResult(runId: string, result: DiscoveryResul
         prospectId = created.id;
       }
 
-      for (const evidence of prospect.evidence ?? []) {
-        if (!evidence.sourceUrl || !evidence.summary || !evidence.signalType) continue;
+      for (const evidence of usableEvidence) {
         await trx`
           INSERT INTO outbound_evidence (
             prospect_id, run_id, source_type, source_url, signal_type, summary, quoted_text, confidence
