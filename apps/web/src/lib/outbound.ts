@@ -49,10 +49,31 @@ export interface EnrichmentResultInput {
   contacts?: OutboundContactInput[];
 }
 
+export interface OutboundDraftInput {
+  contactId?: string | null;
+  channel?: string | null;
+  sequenceStep?: number | null;
+  subject?: string | null;
+  body?: string | null;
+  personalizationBasis?: {
+    evidenceIds?: string[];
+    reasoning?: string[];
+  } | null;
+}
+
+export interface DraftOutreachResultInput {
+  drafts?: OutboundDraftInput[];
+}
+
 const EMAIL_STATUSES = new Set(['unknown', 'guessed', 'verified', 'invalid', 'risky']);
+const DRAFT_CHANNELS = new Set(['email', 'linkedin_manual']);
 
 function cleanEmailStatus(value?: string | null) {
   return value && EMAIL_STATUSES.has(value) ? value : 'unknown';
+}
+
+function cleanDraftChannel(value?: string | null) {
+  return value && DRAFT_CHANNELS.has(value) ? value : 'email';
 }
 
 export function defaultDiscoveryConfig() {
@@ -161,6 +182,42 @@ export function mockEnrichmentResult(companyName: string, domain?: string | null
         emailStatus: 'unknown',
         source: 'Mock leadership page',
         confidence: 70,
+      },
+    ],
+  };
+}
+
+export function mockDraftOutreachResult(
+  companyName: string,
+  contacts: Array<{ id: string; full_name: string | null }> = [],
+  evidence: Array<{ id: string }> = []
+): DraftOutreachResultInput {
+  const contact = contacts[0];
+  const firstName = contact?.full_name?.trim().split(/\s+/)[0] || 'there';
+  const evidenceIds = evidence.map((item) => item.id).slice(0, 2);
+  return {
+    drafts: [
+      {
+        contactId: contact?.id ?? null,
+        channel: 'email',
+        sequenceStep: 1,
+        subject: 'AI-native technical hiring',
+        body: `Hi ${firstName},\n\nI noticed ${companyName} is hiring for technical roles and has signals around adapting hiring for AI-assisted candidates.\n\nArcEval helps teams evaluate candidates in a real AI-assisted coding environment, so reviewers can see how they reason, prompt, debug, and ship.\n\nWorth a quick look next week?`,
+        personalizationBasis: {
+          evidenceIds,
+          reasoning: ['References stored hiring and AI-assessment signals supplied by ArcEval.'],
+        },
+      },
+      {
+        contactId: contact?.id ?? null,
+        channel: 'linkedin_manual',
+        sequenceStep: 1,
+        subject: null,
+        body: `Noticed ${companyName} is hiring technical roles. I am working on ArcEval, which helps teams evaluate real AI-assisted engineering work. Thought it might be relevant.`,
+        personalizationBasis: {
+          evidenceIds,
+          reasoning: ['Manual LinkedIn note references only company-level hiring context.'],
+        },
       },
     ],
   };
@@ -334,6 +391,77 @@ export async function storeEnrichmentResult(runId: string, prospectId: string, r
         completed_at = NOW(),
         last_heartbeat_at = NOW(),
         stats = ${JSON.stringify({ contactsFound: storedContacts })}::jsonb
+      WHERE id = ${runId}
+    `;
+  });
+}
+
+export async function storeDraftOutreachResult(
+  runId: string,
+  prospectId: string,
+  result: DraftOutreachResultInput,
+  allowedContactIds: string[] = []
+) {
+  const drafts = Array.isArray(result.drafts) ? result.drafts : [];
+  const allowedContacts = new Set(allowedContactIds);
+
+  await sql.begin(async (tx) => {
+    const trx = tx as unknown as typeof sql;
+
+    await trx`
+      DELETE FROM outbound_drafts
+      WHERE prospect_id = ${prospectId}
+        AND status IN ('draft', 'edited', 'rejected')
+    `;
+
+    let storedDrafts = 0;
+    for (const draft of drafts) {
+      const body = draft.body?.trim();
+      if (!body) continue;
+
+      const channel = cleanDraftChannel(draft.channel);
+      const subject = channel === 'email' ? draft.subject?.trim() || 'Quick question' : draft.subject?.trim() || null;
+      const sequenceStep = Number.isFinite(Number(draft.sequenceStep))
+        ? Math.max(1, Math.min(5, Math.round(Number(draft.sequenceStep))))
+        : 1;
+      const contactId = draft.contactId && allowedContacts.has(draft.contactId) ? draft.contactId : null;
+
+      await trx`
+        INSERT INTO outbound_drafts (
+          prospect_id, contact_id, run_id, channel, sequence_step, subject, body, personalization_basis, status
+        )
+        VALUES (
+          ${prospectId},
+          ${contactId},
+          ${runId},
+          ${channel},
+          ${sequenceStep},
+          ${subject},
+          ${body},
+          ${JSON.stringify(draft.personalizationBasis ?? {})}::jsonb,
+          'draft'
+        )
+      `;
+      storedDrafts += 1;
+    }
+
+    if (storedDrafts === 0) {
+      throw new Error('No usable outreach drafts returned');
+    }
+
+    await trx`
+      UPDATE outbound_prospects
+      SET status = 'drafted', source_run_id = ${runId}, updated_at = NOW()
+      WHERE id = ${prospectId}
+    `;
+
+    await trx`
+      UPDATE outbound_agent_runs
+      SET
+        status = 'completed',
+        completed_at = NOW(),
+        last_heartbeat_at = NOW(),
+        stats = ${JSON.stringify({ draftsFound: storedDrafts })}::jsonb
       WHERE id = ${runId}
     `;
   });

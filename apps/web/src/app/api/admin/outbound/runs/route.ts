@@ -45,6 +45,11 @@ export async function GET() {
           WHERE c.prospect_id = p.id
         ) AS contact_count,
         (
+          SELECT COUNT(d.id)::int
+          FROM outbound_drafts d
+          WHERE d.prospect_id = p.id
+        ) AS draft_count,
+        (
           SELECT COALESCE(
             json_agg(
               json_build_object(
@@ -65,6 +70,30 @@ export async function GET() {
           FROM outbound_contacts c
           WHERE c.prospect_id = p.id
         ) AS contacts,
+        (
+          SELECT COALESCE(
+            json_agg(
+              json_build_object(
+                'id', d.id,
+                'contactId', d.contact_id,
+                'channel', d.channel,
+                'sequenceStep', d.sequence_step,
+                'subject', d.subject,
+                'body', d.body,
+                'personalizationBasis', d.personalization_basis,
+                'status', d.status,
+                'approvedByEmail', d.approved_by_email,
+                'approvedAt', d.approved_at,
+                'createdAt', d.created_at,
+                'updatedAt', d.updated_at
+              )
+              ORDER BY d.sequence_step ASC, d.created_at DESC
+            ),
+            '[]'
+          )
+          FROM outbound_drafts d
+          WHERE d.prospect_id = p.id
+        ) AS drafts,
         COALESCE(
           json_agg(
             json_build_object(
