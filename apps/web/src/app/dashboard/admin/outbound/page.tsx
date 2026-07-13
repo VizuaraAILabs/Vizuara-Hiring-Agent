@@ -67,9 +67,25 @@ interface OutboundProspect {
     body: string;
     status: string;
   }>;
+  messages: Array<{
+    id: string;
+    draftId: string | null;
+    contactId: string | null;
+    channel: string;
+    status: string;
+    sentAt: string | null;
+    metadata: {
+      replyText?: string;
+      classification?: string;
+      suggestedNextAction?: string;
+      summary?: string;
+      followUpSuggestion?: string | null;
+    } | null;
+  }>;
   evidence_count: number;
   contact_count: number;
   draft_count: number;
+  message_count: number;
   created_at: string;
 }
 
@@ -97,6 +113,8 @@ function StatusPill({ status }: { status: string }) {
     draft_requested: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
     contacted: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
     sent: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    replied: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+    reply_received: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     reviewed: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
     new: 'border-primary/20 bg-primary/10 text-primary',
   };
@@ -129,7 +147,9 @@ export default function OutboundAdminPage() {
   const [draftingId, setDraftingId] = useState<string | null>(null);
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
   const [sendingDraftId, setSendingDraftId] = useState<string | null>(null);
+  const [classifyingMessageId, setClassifyingMessageId] = useState<string | null>(null);
   const [draftEdits, setDraftEdits] = useState<Record<string, { subject: string; body: string }>>({});
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -273,6 +293,32 @@ export default function OutboundAdminPage() {
     }
   }
 
+  async function recordReply(messageId: string) {
+    const replyText = replyTexts[messageId]?.trim();
+    if (!replyText) return;
+    setClassifyingMessageId(messageId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/outbound/messages/${messageId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyText }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to classify reply');
+      setReplyTexts((current) => {
+        const next = { ...current };
+        delete next[messageId];
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to classify reply');
+    } finally {
+      setClassifyingMessageId(null);
+    }
+  }
+
   function updateDraftEdit(draft: OutboundProspect['drafts'][number], changes: Partial<{ subject: string; body: string }>) {
     setDraftEdits((current) => {
       const existing = current[draft.id] ?? { subject: draft.subject ?? '', body: draft.body };
@@ -288,7 +334,8 @@ export default function OutboundAdminPage() {
     const evidence = prospects.reduce((sum, prospect) => sum + Number(prospect.evidence_count || 0), 0);
     const contacts = prospects.reduce((sum, prospect) => sum + Number(prospect.contact_count || 0), 0);
     const drafts = prospects.reduce((sum, prospect) => sum + Number(prospect.draft_count || 0), 0);
-    return { completed, evidence, contacts, drafts };
+    const messages = prospects.reduce((sum, prospect) => sum + Number(prospect.message_count || 0), 0);
+    return { completed, evidence, contacts, drafts, messages };
   }, [prospects, runs]);
 
   if (authLoading || !user?.isAdmin) return null;
@@ -337,7 +384,7 @@ export default function OutboundAdminPage() {
         <MetricCard label="Runs" value={String(runs.length)} sub={`${totals.completed} completed`} />
         <MetricCard label="Prospects" value={String(prospects.length)} sub="stored companies" />
         <MetricCard label="Evidence" value={String(totals.evidence)} sub="source-backed signals" />
-        <MetricCard label="Contacts" value={String(totals.contacts)} sub={`${totals.drafts} drafts`} />
+        <MetricCard label="Contacts" value={String(totals.contacts)} sub={`${totals.drafts} drafts, ${totals.messages} messages`} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_1.4fr]">
@@ -618,6 +665,50 @@ export default function OutboundAdminPage() {
                                   No drafts yet
                                 </div>
                               )}
+                              {(prospect.messages ?? []).slice(0, 4).map((message) => {
+                                const contact = prospect.contacts.find((item) => item.id === message.contactId);
+                                const isSent = message.status === 'sent' || message.status === 'manual_sent';
+                                return (
+                                  <div key={message.id} className="rounded-xl border border-amber-500/10 bg-amber-500/[0.04] px-3 py-2.5">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-medium text-neutral-200">
+                                          {message.channel.replace(/_/g, ' ')}
+                                        </p>
+                                        <p className="mt-0.5 truncate text-xs text-neutral-500">
+                                          {contact?.fullName || contact?.roleTitle || 'Company level'}{message.sentAt ? ` - ${fmtDate(message.sentAt)}` : ''}
+                                        </p>
+                                      </div>
+                                      <StatusPill status={message.status} />
+                                    </div>
+                                    {message.status === 'reply_received' ? (
+                                      <div className="mt-2 space-y-1 text-xs leading-5 text-neutral-400">
+                                        <p className="text-neutral-300">{message.metadata?.summary || 'Reply received'}</p>
+                                        <p>{message.metadata?.classification || 'unknown'} · {message.metadata?.suggestedNextAction || 'review manually'}</p>
+                                        {message.metadata?.followUpSuggestion && <p>{message.metadata.followUpSuggestion}</p>}
+                                      </div>
+                                    ) : isSent ? (
+                                      <div className="mt-2 space-y-2">
+                                        <textarea
+                                          value={replyTexts[message.id] ?? ''}
+                                          onChange={(event) => setReplyTexts((current) => ({ ...current, [message.id]: event.target.value }))}
+                                          rows={3}
+                                          className="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs leading-5 text-neutral-300 outline-none transition-colors focus:border-amber-400/50"
+                                          placeholder="Paste reply text"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => void recordReply(message.id)}
+                                          disabled={classifyingMessageId === message.id || !replyTexts[message.id]?.trim()}
+                                          className="inline-flex h-8 items-center rounded-lg border border-amber-500/20 px-2.5 text-xs text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-30"
+                                        >
+                                          Classify reply
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         </td>

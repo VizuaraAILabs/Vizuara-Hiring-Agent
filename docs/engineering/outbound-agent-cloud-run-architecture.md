@@ -236,6 +236,7 @@ apps/web/src/app/api/admin/outbound/prospects/[prospectId]/enrich/route.ts
 apps/web/src/app/api/admin/outbound/prospects/[prospectId]/drafts/route.ts
 apps/web/src/app/api/admin/outbound/drafts/[draftId]/route.ts
 apps/web/src/app/api/admin/outbound/drafts/[draftId]/send/route.ts
+apps/web/src/app/api/admin/outbound/messages/[messageId]/reply/route.ts
 ```
 
 All admin routes use existing ArcEval admin auth through `getAuthUser()` and `isAdmin(...)`.
