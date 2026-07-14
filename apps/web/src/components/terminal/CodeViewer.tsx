@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, UIEvent } from 'react';
+import type { UIEvent } from 'react';
 import { codeToHtml } from 'shiki';
 import ArcSpinner from '@/components/ArcSpinner';
 import type { FileContent } from '@/hooks/useFileExplorer';
@@ -11,7 +11,6 @@ interface CodeViewerProps {
   fileContent: FileContent | null;
   fileLoading: boolean;
   fileError: string | null;
-  onSave: (filePath: string, content: string) => Promise<void>;
 }
 
 function getLanguage(filename: string): string {
@@ -34,79 +33,49 @@ export default function CodeViewer({
   fileContent,
   fileLoading,
   fileError,
-  onSave,
 }: CodeViewerProps) {
   const highlightedRef = useRef<HTMLDivElement>(null);
-  const [draft, setDraft] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlighted, setHighlighted] = useState<{ key: string; html: string | null } | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const originalContent = fileContent?.content ?? '';
-  const isDirty = Boolean(fileContent && draft !== originalContent);
-  const canEdit = Boolean(fileContent && !fileContent.truncated);
-  const highlightKey = selectedFile ? `${selectedFile}:${draft.length}:${draft.slice(0, 64)}` : null;
-
-  useEffect(() => {
-    setDraft(fileContent?.content ?? '');
-    setSaveError(null);
-  }, [fileContent?.path, fileContent?.content]);
+  const isViewingLoadedFile = Boolean(fileContent && selectedFile === fileContent.path && !fileLoading);
+  const displayedContent = isViewingLoadedFile ? fileContent?.content ?? '' : '';
+  const highlightKey = isViewingLoadedFile && selectedFile
+    ? `${selectedFile}:${displayedContent.length}:${displayedContent.slice(0, 64)}`
+    : null;
 
   useEffect(() => {
     if (!selectedFile || !highlightKey) return;
 
     let cancelled = false;
-    codeToHtml(draft || ' ', {
-      lang: getLanguage(selectedFile),
-      theme: 'vitesse-dark',
-    })
-      .then((html) => {
-        if (!cancelled) setHighlighted({ key: highlightKey, html });
+    const timer = window.setTimeout(() => {
+      codeToHtml(displayedContent || ' ', {
+        lang: getLanguage(selectedFile),
+        theme: 'vitesse-dark',
       })
-      .catch(() => {
-        if (!cancelled) setHighlighted({ key: highlightKey, html: null });
-      });
+        .then((html) => {
+          if (!cancelled) setHighlighted({ key: highlightKey, html });
+        })
+        .catch(() => {
+          if (!cancelled) setHighlighted({ key: highlightKey, html: null });
+        });
+    }, 80);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [selectedFile, draft, highlightKey]);
+  }, [selectedFile, displayedContent, highlightKey]);
+
+  useEffect(() => {
+    const target = textareaRef.current;
+    const highlightedEl = highlightedRef.current;
+    if (!target || !highlightedEl) return;
+    highlightedEl.scrollTop = target.scrollTop;
+    highlightedEl.scrollLeft = target.scrollLeft;
+  }, [highlighted]);
 
   if (!selectedFile) return null;
-
-  async function handleSave() {
-    if (!selectedFile || !canEdit || !isDirty || saving) return;
-
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await onSave(selectedFile, draft);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save file');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      void handleSave();
-      return;
-    }
-
-    if (event.key !== 'Tab') return;
-    event.preventDefault();
-    const target = event.currentTarget;
-    const start = target.selectionStart;
-    const end = target.selectionEnd;
-    const nextDraft = `${draft.slice(0, start)}  ${draft.slice(end)}`;
-    setDraft(nextDraft);
-    requestAnimationFrame(() => {
-      target.selectionStart = start + 2;
-      target.selectionEnd = start + 2;
-    });
-  }
 
   function handleEditorScroll(event: UIEvent<HTMLTextAreaElement>) {
     if (!highlightedRef.current) return;
@@ -134,21 +103,12 @@ export default function CodeViewer({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="shrink-0 flex items-center justify-between gap-3 border-b border-white/5 bg-[#0d0d0d] px-3 py-2">
+      <div className="shrink-0 border-b border-white/5 bg-[#0d0d0d] px-3 py-2">
         <div className="min-w-0">
           <p className="text-[11px] text-neutral-500">
-            {canEdit ? 'Editable workspace file' : 'Large file preview is read-only'}
+            {fileContent.truncated ? 'Large file preview is read-only' : 'Workspace file preview'}
           </p>
-          {saveError && <p className="mt-0.5 text-[11px] text-red-400">{saveError}</p>}
         </div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={!canEdit || !isDirty || saving}
-          className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 hover:text-primary-light disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/2 disabled:text-neutral-700"
-        >
-          {saving ? 'Saving...' : isDirty ? 'Save' : 'Saved'}
-        </button>
       </div>
 
       {fileContent.truncated && (
@@ -163,23 +123,25 @@ export default function CodeViewer({
         <div
           ref={highlightedRef}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-auto p-2 font-mono text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-xs [&_pre]:!leading-relaxed"
+          className="code-editor-highlight pointer-events-none absolute inset-0 overflow-hidden whitespace-pre p-2 font-mono text-xs leading-5 [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-xs [&_pre]:!leading-5 [&_pre]:!whitespace-pre"
+          style={{ tabSize: 2 }}
         >
           {highlighted?.key === highlightKey && highlighted.html ? (
             <div dangerouslySetInnerHTML={{ __html: highlighted.html }} />
           ) : (
-            <pre className="whitespace-pre text-neutral-300">{draft}</pre>
+            <pre className="whitespace-pre text-neutral-300">{displayedContent}</pre>
           )}
         </div>
         <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={handleKeyDown}
+          ref={textareaRef}
+          value={displayedContent}
           onScroll={handleEditorScroll}
-          readOnly={!canEdit}
-          className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-2 font-mono text-xs leading-relaxed text-transparent caret-white selection:bg-primary/30 focus:outline-none disabled:cursor-default"
+          readOnly
+          wrap="off"
+          className="code-editor-input absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent p-2 font-mono text-xs leading-5 text-transparent caret-white selection:bg-primary/30 focus:outline-none disabled:cursor-default"
+          style={{ tabSize: 2 }}
           spellCheck={false}
-          aria-label={`${selectedFile} source editor`}
+          aria-label={`${selectedFile} source preview`}
         />
       </div>
     </div>

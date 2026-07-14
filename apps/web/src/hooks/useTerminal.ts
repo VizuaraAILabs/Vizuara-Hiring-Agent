@@ -36,6 +36,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting to terminal...');
   const [terminalError, setTerminalError] = useState<string | null>(null);
@@ -44,6 +45,24 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const spawnAckedRef = useRef(false);
   const fatalErrorRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
+
+  const sendResize = useCallback(() => {
+    const terminal = terminalRef.current;
+    const ws = wsRef.current;
+    if (!terminal || ws?.readyState !== WebSocket.OPEN) return;
+
+    ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+  }, []);
+
+  const refitTerminal = useCallback(() => {
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!terminal || !fitAddon) return;
+
+    fitAddon.fit();
+    terminal.refresh(0, terminal.rows - 1);
+    sendResize();
+  }, [sendResize]);
 
   const connect = useCallback(() => {
     // NEXT_PUBLIC_* vars are inlined at build time. In production Docker builds
@@ -60,6 +79,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
 
     ws.onopen = () => {
       console.log('[Terminal] WebSocket connected');
+      refitTerminal();
       // Send a ping every 30s to keep the connection alive
       const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -89,6 +109,10 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
             spawnAckedRef.current = true;
             setConnected(true);
             setStatusMessage('');
+            refitTerminal();
+            requestAnimationFrame(refitTerminal);
+            window.setTimeout(refitTerminal, 150);
+            window.setTimeout(refitTerminal, 500);
             if (msg.reconnected) {
               console.log('[Terminal] Reconnected to existing session');
             }
@@ -130,7 +154,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     ws.onerror = (err) => {
       console.error('[Terminal] WebSocket error:', err);
     };
-  }, [token, onExit]);
+  }, [token, onExit, refitTerminal]);
 
   useEffect(() => {
     connectRef.current = connect;
@@ -157,24 +181,31 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
         cyan: '#22d3ee',
         white: '#e2e8f0',
       },
-      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, monospace',
+      fontFamily: '"Cascadia Mono", Consolas, "Liberation Mono", "Courier New", monospace',
       fontSize: 14,
-      lineHeight: 1.4,
+      fontWeight: 400,
+      fontWeightBold: 400,
+      lineHeight: 1.25,
+      letterSpacing: 0,
       cursorBlink: true,
       cursorStyle: 'bar',
-      allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
 
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
     terminal.open(container);
-    fitAddon.fit();
+    refitTerminal();
     terminal.focus();
     terminal.write('Connecting to terminal...\r\n');
 
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+    requestAnimationFrame(refitTerminal);
+    window.setTimeout(refitTerminal, 250);
+    window.setTimeout(refitTerminal, 1000);
+    document.fonts?.ready.then(refitTerminal).catch(() => {});
 
     // Handle user input
     terminal.onData((data) => {
@@ -185,26 +216,25 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows })
-        );
-      }
+      refitTerminal();
     });
     resizeObserver.observe(container);
+    resizeObserverRef.current = resizeObserver;
 
     // Connect WebSocket
     connect();
 
     return () => {
       resizeObserver.disconnect();
+      resizeObserverRef.current = null;
     };
-  }, [connect]);
+  }, [connect, refitTerminal]);
 
   useEffect(() => {
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       wsRef.current?.close();
       terminalRef.current?.dispose();
       terminalRef.current = null;

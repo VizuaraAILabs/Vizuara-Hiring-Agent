@@ -39,23 +39,11 @@ export function useFileExplorer(token: string) {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectRequestRef = useRef(0);
 
   const apiUrl = useCallback((endpoint: string) =>
     `${terminalHttpUrl}/api/files/${endpoint}?token=${encodeURIComponent(token)}`,
   [terminalHttpUrl, token]);
-
-  const postApi = useCallback(async (endpoint: string, body: Record<string, string>) => {
-    const res = await fetch(apiUrl(endpoint), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(data.error);
-    }
-    return res.json();
-  }, [apiUrl]);
 
   const fetchTree = useCallback(async () => {
     try {
@@ -75,6 +63,7 @@ export function useFileExplorer(token: string) {
   }, [apiUrl]);
 
   const selectFile = useCallback(async (filePath: string) => {
+    const requestId = ++selectRequestRef.current;
     setSelectedFile(filePath);
     setFileLoading(true);
     setFileError(null);
@@ -88,72 +77,46 @@ export function useFileExplorer(token: string) {
         throw new Error(data.error);
       }
       const data: FileContent = await res.json();
+      if (requestId !== selectRequestRef.current) return;
       setFileContent(data);
       setFileError(null);
     } catch (err: unknown) {
+      if (requestId !== selectRequestRef.current) return;
       setFileError(err instanceof Error ? err.message : 'Failed to read file');
       setFileContent(null);
     } finally {
-      setFileLoading(false);
+      if (requestId === selectRequestRef.current) {
+        setFileLoading(false);
+      }
     }
   }, [terminalHttpUrl, token]);
 
   const closeFile = useCallback(() => {
+    selectRequestRef.current++;
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
+    setFileLoading(false);
   }, []);
 
   const refresh = useCallback(async () => {
     await fetchTree();
-    if (selectedFile) {
-      await selectFile(selectedFile);
-    }
-  }, [fetchTree, selectedFile, selectFile]);
+  }, [fetchTree]);
 
-  // --- File mutation operations ---
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${terminalHttpUrl}/api/editor/context?token=${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activeFile: selectedFile }),
+      signal: controller.signal,
+    }).catch((err: unknown) => {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      console.warn('[FileExplorer] Failed to sync active editor file:', err);
+    });
 
-  const createNewFile = useCallback(async (filePath: string) => {
-    await postApi('create', { path: filePath });
-    await fetchTree();
-  }, [postApi, fetchTree]);
-
-  const saveFileContent = useCallback(async (filePath: string, content: string) => {
-    await postApi('update', { path: filePath, content });
-    setFileContent((prev) => prev && prev.path === filePath
-      ? { ...prev, content, size: new Blob([content]).size, truncated: false }
-      : prev);
-    await fetchTree();
-  }, [postApi, fetchTree]);
-
-  const createNewDirectory = useCallback(async (dirPath: string) => {
-    await postApi('mkdir', { path: dirPath });
-    await fetchTree();
-  }, [postApi, fetchTree]);
-
-  const renameItem = useCallback(async (oldPath: string, newPath: string) => {
-    await postApi('rename', { oldPath, newPath });
-    if (selectedFile === oldPath) {
-      setSelectedFile(newPath);
-    }
-    await fetchTree();
-  }, [postApi, fetchTree, selectedFile]);
-
-  const deleteItem = useCallback(async (filePath: string) => {
-    await postApi('delete', { path: filePath });
-    if (selectedFile === filePath) {
-      closeFile();
-    }
-    await fetchTree();
-  }, [postApi, fetchTree, selectedFile, closeFile]);
-
-  const moveItem = useCallback(async (srcPath: string, destPath: string) => {
-    await postApi('move', { srcPath, destPath });
-    if (selectedFile === srcPath) {
-      setSelectedFile(destPath);
-    }
-    await fetchTree();
-  }, [postApi, fetchTree, selectedFile]);
+    return () => controller.abort();
+  }, [selectedFile, terminalHttpUrl, token]);
 
   // Initial fetch + polling
   useEffect(() => {
@@ -176,11 +139,5 @@ export function useFileExplorer(token: string) {
     selectFile,
     closeFile,
     refresh,
-    createNewFile,
-    saveFileContent,
-    createNewDirectory,
-    renameItem,
-    deleteItem,
-    moveItem,
   };
 }

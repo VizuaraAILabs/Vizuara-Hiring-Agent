@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useFileExplorer } from '@/hooks/useFileExplorer';
 import FileTree from './FileTree';
 import CodeViewer from './CodeViewer';
 import type { FileTreeActions } from './FileTreeNode';
-import ConfirmationModal from '@/components/ConfirmationModal';
 import ArcSpinner from '@/components/ArcSpinner';
 
 interface FileExplorerProps {
@@ -25,83 +24,26 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     selectFile,
     closeFile,
     refresh,
-    createNewFile,
-    saveFileContent,
-    createNewDirectory,
-    renameItem,
-    deleteItem,
-    moveItem,
   } = useFileExplorer(token);
-
-  const [creating, setCreating] = useState<{ type: 'file' | 'folder'; parentDir: string } | null>(null);
-  const [createName, setCreateName] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [deletePath, setDeletePath] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     onReadyChange?.(!loading && !error, error);
   }, [loading, error, onReadyChange]);
 
-  const handleCreateFile = useCallback((parentDir: string) => {
-    setCreating({ type: 'file', parentDir });
-    setCreateName('');
-    setCreateError('');
-  }, []);
+  const handleSelectFile = useCallback((filePath: string) => {
+    void selectFile(filePath);
+  }, [selectFile]);
 
-  const handleCreateFolder = useCallback((parentDir: string) => {
-    setCreating({ type: 'folder', parentDir });
-    setCreateName('');
-    setCreateError('');
-  }, []);
+  const handleCloseFile = useCallback(() => {
+    closeFile();
+  }, [closeFile]);
 
-  async function handleCreateSubmit() {
-    if (!creating || !createName.trim()) return;
-    const fullPath = creating.parentDir ? `${creating.parentDir}/${createName.trim()}` : createName.trim();
-    try {
-      if (creating.type === 'file') {
-        await createNewFile(fullPath);
-      } else {
-        await createNewDirectory(fullPath);
-      }
-      setCreating(null);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create item');
-    }
-  }
-
-  function handleCreateKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') handleCreateSubmit();
-    if (e.key === 'Escape') setCreating(null);
-  }
-
-  const handleDelete = useCallback(async (filePath: string) => {
-    setDeletePath(filePath);
-    setDeleteError(null);
-  }, []);
-
-  const confirmDelete = useCallback(async () => {
-    if (!deletePath || deleting) return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteItem(deletePath);
-      setDeletePath(null);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete item.');
-    } finally {
-      setDeleting(false);
-    }
-  }, [deleteItem, deletePath, deleting]);
+  const handleRefresh = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
 
   const actions: FileTreeActions = {
-    onSelectFile: selectFile,
-    onRename: renameItem,
-    onDelete: handleDelete,
-    onMove: moveItem,
-    onCreateFile: handleCreateFile,
-    onCreateFolder: handleCreateFolder,
+    onSelectFile: handleSelectFile,
   };
 
   return (
@@ -113,21 +55,7 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
           <span className="text-xs font-medium text-neutral-400">Files</span>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => handleCreateFile('')}
-              className="text-neutral-600 hover:text-neutral-300 text-xs px-1"
-              title="New File"
-            >
-              +F
-            </button>
-            <button
-              onClick={() => handleCreateFolder('')}
-              className="text-neutral-600 hover:text-neutral-300 text-xs px-1"
-              title="New Folder"
-            >
-              +D
-            </button>
-            <button
-              onClick={refresh}
+              onClick={handleRefresh}
               className="text-neutral-600 hover:text-neutral-300 text-sm px-1"
               title="Refresh"
             >
@@ -135,25 +63,6 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
             </button>
           </div>
         </div>
-
-        {/* Inline create input */}
-        {creating && (
-          <div className="px-2 py-1.5 border-b border-white/5 bg-white/2">
-            <div className="text-[10px] text-neutral-500 mb-1">
-              New {creating.type}{creating.parentDir ? ` in ${creating.parentDir}` : ''}
-            </div>
-            <input
-              autoFocus
-              value={createName}
-              onChange={(e) => { setCreateName(e.target.value); setCreateError(''); }}
-              onKeyDown={handleCreateKeyDown}
-              onBlur={() => setCreating(null)}
-              placeholder={creating.type === 'file' ? 'filename.ext' : 'folder-name'}
-              className="w-full bg-surface border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-primary/50"
-            />
-            {createError && <div className="text-[10px] text-red-400 mt-0.5">{createError}</div>}
-          </div>
-        )}
 
         {/* File tree */}
         <div className="flex-1 min-h-0 overflow-auto file-tree-scroll">
@@ -180,7 +89,7 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
               {fileContent?.path || selectedFile}
             </span>
             <button
-              onClick={closeFile}
+              onClick={handleCloseFile}
               className="text-neutral-600 hover:text-white text-lg leading-none ml-3 px-1"
               title="Close file viewer"
             >
@@ -195,27 +104,10 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
               fileContent={fileContent}
               fileLoading={fileLoading}
               fileError={fileError}
-              onSave={saveFileContent}
             />
           </div>
         </div>
       )}
-      <ConfirmationModal
-        open={Boolean(deletePath)}
-        title="Delete Item?"
-        description={`Delete "${deletePath ?? ''}" from this workspace? This cannot be undone.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        variant="danger"
-        isLoading={deleting}
-        error={deleteError}
-        onConfirm={confirmDelete}
-        onClose={() => {
-          if (deleting) return;
-          setDeletePath(null);
-          setDeleteError(null);
-        }}
-      />
     </>
   );
 }
