@@ -16,6 +16,7 @@ Project documentation is grouped by topic so planning notes, implementation guid
 - [Environment Variables](engineering/env-vars.md)
 - [Private GitHub Pulls on GCP VM](engineering/private-github-pulls-on-gcp-vm.md)
 - [Claude Code Gateway](engineering/claude-gateway.md)
+- [Outbound Agent Cloud Run Architecture](engineering/outbound-agent-cloud-run-architecture.md)
 - [Concrete Skill Signals Spec](analysis/concrete-skill-signals-spec.md)
 - [Troubleshooting](engineering/troubleshooting.md)
 - [Public Candidate Analysis API](api/public-candidate-analysis-api.md)

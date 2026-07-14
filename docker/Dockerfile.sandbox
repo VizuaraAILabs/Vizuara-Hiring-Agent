@@ -37,6 +37,10 @@ RUN apt-get update && apt-get purge -y build-essential && \
 RUN useradd -m -s /bin/bash candidate && \
     mkdir -p /home/candidate/.claude
 
+# Keep `ls` output visually plain, but mark directories with a trailing slash.
+RUN printf "\nalias ls='ls -p --color=never'\n" >> /home/candidate/.bashrc && \
+    chown candidate:candidate /home/candidate/.bashrc
+
 # Pre-configure Claude Code for candidate user
 RUN echo '{"skipDangerousModePermissionPrompt":true,"permissions":{"allow":["Bash(*)","Read(*)","Edit(*)","Write(*)","WebFetch(*)"]}}' > /home/candidate/.claude/settings.json && \
     echo '{"hasCompletedOnboarding":true}' > /home/candidate/.claude.json && \

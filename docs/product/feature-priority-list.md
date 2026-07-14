@@ -208,6 +208,14 @@ This first iteration is based on the requested assessment-link expiry workflow p
 
 ## P3
 
+### FEAT-P3-005: Add prospect-specific outbound landing pages
+
+- Status: Proposed
+- Area: Outbound marketing / conversion
+- Source: Deferred from the ArcEval outbound agent plan. The first outbound implementation should focus on prospect discovery, enrichment, admin review, personalized draft generation, and compliant sending. Prospect-specific landing pages can come after that core loop is working.
+- Impact: Cold outreach can convert better when the call-to-action opens a page tailored to the prospect's role, hiring signal, and likely assessment use case, but building this too early would distract from the core outbound workflow.
+- Suggested fix: Add generated, reviewable demo pages for approved prospects or segments, for example company-specific or ICP-specific pages showing relevant ArcEval assessment examples, AI-assisted hiring evaluation angles, and a lightweight booking/contact CTA. Keep page generation admin-approved and avoid publishing private prospect evidence unless explicitly allowed.
+
 ### FEAT-P3-001: Add archived/completed grouping for old assessments
 
 - Status: Implemented

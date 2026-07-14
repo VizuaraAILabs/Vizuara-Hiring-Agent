@@ -9,10 +9,13 @@ const ROOT_DIR = path.resolve(__dirname, '..', '..', '..');
 dotenv.config({ path: path.join(ROOT_DIR, '.env.local') });
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || 'hiring-sandbox';
+const SANDBOX_SESSION_ROOT = process.env.SANDBOX_SESSION_ROOT
+  || path.join(os.tmpdir(), 'hiring-agent-sessions');
 const DOCKER_SOCKET_PATH = process.env.DOCKER_SOCKET_PATH
   || (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock');
 // Force Claude Code to use Haiku (fastest, most cost-efficient model) inside sandbox containers
 const CLAUDE_MODEL = process.env.SANDBOX_CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
+const SANDBOX_LS_COLORS = 'di=0:ow=0:tw=0';
 
 // Resource management constants
 const MAX_CONCURRENT_SANDBOXES = parseInt(process.env.SANDBOX_MAX_CONCURRENT || '5');
@@ -105,7 +108,7 @@ export class DockerManager {
     await this.removeStaleNamedContainer(sessionId);
 
     // Create a temporary host directory with starter files
-    const hostWorkDir = path.join(os.tmpdir(), 'hiring-agent-sessions', sessionId);
+    const hostWorkDir = path.join(SANDBOX_SESSION_ROOT, sessionId);
     fs.mkdirSync(hostWorkDir, { recursive: true });
 
     // Seed workspace from JSONB starter files (takes priority over dir)
@@ -147,6 +150,7 @@ export class DockerManager {
       Env: [
         ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
+        `LS_COLORS=${SANDBOX_LS_COLORS}`,
         `SESSION_ID=${sessionId}`,
       ],
       HostConfig: {
@@ -216,6 +220,7 @@ export class DockerManager {
       Env: [
         ...this.buildClaudeEnv(claudeGateway),
         'TERM=xterm-256color',
+        `LS_COLORS=${SANDBOX_LS_COLORS}`,
       ],
       User: 'candidate',
       AttachStdin: true,

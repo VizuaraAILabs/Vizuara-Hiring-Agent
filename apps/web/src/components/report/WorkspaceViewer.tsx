@@ -110,6 +110,7 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [zipDownloading, setZipDownloading] = useState(false);
   const highlightedViewerRef = useRef<HTMLDivElement>(null);
+  const viewerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedCode, setHighlightedCode] = useState<{ key: string; html: string | null } | null>(null);
 
   const files = snapshot?.files ?? [];
@@ -147,6 +148,14 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
       cancelled = true;
     };
   }, [highlightKey, selectedFile]);
+
+  useEffect(() => {
+    const target = viewerTextareaRef.current;
+    const highlightedEl = highlightedViewerRef.current;
+    if (!target || !highlightedEl) return;
+    highlightedEl.scrollTop = target.scrollTop;
+    highlightedEl.scrollLeft = target.scrollLeft;
+  }, [highlightedCode]);
 
   const handleCodeScroll = (event: UIEvent<HTMLTextAreaElement>) => {
     if (!highlightedViewerRef.current) return;
@@ -267,7 +276,8 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
                 <div
                   ref={highlightedViewerRef}
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 overflow-auto p-4 font-mono text-xs leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-xs [&_pre]:!leading-relaxed"
+                  className="code-editor-highlight pointer-events-none absolute inset-0 overflow-hidden whitespace-pre p-4 font-mono text-xs leading-5 [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-xs [&_pre]:!leading-5 [&_pre]:!whitespace-pre"
+                  style={{ tabSize: 2 }}
                 >
                   {highlightedCode?.key === highlightKey && highlightedCode.html ? (
                     <div dangerouslySetInnerHTML={{ __html: highlightedCode.html }} />
@@ -276,11 +286,14 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
                   )}
                 </div>
                 <textarea
+                  ref={viewerTextareaRef}
                   value={selectedFile.content}
                   onChange={() => undefined}
                   onScroll={handleCodeScroll}
                   readOnly
-                  className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-4 font-mono text-xs leading-relaxed text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  wrap="off"
+                  className="code-editor-input absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent p-4 font-mono text-xs leading-5 text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  style={{ tabSize: 2 }}
                   spellCheck={false}
                   aria-label={`${selectedFile.path} read-only source`}
                 />

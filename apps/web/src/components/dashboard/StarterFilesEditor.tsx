@@ -397,6 +397,7 @@ export default function StarterFilesEditor({
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   const highlightedEditorRef = useRef<HTMLDivElement>(null);
+  const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedCode, setHighlightedCode] = useState<{ key: string; html: string | null } | null>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
@@ -456,6 +457,14 @@ export default function StarterFilesEditor({
       cancelled = true;
     };
   }, [highlightKey, selectedFileData]);
+
+  useEffect(() => {
+    const target = editorTextareaRef.current;
+    const highlightedEl = highlightedEditorRef.current;
+    if (!target || !highlightedEl) return;
+    highlightedEl.scrollTop = target.scrollTop;
+    highlightedEl.scrollLeft = target.scrollLeft;
+  }, [highlightedCode]);
 
   // Get target directory for new file/folder based on selection
   function getCreationTarget(): string {
@@ -985,7 +994,8 @@ export default function StarterFilesEditor({
                 <div
                   ref={highlightedEditorRef}
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-sm leading-relaxed [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-sm [&_pre]:!leading-relaxed"
+                  className="code-editor-highlight pointer-events-none absolute inset-0 overflow-hidden whitespace-pre p-3 font-mono text-sm leading-[22px] [&_pre]:!m-0 [&_pre]:!bg-transparent [&_pre]:!p-0 [&_pre]:!font-mono [&_pre]:!text-sm [&_pre]:!leading-[22px] [&_pre]:!whitespace-pre"
+                  style={{ tabSize: 2 }}
                 >
                   {highlightedCode?.key === highlightKey && highlightedCode.html ? (
                     <div dangerouslySetInnerHTML={{ __html: highlightedCode.html }} />
@@ -994,11 +1004,14 @@ export default function StarterFilesEditor({
                   )}
                 </div>
                 <textarea
+                  ref={editorTextareaRef}
                   value={selectedFileData.content}
                   onChange={(e) => handleContentChange(e.target.value)}
                   onKeyDown={handleTextareaKeyDown}
                   onScroll={handleEditorScroll}
-                  className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-3 font-mono text-sm leading-relaxed text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  wrap="off"
+                  className="code-editor-input absolute inset-0 h-full w-full resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-sm leading-[22px] text-transparent caret-white selection:bg-primary/30 focus:outline-none"
+                  style={{ tabSize: 2 }}
                   spellCheck={false}
                 />
               </div>

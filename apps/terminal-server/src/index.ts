@@ -1,4 +1,4 @@
-import http from 'http';
+import http, { IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import postgres from 'postgres';
 import path from 'path';
@@ -8,7 +8,7 @@ import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import * as fs from 'fs';
-import { buildFileTree, readFileContent, createFile, updateFileContent, createDirectory, renameFile, deleteFile, moveFile, FileNode } from './file-service';
+import { buildFileTree, readFileContent, FileNode } from './file-service';
 import { CostTracker } from './cost-tracker';
 import { ActivityMonitor } from './activity-monitor';
 import { handleClaudeGatewayRequest, issueClaudeGatewayToken } from './claude-gateway';
@@ -48,6 +48,7 @@ logger.onFlush((sessionId, content, contentType) => {
 
 const disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 const runtimeHeartbeatTimers: Map<string, NodeJS.Timeout> = new Map();
+const activeEditorFiles: Map<string, string> = new Map();
 
 // Per-session activity monitors for the AI interviewer
 const activityMonitors: Map<string, ActivityMonitor> = new Map();
@@ -80,6 +81,52 @@ class WorkspaceArchiveError extends Error {
 
 function redactClaudeGatewayTokens(value: string): string {
   return value.replace(/claude_sess_[A-Za-z0-9_-]+/g, '[REDACTED_CLAUDE_AUTH_TOKEN]');
+}
+
+function normalizeEditorFilePath(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') throw new Error('Invalid active file path');
+
+  const normalized = value.replace(/\\/g, '/');
+  if (
+    /[\u0000-\u001F\u007F]/.test(normalized)
+    || normalized.length > 1000
+    || normalized.includes('`')
+    || normalized.includes('$')
+    || normalized.includes('<')
+    || normalized.includes('>')
+    || normalized.includes('|')
+    || normalized.includes('&')
+    || normalized.includes(';')
+    || normalized.includes('\n')
+    || normalized.includes('\r')
+    || normalized.includes('\t')
+    || normalized.includes('*')
+    || normalized.includes('?')
+    || path.isAbsolute(normalized)
+    || path.win32.isAbsolute(normalized)
+    || path.posix.isAbsolute(normalized)
+  ) {
+    throw new Error('Invalid active file path');
+  }
+
+  const segments = normalized.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error('Invalid active file path');
+  }
+
+  return segments.join('/');
+}
+
+function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk: Buffer) => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); }
+    });
+    req.on('error', reject);
+  });
 }
 
 // Periodically kill containers for sessions that have been ended (by button or timer expiry)
@@ -464,6 +511,7 @@ async function cleanupSubmittedSession(sessionId: string): Promise<void> {
     const monitor = activityMonitors.get(sessionId);
     monitor?.destroy();
     activityMonitors.delete(sessionId);
+    activeEditorFiles.delete(sessionId);
 
     if (dyingSession) {
       await dockerManager.kill(sessionId);
@@ -519,16 +567,55 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/editor/context') {
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+
+    const token = url.searchParams.get('token');
+    if (!token) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'This assessment link is missing required access information.' }));
+      return;
+    }
+
+    const sessionInfo = await validateSessionToken(token, sql);
+    if (!sessionInfo) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'This assessment link is invalid or expired.' }));
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const activeFile = normalizeEditorFilePath(body.activeFile);
+      if (activeFile) {
+        activeEditorFiles.set(sessionInfo.sessionId, activeFile);
+      } else {
+        activeEditorFiles.delete(sessionInfo.sessionId);
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message || 'Invalid editor context' }));
+    }
+    return;
+  }
+
   if (pathname === '/claude-gateway/v1/messages' || pathname === '/v1/messages') {
     await handleClaudeGatewayRequest(req, res, sql, {
       anthropicApiKey: ANTHROPIC_API_KEY,
       tokenSecret: CLAUDE_GATEWAY_TOKEN_SECRET,
+      getActiveFile: (sessionId) => activeEditorFiles.get(sessionId) ?? null,
     });
     return;
   }
 
   // File API endpoints
-  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read', '/api/files/create', '/api/files/update', '/api/files/mkdir', '/api/files/rename', '/api/files/delete', '/api/files/move'];
+  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read'];
   if (FILE_API_ROUTES.includes(pathname)) {
     const token = url.searchParams.get('token');
     if (!token) {
@@ -588,109 +675,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // --- Mutation endpoints (POST/DELETE) ---
-
-    // Helper to read JSON body
-    const readBody = (): Promise<Record<string, string>> =>
-      new Promise((resolve, reject) => {
-        let data = '';
-        req.on('data', (chunk: Buffer) => { data += chunk; });
-        req.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); }
-        });
-        req.on('error', reject);
-      });
-
-    if (pathname === '/api/files/create' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
-        createFile(workDir, body.path, body.content || '');
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-
-    if (pathname === '/api/files/update' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
-        updateFileContent(workDir, body.path, body.content || '');
-        logger.logFileEdit(sessionInfo.sessionId, body.path, body.content || '');
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'File not found' ? 404 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-
-    if (pathname === '/api/files/mkdir' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
-        createDirectory(workDir, body.path);
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-
-    if (pathname === '/api/files/rename' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.oldPath || !body.newPath) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing oldPath or newPath' })); return; }
-        renameFile(workDir, body.oldPath, body.newPath);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-
-    if (pathname === '/api/files/delete' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.path) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing path' })); return; }
-        deleteFile(workDir, body.path);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'File not found' ? 404 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
-
-    if (pathname === '/api/files/move' && req.method === 'POST') {
-      try {
-        const body = await readBody();
-        if (!body.srcPath || !body.destPath) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Missing srcPath or destPath' })); return; }
-        moveFile(workDir, body.srcPath, body.destPath);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err: any) {
-        const status = err.message === 'Path traversal detected' ? 403 : err.message === 'Source not found' ? 404 : 400;
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-      return;
-    }
   }
 
   res.writeHead(404);
@@ -895,10 +879,6 @@ wss.on('connection', async (ws: WebSocket, req) => {
     logger.logOutput(sessionId, redactedData);
     costTracker.processOutput(sessionId, redactedData);
   };
-
-  // Trigger a resize so the shell redraws its prompt — the initial prompt is
-  // output during exec.start() before onData is set, so it gets lost without this.
-  setTimeout(() => dockerManager.resize(sessionId, 220, 50), 150);
 
   dockerSession!.onExit = (exitCode: number) => {
     console.log(`[Terminal] Container exited for session ${sessionId} with code ${exitCode}`);

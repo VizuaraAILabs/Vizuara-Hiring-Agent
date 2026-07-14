@@ -145,10 +145,57 @@ summary,
 /* xterm.js styles */
 .xterm {
   padding: 0;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: 0 !important;
+}
+
+.xterm,
+.xterm * {
+  cursor: text !important;
+}
+
+.xterm-screen,
+.xterm-rows,
+.xterm-rows span {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+
+.xterm-helper-textarea {
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  letter-spacing: 0 !important;
 }
 
 .xterm-viewport::-webkit-scrollbar {
   width: 8px;
+}
+
+.code-editor-highlight,
+.code-editor-highlight *,
+.code-editor-input {
+  box-sizing: border-box;
+  font-variant-ligatures: none !important;
+  font-feature-settings: "liga" 0, "calt" 0 !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+  text-rendering: geometricPrecision;
+}
+
+.code-editor-input {
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.code-editor-highlight pre {
+  overflow: visible !important;
 }
 
 @media screen {
