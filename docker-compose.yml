@@ -56,6 +56,7 @@ services:
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-5}
       SANDBOX_IDLE_TTL_MS: ${SANDBOX_IDLE_TTL_MS:-900000}
       SANDBOX_QUEUE_TIMEOUT_MS: ${SANDBOX_QUEUE_TIMEOUT_MS:-60000}
+      SANDBOX_SESSION_ROOT: /tmp/sessions
       NODE_ENV: production
     deploy:
       resources:
