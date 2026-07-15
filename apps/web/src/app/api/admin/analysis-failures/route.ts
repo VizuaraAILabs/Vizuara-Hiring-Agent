@@ -23,6 +23,25 @@ interface AdminAnalysisFailure {
   interaction_count: number;
 }
 
+interface AdminAnalysisInProgress {
+  session_id: string;
+  challenge_id: string;
+  challenge_title: string;
+  company_name: string;
+  candidate_name: string;
+  candidate_email: string;
+  session_status: string;
+  session_ended_at: string | null;
+  analysis_job_status: string | null;
+  analysis_job_attempt_count: number | null;
+  analysis_job_claimed_by: string | null;
+  analysis_job_claimed_at: string | null;
+  analysis_job_updated_at: string | null;
+  analysis_started_at: string | null;
+  minutes_in_analysis: number;
+  interaction_count: number;
+}
+
 export async function GET() {
   try {
     const user = await getAuthUser();
@@ -84,7 +103,56 @@ export async function GET() {
       LIMIT 200
     `;
 
-    return NextResponse.json({ failures });
+    const inProgress = await sql<AdminAnalysisInProgress[]>`
+      WITH interaction_counts AS (
+        SELECT session_id, COUNT(*)::int AS interaction_count
+        FROM interactions
+        GROUP BY session_id
+      ),
+      active_sessions AS (
+        SELECT
+          s.id AS session_id,
+          s.challenge_id,
+          c.title AS challenge_title,
+          co.name AS company_name,
+          s.candidate_name,
+          s.candidate_email,
+          s.status AS session_status,
+          s.ended_at AS session_ended_at,
+          aj.status AS analysis_job_status,
+          aj.attempt_count AS analysis_job_attempt_count,
+          aj.claimed_by AS analysis_job_claimed_by,
+          aj.claimed_at AS analysis_job_claimed_at,
+          aj.updated_at AS analysis_job_updated_at,
+          CASE
+            WHEN s.status = 'analyzing'
+              THEN COALESCE(aj.claimed_at, aj.updated_at, s.ended_at, s.created_at)
+            ELSE COALESCE(aj.updated_at, s.ended_at, s.created_at)
+          END AS analysis_started_at,
+          COALESCE(ic.interaction_count, 0)::int AS interaction_count
+        FROM sessions s
+        JOIN challenges c ON c.id = s.challenge_id
+        JOIN companies co ON co.id = c.company_id
+        LEFT JOIN analysis_results ar ON ar.session_id = s.id
+        LEFT JOIN analysis_jobs aj ON aj.session_id = s.id
+        LEFT JOIN interaction_counts ic ON ic.session_id = s.id
+        WHERE s.status IN ('queued', 'analyzing')
+          AND ar.id IS NULL
+      )
+      SELECT
+        *,
+        FLOOR(EXTRACT(EPOCH FROM (NOW() - analysis_started_at)) / 60)::int AS minutes_in_analysis
+      FROM active_sessions
+      ORDER BY
+        CASE session_status
+          WHEN 'analyzing' THEN 1
+          ELSE 2
+        END,
+        analysis_started_at ASC
+      LIMIT 200
+    `;
+
+    return NextResponse.json({ failures, inProgress });
   } catch (error) {
     console.error('Admin analysis failures error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
