@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { FilePlus, RefreshCw, X } from 'lucide-react';
 import { useFileExplorer } from '@/hooks/useFileExplorer';
 import FileTree from './FileTree';
 import CodeViewer from './CodeViewer';
 import type { FileTreeActions } from './FileTreeNode';
 import ArcSpinner from '@/components/ArcSpinner';
+import ConfirmationModal from '@/components/ConfirmationModal';
 
 interface FileExplorerProps {
   token: string;
@@ -48,22 +49,57 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     refresh,
   } = useFileExplorer(token);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
-  const confirmDiscardUnsaved = useCallback((message: string) => {
-    if (!hasUnsavedChanges) return true;
-    return window.confirm(message);
-  }, [hasUnsavedChanges]);
+  const [renameTarget, setRenameTarget] = useState<{
+    path: string;
+    type: 'file' | 'directory';
+    affectsOpenFile: boolean;
+  } | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameSubmitting, setRenameSubmitting] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    path: string;
+    type: 'file' | 'directory';
+    affectsOpenFile: boolean;
+  } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [createTarget, setCreateTarget] = useState<{ parent: string | null } | null>(null);
+  const [createValue, setCreateValue] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const createInputRef = useRef<HTMLInputElement | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<
+    { action: 'select'; filePath: string } | { action: 'close' } | null
+  >(null);
 
   useEffect(() => {
     onReadyChange?.(!loading && !error, error);
   }, [loading, error, onReadyChange]);
 
+  useEffect(() => {
+    if (!renameTarget) return;
+    const timer = window.setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [renameTarget]);
+
+  useEffect(() => {
+    if (!createTarget) return;
+    const timer = window.setTimeout(() => {
+      createInputRef.current?.focus();
+      createInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [createTarget]);
+
   const handleSelectFile = useCallback((filePath: string) => {
     if (filePath === selectedFile) return;
-    if (
-      hasUnsavedChanges
-      && !window.confirm('Discard unsaved changes and open another file?')
-    ) {
+    if (hasUnsavedChanges) {
+      setDiscardTarget({ action: 'select', filePath });
       return;
     }
     setHasUnsavedChanges(false);
@@ -71,71 +107,155 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
   }, [hasUnsavedChanges, selectFile, selectedFile]);
 
   const handleCloseFile = useCallback(() => {
-    if (
-      hasUnsavedChanges
-      && !window.confirm('Discard unsaved changes and close this file?')
-    ) {
+    if (hasUnsavedChanges) {
+      setDiscardTarget({ action: 'close' });
       return;
     }
     setHasUnsavedChanges(false);
     closeFile();
   }, [closeFile, hasUnsavedChanges]);
 
+  const closeDiscardModal = useCallback(() => {
+    setDiscardTarget(null);
+  }, []);
+
+  const confirmDiscard = useCallback(() => {
+    if (!discardTarget) return;
+
+    setHasUnsavedChanges(false);
+    if (discardTarget.action === 'select') {
+      void selectFile(discardTarget.filePath);
+    } else {
+      closeFile();
+    }
+    setDiscardTarget(null);
+  }, [closeFile, discardTarget, selectFile]);
+
   const handleRefresh = useCallback(async () => {
     await refresh();
   }, [refresh]);
 
-  const handleCreateFile = useCallback(async (parent: string | null) => {
-    if (!confirmDiscardUnsaved('Discard unsaved changes and create a new file?')) return;
+  const handleCreateFile = useCallback((parent: string | null) => {
+    setCreateTarget({ parent });
+    setCreateValue('new-file.txt');
+    setCreateError(null);
+  }, []);
 
-    const prefix = parent ? `${parent}/` : '';
-    const requested = window.prompt('New file path', `${prefix}new-file.txt`);
-    const filePath = requested?.trim();
-    if (!filePath) return;
+  const closeCreateModal = useCallback(() => {
+    if (createSubmitting) return;
+    setCreateTarget(null);
+    setCreateValue('');
+    setCreateError(null);
+  }, [createSubmitting]);
 
-    const created = await createFile(filePath);
-    if (!created) return;
-    setHasUnsavedChanges(false);
-  }, [confirmDiscardUnsaved, createFile]);
+  const confirmCreate = useCallback(() => {
+    if (!createTarget || createSubmitting) return;
 
-  const handleRenamePath = useCallback(async (path: string, type: 'file' | 'directory') => {
-    const affectsOpenFile = pathInScope(selectedFile, path);
-    if (
-      affectsOpenFile
-      && !confirmDiscardUnsaved(`Discard unsaved changes and rename this ${type}?`)
-    ) {
+    const nextName = createValue.trim();
+    if (!nextName) {
+      setCreateError('Enter a file name.');
+      return;
+    }
+    if (createTarget.parent && (nextName.includes('/') || nextName.includes('\\'))) {
+      setCreateError('Enter only a name. This file will be created in the selected folder.');
       return;
     }
 
-    const base = parentPath(path);
-    const requestedName = window.prompt(`Rename ${type}`, leafName(path));
-    const nextName = requestedName?.trim();
-    if (!nextName || nextName === leafName(path)) return;
+    const filePath = createTarget.parent ? `${createTarget.parent}/${nextName}` : nextName;
+    setCreateSubmitting(true);
+    setCreateError(null);
 
+    void createFile(filePath)
+      .then((created) => {
+        if (!created) {
+          setCreateError('File creation failed. Check the file tree message and try again.');
+          return;
+        }
+        setHasUnsavedChanges(false);
+        setCreateTarget(null);
+        setCreateValue('');
+      })
+      .finally(() => setCreateSubmitting(false));
+  }, [createFile, createSubmitting, createTarget, createValue]);
+
+  const handleRenamePath = useCallback((path: string, type: 'file' | 'directory') => {
+    const affectsOpenFile = pathInScope(selectedFile, path);
+    setRenameTarget({ path, type, affectsOpenFile });
+    setRenameValue(leafName(path));
+    setRenameError(null);
+  }, [selectedFile]);
+
+  const closeRenameModal = useCallback(() => {
+    if (renameSubmitting) return;
+    setRenameTarget(null);
+    setRenameValue('');
+    setRenameError(null);
+  }, [renameSubmitting]);
+
+  const confirmRename = useCallback(() => {
+    if (!renameTarget || renameSubmitting) return;
+
+    const nextName = renameValue.trim();
+    if (!nextName) {
+      setRenameError('Enter a file or folder name.');
+      return;
+    }
+    if (nextName.includes('/') || nextName.includes('\\')) {
+      setRenameError('Enter only a name. Move files from the terminal if you need to change folders.');
+      return;
+    }
+    if (nextName === leafName(renameTarget.path)) {
+      closeRenameModal();
+      return;
+    }
+
+    setRenameSubmitting(true);
+    setRenameError(null);
+    const base = parentPath(renameTarget.path);
     const nextPath = base ? `${base}/${nextName}` : nextName;
-    const renamed = await renamePath(path, nextPath);
-    if (!renamed) return;
-    if (affectsOpenFile) setHasUnsavedChanges(false);
-  }, [confirmDiscardUnsaved, renamePath, selectedFile]);
 
-  const handleDeletePath = useCallback(async (path: string, type: 'file' | 'directory') => {
+    void renamePath(renameTarget.path, nextPath)
+      .then((renamed) => {
+        if (!renamed) {
+          setRenameError('Rename failed. Check the file tree message and try again.');
+          return;
+        }
+        if (renameTarget.affectsOpenFile) setHasUnsavedChanges(false);
+        setRenameTarget(null);
+        setRenameValue('');
+      })
+      .finally(() => setRenameSubmitting(false));
+  }, [closeRenameModal, renamePath, renameSubmitting, renameTarget, renameValue]);
+
+  const handleDeletePath = useCallback((path: string, type: 'file' | 'directory') => {
     const affectsOpenFile = pathInScope(selectedFile, path);
-    if (
-      affectsOpenFile
-      && !confirmDiscardUnsaved(`Discard unsaved changes and delete this ${type}?`)
-    ) {
-      return;
-    }
+    setDeleteTarget({ path, type, affectsOpenFile });
+    setDeleteError(null);
+  }, [selectedFile]);
 
-    const label = type === 'directory'
-      ? `Delete folder "${path}" and everything inside it?`
-      : `Delete file "${path}"?`;
-    if (!window.confirm(label)) return;
+  const closeDeleteModal = useCallback(() => {
+    if (deleteSubmitting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }, [deleteSubmitting]);
 
-    const deleted = await deletePath(path);
-    if (!deleted) return;
-    if (affectsOpenFile) setHasUnsavedChanges(false);
-  }, [confirmDiscardUnsaved, deletePath, selectedFile]);
+  const confirmDelete = useCallback(() => {
+    if (!deleteTarget || deleteSubmitting) return;
+
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+
+    void deletePath(deleteTarget.path)
+      .then((deleted) => {
+        if (!deleted) {
+          setDeleteError('Delete failed. Check the file tree message and try again.');
+          return;
+        }
+        if (deleteTarget.affectsOpenFile) setHasUnsavedChanges(false);
+        setDeleteTarget(null);
+      })
+      .finally(() => setDeleteSubmitting(false));
+  }, [deletePath, deleteSubmitting, deleteTarget]);
 
   const actions: FileTreeActions = {
     onSelectFile: handleSelectFile,
@@ -216,6 +336,127 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        open={Boolean(createTarget)}
+        title="Create file"
+        description={
+          createTarget?.parent
+            ? `Create a new file in "${createTarget.parent}".`
+            : 'Create a new file in the workspace.'
+        }
+        confirmLabel="Create"
+        cancelLabel="Cancel"
+        isLoading={createSubmitting}
+        error={createError}
+        onConfirm={confirmCreate}
+        onClose={closeCreateModal}
+      >
+        <label htmlFor="createPathValue" className="block text-xs text-neutral-500 mb-1.5">
+          {createTarget?.parent ? 'Name' : 'Path'}
+        </label>
+        <input
+          ref={createInputRef}
+          id="createPathValue"
+          type="text"
+          value={createValue}
+          onChange={(event) => {
+            setCreateValue(event.target.value);
+            setCreateError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              confirmCreate();
+            }
+          }}
+          disabled={createSubmitting}
+          className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary disabled:opacity-60"
+          autoComplete="off"
+        />
+        {hasUnsavedChanges && (
+          <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200">
+            Creating this file will open it and discard unsaved edits in the current file.
+          </div>
+        )}
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        open={Boolean(renameTarget)}
+        title={`Rename ${renameTarget?.type ?? 'file'}`}
+        description={
+          renameTarget?.affectsOpenFile && hasUnsavedChanges
+            ? 'This item is open with unsaved changes. Renaming it will discard those unsaved edits.'
+            : 'Enter a new name for this workspace item.'
+        }
+        confirmLabel="Rename"
+        cancelLabel="Cancel"
+        isLoading={renameSubmitting}
+        error={renameError}
+        onConfirm={confirmRename}
+        onClose={closeRenameModal}
+      >
+        <label htmlFor="renamePathValue" className="block text-xs text-neutral-500 mb-1.5">
+          Name
+        </label>
+        <input
+          ref={renameInputRef}
+          id="renamePathValue"
+          type="text"
+          value={renameValue}
+          onChange={(event) => {
+            setRenameValue(event.target.value);
+            setRenameError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              confirmRename();
+            }
+          }}
+          disabled={renameSubmitting}
+          className="h-10 w-full rounded-lg border border-white/10 bg-black/30 px-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-600 focus:border-primary disabled:opacity-60"
+          autoComplete="off"
+        />
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.type ?? 'file'}`}
+        description={
+          deleteTarget?.type === 'directory'
+            ? `Delete folder "${deleteTarget.path}" and everything inside it?`
+            : `Delete file "${deleteTarget?.path ?? ''}"?`
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={deleteSubmitting}
+        error={deleteError}
+        onConfirm={confirmDelete}
+        onClose={closeDeleteModal}
+      >
+        {deleteTarget?.affectsOpenFile && hasUnsavedChanges && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-200">
+            This item is open with unsaved changes. Deleting it will discard those unsaved edits.
+          </div>
+        )}
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        open={Boolean(discardTarget)}
+        title="Discard unsaved changes?"
+        description={
+          discardTarget?.action === 'select'
+            ? 'Opening another file will discard the unsaved edits in the current file.'
+            : 'Closing this file will discard its unsaved edits.'
+        }
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        variant="danger"
+        onConfirm={confirmDiscard}
+        onClose={closeDiscardModal}
+      />
     </>
   );
 }
