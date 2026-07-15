@@ -59,6 +59,28 @@ def _error_payload(
     return {"error": payload}
 
 
+def _exception_metadata(
+    exc: Exception,
+    *,
+    phase: str,
+    interaction_count: int | None = None,
+    transcript_chars: int | None = None,
+    parsed_turn_count: int | None = None,
+) -> dict:
+    metadata = {
+        "exception_type": exc.__class__.__name__,
+        "exception_message": str(exc)[:500],
+        "phase": phase,
+    }
+    if interaction_count is not None:
+        metadata["interaction_count"] = interaction_count
+    if transcript_chars is not None:
+        metadata["transcript_chars"] = transcript_chars
+    if parsed_turn_count is not None:
+        metadata["parsed_turn_count"] = parsed_turn_count
+    return metadata
+
+
 def _raise_analysis_error(
     status_code: int,
     code: str,
@@ -1040,7 +1062,7 @@ async def _mark_analysis_failed(
 
     if is_timeout_exception(exc):
         error_code = "analysis_timeout"
-    elif status_code is not None:
+    elif status_code is not None and error_code == "analysis_error" and not extra_metadata:
         error_code = error_code if error_code != "analysis_error" else f"http_{status_code}"
 
     await pool.execute(
@@ -1121,6 +1143,9 @@ async def _analyze_session_impl(
     8. Return the analysis.
     """
     logger.info("Starting analysis for session: %s", session_id)
+    analysis_phase = "fetch_data"
+    parsed_transcript = None
+    transcript = ""
 
     # -- Step 1: Fetch data from the database --
     pool = await _get_pool()
@@ -1173,12 +1198,14 @@ async def _analyze_session_impl(
 
     try:
         # -- Step 2: Parse transcript --
+        analysis_phase = "transcript_parse"
         parser = TranscriptParser()
         parsed_transcript = parser.parse_with_turns(interactions)
         transcript = parsed_transcript.transcript
         logger.info("Parsed transcript: %d characters", len(transcript))
 
         # -- Step 3: Quality gate --
+        analysis_phase = "quality_gate"
         quality_gate = TranscriptQualityGate()
         insufficient_result = quality_gate.assess(
             interactions,
@@ -1194,6 +1221,7 @@ async def _analyze_session_impl(
             analysis = insufficient_result
         else:
             # -- Step 4: Two-pass Gemini analysis --
+            analysis_phase = "gemini_analysis"
             def _fmt_dt(dt) -> str:
                 if dt is None:
                     return "Unknown"
@@ -1229,6 +1257,7 @@ async def _analyze_session_impl(
             logger.info("Gemini two-pass analysis complete")
 
             # -- Step 5: Evidence verification --
+            analysis_phase = "evidence_verification"
             verifier = EvidenceVerifier(transcript)
             raw_analysis = verifier.verify(raw_analysis)
             logger.info(
@@ -1239,6 +1268,7 @@ async def _analyze_session_impl(
             )
 
             # -- Step 6: Validate and normalize scores --
+            analysis_phase = "score_calculation"
             calculator = ScoreCalculator()
             analysis = calculator.calculate(raw_analysis)
 
@@ -1247,6 +1277,7 @@ async def _analyze_session_impl(
         )
 
         # -- Step 7: Persist to database --
+        analysis_phase = "report_persistence"
         report_gen = ReportGenerator(pool)
         analysis_id = await report_gen.save(
             session_id=session_id,
@@ -1312,12 +1343,20 @@ async def _analyze_session_impl(
         raise
     except ValueError as exc:
         logger.error("Analysis failed for session %s: %s", session_id, exc)
+        parsed_turn_count = len(parsed_transcript.turns) if parsed_transcript else None
         raise HTTPException(
             status_code=502,
             detail=_error_payload(
                 "model_response_invalid",
                 "The analysis provider returned an invalid response. Please retry.",
                 retryable=True,
+                metadata=_exception_metadata(
+                    exc,
+                    phase=analysis_phase,
+                    interaction_count=len(interactions),
+                    transcript_chars=len(transcript) if transcript else None,
+                    parsed_turn_count=parsed_turn_count,
+                ),
             ),
         )
     except Exception as exc:
@@ -1327,11 +1366,19 @@ async def _analyze_session_impl(
             exc,
             exc_info=True,
         )
+        parsed_turn_count = len(parsed_transcript.turns) if parsed_transcript else None
         raise HTTPException(
             status_code=500,
             detail=_error_payload(
-                "analysis_error",
+                "analysis_internal_error",
                 "Analysis failed. Please retry or contact support.",
                 retryable=True,
+                metadata=_exception_metadata(
+                    exc,
+                    phase=analysis_phase,
+                    interaction_count=len(interactions),
+                    transcript_chars=len(transcript) if transcript else None,
+                    parsed_turn_count=parsed_turn_count,
+                ),
             ),
         )
