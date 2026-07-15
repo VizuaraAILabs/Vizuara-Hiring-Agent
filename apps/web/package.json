@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@monaco-editor/react": "^4.8.0-rc.3",
     "@opentelemetry/api": "^1.9.0",
     "@tailwindcss/typography": "^0.5.19",
     "@xterm/addon-fit": "^0.11.0",
@@ -19,6 +20,7 @@
     "firebase-admin": "^13.6.1",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.577.0",
+    "monaco-editor": "^0.55.1",
     "next": "16.1.6",
     "postgres": "^3.4.4",
     "react": "19.2.3",
