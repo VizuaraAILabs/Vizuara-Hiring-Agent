@@ -17,6 +17,14 @@ export interface FileContent {
   size: number;
 }
 
+interface TreeResponse {
+  tree?: FileNode[];
+}
+
+interface CreateFileResponse extends TreeResponse {
+  file?: FileContent;
+}
+
 const POLL_INTERVAL = 10_000;
 
 function getTerminalHttpUrl(): string {
@@ -38,8 +46,16 @@ export function useFileExplorer(token: string) {
   const [fileContent, setFileContent] = useState<FileContent | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fileSaving, setFileSaving] = useState(false);
+  const [fileSaveError, setFileSaveError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const selectRequestRef = useRef(0);
+  const selectedFileRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    selectedFileRef.current = selectedFile;
+  }, [selectedFile]);
 
   const apiUrl = useCallback((endpoint: string) =>
     `${terminalHttpUrl}/api/files/${endpoint}?token=${encodeURIComponent(token)}`,
@@ -55,6 +71,7 @@ export function useFileExplorer(token: string) {
       const data = await res.json();
       setTree(data.tree ?? []);
       setError(null);
+      setOperationError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to fetch file tree');
     } finally {
@@ -64,9 +81,13 @@ export function useFileExplorer(token: string) {
 
   const selectFile = useCallback(async (filePath: string) => {
     const requestId = ++selectRequestRef.current;
+    selectedFileRef.current = filePath;
     setSelectedFile(filePath);
+    setFileContent(null);
     setFileLoading(true);
     setFileError(null);
+    setFileSaveError(null);
+    setOperationError(null);
 
     try {
       const res = await fetch(
@@ -93,11 +114,130 @@ export function useFileExplorer(token: string) {
 
   const closeFile = useCallback(() => {
     selectRequestRef.current++;
+    selectedFileRef.current = null;
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
+    setFileSaveError(null);
+    setOperationError(null);
     setFileLoading(false);
   }, []);
+
+  const saveFile = useCallback(async (filePath: string, content: string): Promise<FileContent | null> => {
+    setFileSaving(true);
+    setFileSaveError(null);
+
+    try {
+      setOperationError(null);
+      const res = await fetch(
+        `${terminalHttpUrl}/api/files/write?token=${encodeURIComponent(token)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: filePath, content }),
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to save file' }));
+        throw new Error(data.error);
+      }
+
+      const data: FileContent = await res.json();
+      if (selectedFileRef.current === filePath) {
+        setFileContent(data);
+        setFileError(null);
+        setFileSaveError(null);
+      }
+      return data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save file';
+      if (selectedFileRef.current === filePath) {
+        setFileSaveError(message);
+      }
+      return null;
+    } finally {
+      setFileSaving(false);
+    }
+  }, [terminalHttpUrl, token]);
+
+  const postFileMutation = useCallback(async <T extends TreeResponse>(
+    endpoint: string,
+    body: Record<string, unknown>,
+  ): Promise<T | null> => {
+    try {
+      const res = await fetch(
+        `${terminalHttpUrl}/api/files/${endpoint}?token=${encodeURIComponent(token)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'File operation failed' }));
+        throw new Error(data.error);
+      }
+
+      const data: T = await res.json();
+      setTree(data.tree ?? []);
+      setOperationError(null);
+      return data;
+    } catch (err: unknown) {
+      setOperationError(err instanceof Error ? err.message : 'File operation failed');
+      return null;
+    }
+  }, [terminalHttpUrl, token]);
+
+  const createFile = useCallback(async (filePath: string): Promise<FileContent | null> => {
+    const data = await postFileMutation<CreateFileResponse>('create', {
+      path: filePath,
+      content: '',
+    });
+    if (!data?.file) return null;
+    selectedFileRef.current = data.file.path;
+    setSelectedFile(data.file.path);
+    setFileContent(data.file);
+    setFileError(null);
+    setFileSaveError(null);
+    setFileLoading(false);
+    return data.file;
+  }, [postFileMutation]);
+
+  const renamePath = useCallback(async (
+    oldPath: string,
+    newPath: string,
+  ): Promise<{ oldPath: string; newPath: string } | null> => {
+    const data = await postFileMutation<TreeResponse & { oldPath: string; newPath: string }>('rename', {
+      oldPath,
+      newPath,
+    });
+    if (!data) return null;
+
+    const current = selectedFileRef.current;
+    if (current === oldPath || current?.startsWith(`${oldPath}/`)) {
+      const renamedSelection = current === oldPath
+        ? newPath
+        : `${newPath}/${current.slice(oldPath.length + 1)}`;
+      selectedFileRef.current = renamedSelection;
+      await selectFile(renamedSelection);
+    }
+
+    return { oldPath: data.oldPath, newPath: data.newPath };
+  }, [postFileMutation, selectFile]);
+
+  const deletePath = useCallback(async (filePath: string): Promise<boolean> => {
+    const data = await postFileMutation<TreeResponse & { deletedPath: string }>('delete', {
+      path: filePath,
+    });
+    if (!data) return false;
+
+    const current = selectedFileRef.current;
+    if (current === filePath || current?.startsWith(`${filePath}/`)) {
+      closeFile();
+    }
+
+    return true;
+  }, [closeFile, postFileMutation]);
 
   const refresh = useCallback(async () => {
     await fetchTree();
@@ -136,8 +276,15 @@ export function useFileExplorer(token: string) {
     fileContent,
     fileLoading,
     fileError,
+    fileSaving,
+    fileSaveError,
+    operationError,
     selectFile,
     closeFile,
+    saveFile,
+    createFile,
+    renamePath,
+    deletePath,
     refresh,
   };
 }

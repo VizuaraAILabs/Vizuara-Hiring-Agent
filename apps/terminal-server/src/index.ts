@@ -8,7 +8,15 @@ import { DockerManager } from './docker-manager';
 import { InteractionLogger } from './interaction-logger';
 import { validateSessionToken } from './auth-middleware';
 import * as fs from 'fs';
-import { buildFileTree, readFileContent, FileNode } from './file-service';
+import {
+  buildFileTree,
+  createFile,
+  deleteFile,
+  readFileContent,
+  renameFile,
+  updateFileContent,
+  FileNode,
+} from './file-service';
 import { CostTracker } from './cost-tracker';
 import { ActivityMonitor } from './activity-monitor';
 import { handleClaudeGatewayRequest, issueClaudeGatewayToken } from './claude-gateway';
@@ -28,6 +36,7 @@ const CUSTOMER_SAFE_TERMINAL_ERROR =
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const CLAUDE_GATEWAY_BASE_URL = process.env.CLAUDE_GATEWAY_BASE_URL || `http://localhost:${PORT}/claude-gateway`;
 const CLAUDE_GATEWAY_TOKEN_SECRET = process.env.CLAUDE_GATEWAY_TOKEN_SECRET || '';
+const MAX_JSON_BODY_BYTES = 1024 * 1024;
 
 // Initialize postgres connection
 const sql = postgres(DATABASE_URL, {
@@ -118,14 +127,37 @@ function normalizeEditorFilePath(value: unknown): string | null {
   return segments.join('/');
 }
 
-function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+function readJsonBody(req: IncomingMessage, maxBytes = MAX_JSON_BODY_BYTES): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (chunk: Buffer) => { data += chunk; });
-    req.on('end', () => {
-      try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); }
+    let bytes = 0;
+    let settled = false;
+    req.on('data', (chunk: Buffer) => {
+      if (settled) return;
+      bytes += chunk.length;
+      if (bytes > maxBytes) {
+        settled = true;
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      data += chunk;
     });
-    req.on('error', reject);
+    req.on('end', () => {
+      if (settled) return;
+      try {
+        settled = true;
+        resolve(JSON.parse(data));
+      } catch {
+        settled = true;
+        reject(new Error('Invalid JSON'));
+      }
+    });
+    req.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
   });
 }
 
@@ -615,7 +647,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // File API endpoints
-  const FILE_API_ROUTES = ['/api/files/tree', '/api/files/read'];
+  const FILE_API_ROUTES = [
+    '/api/files/tree',
+    '/api/files/read',
+    '/api/files/write',
+    '/api/files/create',
+    '/api/files/rename',
+    '/api/files/delete',
+  ];
   if (FILE_API_ROUTES.includes(pathname)) {
     const token = url.searchParams.get('token');
     if (!token) {
@@ -668,6 +707,136 @@ const server = http.createServer(async (req, res) => {
         const message = err.message || 'Failed to read file';
         const status = message === 'File not found' ? 404
           : message === 'Path traversal detected' ? 403
+          : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/write') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const filePath = normalizeEditorFilePath(body.path);
+        const content = body.content;
+        if (!filePath) {
+          throw new Error('Missing path parameter');
+        }
+        if (typeof content !== 'string') {
+          throw new Error('Missing file content');
+        }
+
+        updateFileContent(workDir, filePath, content);
+        logger.logFileEdit(sessionInfo.sessionId, filePath, content);
+
+        const result = readFileContent(workDir, filePath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } catch (err: any) {
+        const message = err.message || 'Failed to save file';
+        const status = message === 'File not found' ? 404
+          : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
+          : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/create') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const filePath = normalizeEditorFilePath(body.path);
+        const content = typeof body.content === 'string' ? body.content : '';
+        if (!filePath) {
+          throw new Error('Missing path parameter');
+        }
+
+        createFile(workDir, filePath, content);
+        logger.logFileEdit(sessionInfo.sessionId, filePath, content);
+
+        const tree = buildFileTree(workDir);
+        const file = readFileContent(workDir, filePath);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ tree, file }));
+      } catch (err: any) {
+        const message = err.message || 'Failed to create file';
+        const status = message === 'File already exists' ? 409
+          : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
+          : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/rename') {
+      if (req.method !== 'POST') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const oldPath = normalizeEditorFilePath(body.oldPath);
+        const newPath = normalizeEditorFilePath(body.newPath);
+        if (!oldPath || !newPath) {
+          throw new Error('Missing path parameter');
+        }
+
+        renameFile(workDir, oldPath, newPath);
+
+        const tree = buildFileTree(workDir);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ tree, oldPath, newPath }));
+      } catch (err: any) {
+        const message = err.message || 'Failed to rename file';
+        const status = message === 'Source not found' ? 404
+          : message === 'Destination already exists' ? 409
+          : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
+          : 400;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (pathname === '/api/files/delete') {
+      if (req.method !== 'POST' && req.method !== 'DELETE') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const filePath = normalizeEditorFilePath(body.path);
+        if (!filePath) {
+          throw new Error('Missing path parameter');
+        }
+
+        deleteFile(workDir, filePath);
+
+        const tree = buildFileTree(workDir);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ tree, deletedPath: filePath }));
+      } catch (err: any) {
+        const message = err.message || 'Failed to delete file';
+        const status = message === 'File not found' ? 404
+          : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: message }));
