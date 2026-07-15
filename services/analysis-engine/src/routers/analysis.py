@@ -1317,6 +1317,8 @@ async def _analyze_session_impl(
                     json.dumps({
                         "pass1_input": gemini_usage.get("pass1_input", 0),
                         "pass1_output": gemini_usage.get("pass1_output", 0),
+                        "pass1_chunks": gemini_usage.get("pass1_chunks", 1),
+                        "chunked_pass1": gemini_usage.get("chunked_pass1", False),
                         "pass2_input": gemini_usage.get("pass2_input", 0),
                         "pass2_output": gemini_usage.get("pass2_output", 0),
                         "input_rate_per_million": float(input_rate),

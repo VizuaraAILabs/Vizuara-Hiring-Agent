@@ -67,6 +67,12 @@ Required for local email/password login in the web app.
 | `ANALYSIS_SESSION_TIMEOUT_SECONDS` | `240` | Total deadline for full two-pass analysis |
 | `ANALYSIS_ENRICHMENT_TIMEOUT_SECONDS` | `75` | Deadline for dimension enrichment |
 | `ANALYSIS_NARRATIVE_TIMEOUT_SECONDS` | `105` | Deadline for transcript narrative generation |
+| `ANALYSIS_CHUNK_TRANSCRIPT_CHARS` | `160000` | Transcript size that triggers chunked observation extraction |
+| `ANALYSIS_CHUNK_TARGET_CHARS` | `100000` | Target maximum characters per observation-extraction chunk |
+| `ANALYSIS_MAX_PASS1_CHUNKS` | `12` | Maximum transcript chunks analyzed in Pass 1 for extremely large sessions |
+| `ANALYSIS_MAX_CANDIDATE_ACTIONS_FOR_SCORING` | `250` | Maximum candidate-action observations kept for final scoring after chunk merging |
+| `ANALYSIS_MAX_AI_OBSERVATIONS_FOR_SCORING` | `300` | Maximum AI-response observations kept for final scoring after chunk merging |
+| `ANALYSIS_MAX_SCORING_OBSERVATIONS_CHARS` | `120000` | Maximum merged-observation JSON size sent into final scoring |
 
 ## Outbound Agent
 
