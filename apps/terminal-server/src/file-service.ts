@@ -121,6 +121,20 @@ export function buildFileTree(workDir: string): FileNode[] {
 
 const MAX_FILE_SIZE = 500 * 1024; // 500KB
 
+function isInsideDirectory(parentDir: string, childPath: string): boolean {
+  const relative = path.relative(path.resolve(parentDir), childPath);
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function assertTextContent(content: string): void {
+  if (Buffer.byteLength(content, 'utf8') > MAX_FILE_SIZE) {
+    throw new Error('File is too large to edit in the browser');
+  }
+  if (content.includes('\0')) {
+    throw new Error('Cannot save binary content');
+  }
+}
+
 export function readFileContent(workDir: string, filePath: string): {
   path: string;
   content: string;
@@ -130,7 +144,7 @@ export function readFileContent(workDir: string, filePath: string): {
 } {
   // Path traversal prevention
   const resolved = path.resolve(workDir, filePath);
-  if (!resolved.startsWith(path.resolve(workDir))) {
+  if (!isInsideDirectory(workDir, resolved)) {
     throw new Error('Path traversal detected');
   }
 
@@ -193,7 +207,7 @@ function safePath(workDir: string, filePath: string): string {
     throw new Error('Invalid path');
   }
   const resolved = path.resolve(workDir, filePath);
-  if (!resolved.startsWith(path.resolve(workDir))) {
+  if (!isInsideDirectory(workDir, resolved)) {
     throw new Error('Path traversal detected');
   }
   return resolved;
@@ -201,6 +215,7 @@ function safePath(workDir: string, filePath: string): string {
 
 export function createFile(workDir: string, filePath: string, content = ''): void {
   const resolved = safePath(workDir, filePath);
+  assertTextContent(content);
   if (fs.existsSync(resolved)) {
     throw new Error('File already exists');
   }
@@ -210,6 +225,7 @@ export function createFile(workDir: string, filePath: string, content = ''): voi
 
 export function updateFileContent(workDir: string, filePath: string, content = ''): void {
   const resolved = safePath(workDir, filePath);
+  assertTextContent(content);
   if (!fs.existsSync(resolved)) {
     throw new Error('File not found');
   }
@@ -217,6 +233,17 @@ export function updateFileContent(workDir: string, filePath: string, content = '
   if (!stat.isFile()) {
     throw new Error('Not a file');
   }
+
+  const fd = fs.openSync(resolved, 'r');
+  const probe = Buffer.alloc(8192);
+  const bytesRead = fs.readSync(fd, probe, 0, 8192, 0);
+  fs.closeSync(fd);
+  for (let i = 0; i < bytesRead; i++) {
+    if (probe[i] === 0) {
+      throw new Error('Cannot edit binary file');
+    }
+  }
+
   fs.writeFileSync(resolved, content, 'utf-8');
 }
 
@@ -233,6 +260,10 @@ export function renameFile(workDir: string, oldPath: string, newPath: string): v
   const resolvedNew = safePath(workDir, newPath);
   if (!fs.existsSync(resolvedOld)) {
     throw new Error('Source not found');
+  }
+  const oldStat = fs.statSync(resolvedOld);
+  if (oldStat.isDirectory() && resolvedNew.startsWith(resolvedOld + path.sep)) {
+    throw new Error('Cannot move directory into itself');
   }
   if (fs.existsSync(resolvedNew)) {
     throw new Error('Destination already exists');
