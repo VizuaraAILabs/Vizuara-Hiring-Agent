@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import socket
 
 from google import genai
@@ -42,6 +43,39 @@ def _env_int(name: str, default: int, minimum: int) -> int:
     except ValueError:
         logger.warning("Invalid %s=%r; defaulting to %d", name, raw_value, default)
         return default
+
+
+_TRANSCRIPT_CHUNK_THRESHOLD_CHARS = _env_int(
+    "ANALYSIS_CHUNK_TRANSCRIPT_CHARS",
+    default=160_000,
+    minimum=40_000,
+)
+_TRANSCRIPT_CHUNK_TARGET_CHARS = _env_int(
+    "ANALYSIS_CHUNK_TARGET_CHARS",
+    default=100_000,
+    minimum=20_000,
+)
+_MAX_PASS1_CHUNKS = _env_int(
+    "ANALYSIS_MAX_PASS1_CHUNKS",
+    default=12,
+    minimum=2,
+)
+_MAX_CANDIDATE_ACTIONS_FOR_SCORING = _env_int(
+    "ANALYSIS_MAX_CANDIDATE_ACTIONS_FOR_SCORING",
+    default=250,
+    minimum=50,
+)
+_MAX_AI_OBSERVATIONS_FOR_SCORING = _env_int(
+    "ANALYSIS_MAX_AI_OBSERVATIONS_FOR_SCORING",
+    default=300,
+    minimum=50,
+)
+_MAX_SCORING_OBSERVATIONS_CHARS = _env_int(
+    "ANALYSIS_MAX_SCORING_OBSERVATIONS_CHARS",
+    default=120_000,
+    minimum=20_000,
+)
+_SEGMENT_HEADER_RE = re.compile(r"(?m)^--- \[[^\]\n]+\].*? ---\s*$")
 
 
 def is_timeout_exception(exc: BaseException) -> bool:
@@ -617,6 +651,12 @@ or fabricate any actions or content."""
 
 The following observations were extracted directly from the candidate's session transcript.
 These are the ONLY facts you may use for scoring. Do NOT add information beyond what is listed here.
+For very large sessions, the observation lists may be a chronological sample rather than every
+single extracted observation. When present, use `total_candidate_actions`,
+`candidate_actions_retained_for_scoring`, and `ai_interactions_retained_for_scoring` in
+`session_summary` to understand how much detail was retained for scoring. Do not penalize the
+candidate merely because the observation list was capped; score from the retained evidence and
+aggregate summary fields.
 
 ```json
 {observations_json}
@@ -1085,6 +1125,495 @@ explaining what was absent and what should have been present."""
     # Helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _chunk_text_by_chars(text: str, target_chars: int) -> list[str]:
+        chunks: list[str] = []
+        start = 0
+        while start < len(text):
+            end = min(len(text), start + target_chars)
+            if end < len(text):
+                newline = text.rfind("\n", start, end)
+                if newline > start + int(target_chars * 0.6):
+                    end = newline + 1
+            chunks.append(text[start:end].strip())
+            start = end
+        return [chunk for chunk in chunks if chunk]
+
+    def _split_large_transcript_block(self, block: str, target_chars: int) -> list[str]:
+        """Split a single oversized transcript block while preserving its segment ref."""
+        lines = block.splitlines()
+        if not lines or not _SEGMENT_HEADER_RE.match(lines[0]):
+            return self._chunk_text_by_chars(block, target_chars)
+
+        header = lines[0].strip()
+        body = "\n".join(lines[1:]).strip()
+        body_target = max(1, target_chars - len(header) - 64)
+        body_chunks = self._chunk_text_by_chars(body, body_target)
+        if not body_chunks:
+            return [header]
+
+        total = len(body_chunks)
+        chunks: list[str] = []
+        for index, body_chunk in enumerate(body_chunks, start=1):
+            continuation = (
+                f"{header}\n[Continuation {index}/{total} of the same transcript segment]"
+            )
+            chunks.append(f"{continuation}\n{body_chunk}".strip())
+        return chunks
+
+    def _split_transcript_for_pass1(self, transcript: str) -> list[str]:
+        """Split oversized transcripts on transcript segment boundaries."""
+        target_chars = _TRANSCRIPT_CHUNK_TARGET_CHARS
+        matches = list(_SEGMENT_HEADER_RE.finditer(transcript))
+        if not matches:
+            return self._chunk_text_by_chars(transcript, target_chars)
+
+        prefix = transcript[: matches[0].start()].strip()
+        blocks: list[str] = []
+        for idx, match in enumerate(matches):
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(transcript)
+            block = transcript[match.start():end].strip()
+            if block:
+                blocks.append(block)
+
+        chunks: list[str] = []
+        current_parts: list[str] = [prefix] if prefix else []
+        current_len = len(prefix)
+
+        def flush() -> None:
+            nonlocal current_parts, current_len
+            if prefix and not any(part and part != prefix for part in current_parts):
+                current_parts = [prefix]
+                current_len = len(prefix)
+                return
+
+            chunk = "\n\n".join(part for part in current_parts if part).strip()
+            if chunk:
+                chunks.append(chunk)
+            current_parts = [prefix] if prefix else []
+            current_len = len(prefix)
+
+        for block in blocks:
+            if len(block) > target_chars:
+                flush()
+                chunks.extend(self._split_large_transcript_block(block, target_chars))
+                continue
+
+            next_len = current_len + len(block) + 2
+            if current_len > len(prefix) and next_len > target_chars:
+                flush()
+
+            current_parts.append(block)
+            current_len += len(block) + 2
+
+        flush()
+        return chunks or [transcript]
+
+    @staticmethod
+    def _wrap_transcript_chunk(chunk: str, index: int, total: int) -> str:
+        return f"""\
+============================================================
+CANDIDATE SESSION TRANSCRIPT CHUNK {index} OF {total}
+Segment references are original transcript references. Analyze only this chunk.
+============================================================
+
+{chunk}
+
+============================================================
+END OF TRANSCRIPT CHUNK {index} OF {total}
+============================================================"""
+
+    @staticmethod
+    def _truncate_observation_text(value: object, limit: int) -> object:
+        if not isinstance(value, str):
+            return value
+        text = re.sub(r"\s+", " ", value).strip()
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "..."
+
+    def _sanitize_candidate_action(self, action: object) -> dict | None:
+        if not isinstance(action, dict):
+            return None
+        sanitized = dict(action)
+        sanitized["description"] = self._truncate_observation_text(
+            sanitized.get("description", ""),
+            700,
+        )
+        sanitized["verbatim_quote"] = self._truncate_observation_text(
+            sanitized.get("verbatim_quote", ""),
+            900,
+        )
+        return sanitized
+
+    def _sanitize_ai_interaction(self, interaction: object) -> dict | None:
+        if not isinstance(interaction, dict):
+            return None
+        sanitized = dict(interaction)
+        sanitized["summary"] = self._truncate_observation_text(
+            sanitized.get("summary", ""),
+            700,
+        )
+        return sanitized
+
+    @staticmethod
+    def _observation_key(item: dict, fields: tuple[str, ...]) -> tuple[str, ...]:
+        values: list[str] = []
+        for field in fields:
+            value = str(item.get(field, "")).lower()
+            value = re.sub(r"\s+", " ", value).strip()
+            values.append(value[:300])
+        return tuple(values)
+
+    @staticmethod
+    def _cap_ordered_observations(items: list[dict], limit: int) -> list[dict]:
+        if limit <= 0:
+            return []
+        if len(items) <= limit:
+            return items
+        if limit == 1:
+            return items[:1]
+
+        last_index = len(items) - 1
+        sampled_indexes = {
+            round(index * last_index / (limit - 1))
+            for index in range(limit)
+        }
+        return [items[index] for index in sorted(sampled_indexes)]
+
+    @staticmethod
+    def _cap_ordered_text_chunks(items: list[str], limit: int) -> list[str]:
+        if limit <= 0:
+            return []
+        if len(items) <= limit:
+            return items
+        if limit == 1:
+            return items[:1]
+
+        last_index = len(items) - 1
+        sampled_indexes = {
+            round(index * last_index / (limit - 1))
+            for index in range(limit)
+        }
+        return [items[index] for index in sorted(sampled_indexes)]
+
+    @staticmethod
+    def _observations_payload_chars(observations: dict) -> int:
+        return len(json.dumps(observations, ensure_ascii=False, separators=(",", ":")))
+
+    def _observations_with_scoring_limits(
+        self,
+        observations: dict,
+        *,
+        action_limit: int,
+        ai_limit: int,
+        description_limit: int,
+        quote_limit: int,
+        ai_summary_limit: int,
+        reduced: bool,
+    ) -> dict:
+        raw_actions = observations.get("candidate_actions", [])
+        raw_ai = observations.get("ai_interactions", [])
+        actions = raw_actions if isinstance(raw_actions, list) else []
+        ai_interactions = raw_ai if isinstance(raw_ai, list) else []
+
+        capped_actions = self._cap_ordered_observations(actions, action_limit)
+        capped_ai = self._cap_ordered_observations(ai_interactions, ai_limit)
+
+        scoring_actions: list[dict] = []
+        for action in capped_actions:
+            if not isinstance(action, dict):
+                continue
+            scoring_action = dict(action)
+            scoring_action["description"] = self._truncate_observation_text(
+                scoring_action.get("description", ""),
+                description_limit,
+            )
+            scoring_action["verbatim_quote"] = self._truncate_observation_text(
+                scoring_action.get("verbatim_quote", ""),
+                quote_limit,
+            )
+            scoring_actions.append(scoring_action)
+
+        scoring_ai: list[dict] = []
+        for interaction in capped_ai:
+            if not isinstance(interaction, dict):
+                continue
+            scoring_interaction = dict(interaction)
+            scoring_interaction["summary"] = self._truncate_observation_text(
+                scoring_interaction.get("summary", ""),
+                ai_summary_limit,
+            )
+            scoring_ai.append(scoring_interaction)
+
+        summary = observations.get("session_summary", {})
+        scoring_summary = dict(summary) if isinstance(summary, dict) else {}
+        scoring_summary["total_candidate_actions"] = len(actions)
+        scoring_summary["candidate_actions_retained_for_scoring"] = len(scoring_actions)
+        scoring_summary["ai_interactions_retained_for_scoring"] = len(scoring_ai)
+        scoring_summary["observations_reduced_for_scoring"] = reduced
+
+        return {
+            "candidate_actions": scoring_actions,
+            "ai_interactions": scoring_ai,
+            "session_summary": scoring_summary,
+        }
+
+    def _fit_observations_to_scoring_budget(self, observations: dict) -> dict:
+        budget = _MAX_SCORING_OBSERVATIONS_CHARS
+        actions = observations.get("candidate_actions", [])
+        ai_interactions = observations.get("ai_interactions", [])
+        action_limit = len(actions) if isinstance(actions, list) else 0
+        ai_limit = len(ai_interactions) if isinstance(ai_interactions, list) else 0
+
+        text_limit_plans = [
+            (700, 900, 700),
+            (500, 650, 500),
+            (300, 400, 300),
+            (180, 260, 180),
+        ]
+
+        for description_limit, quote_limit, ai_summary_limit in text_limit_plans:
+            while True:
+                reduced = (
+                    action_limit < (len(actions) if isinstance(actions, list) else 0)
+                    or ai_limit < (len(ai_interactions) if isinstance(ai_interactions, list) else 0)
+                    or (description_limit, quote_limit, ai_summary_limit) != text_limit_plans[0]
+                )
+                candidate = self._observations_with_scoring_limits(
+                    observations,
+                    action_limit=action_limit,
+                    ai_limit=ai_limit,
+                    description_limit=description_limit,
+                    quote_limit=quote_limit,
+                    ai_summary_limit=ai_summary_limit,
+                    reduced=reduced,
+                )
+                payload_chars = self._observations_payload_chars(candidate)
+                candidate["session_summary"]["scoring_observations_payload_chars"] = payload_chars
+                if payload_chars <= budget:
+                    if reduced:
+                        logger.info(
+                            "Reduced scoring observations payload: chars=%d budget=%d actions=%d ai=%d",
+                            payload_chars,
+                            budget,
+                            len(candidate["candidate_actions"]),
+                            len(candidate["ai_interactions"]),
+                        )
+                    return candidate
+
+                if action_limit == 0 and ai_limit == 0:
+                    break
+
+                ratio = max(0.1, min(0.85, (budget / max(payload_chars, 1)) * 0.9))
+                next_action_limit = int(action_limit * ratio)
+                next_ai_limit = int(ai_limit * ratio)
+                if action_limit > 0 and next_action_limit >= action_limit:
+                    next_action_limit = action_limit - 1
+                if ai_limit > 0 and next_ai_limit >= ai_limit:
+                    next_ai_limit = ai_limit - 1
+                action_limit = max(0, next_action_limit)
+                ai_limit = max(0, next_ai_limit)
+
+        fallback = self._observations_with_scoring_limits(
+            observations,
+            action_limit=0,
+            ai_limit=0,
+            description_limit=0,
+            quote_limit=0,
+            ai_summary_limit=0,
+            reduced=True,
+        )
+        fallback["session_summary"]["scoring_observations_payload_chars"] = (
+            self._observations_payload_chars(fallback)
+        )
+        logger.warning(
+            "Scoring observations exceeded budget even after reduction; using summary-only payload: chars=%d budget=%d",
+            fallback["session_summary"]["scoring_observations_payload_chars"],
+            budget,
+        )
+        return fallback
+
+    def _merge_observation_chunks(self, observation_chunks: list[dict]) -> dict:
+        candidate_actions: list[dict] = []
+        ai_interactions: list[dict] = []
+        seen_actions: set[tuple[str, ...]] = set()
+        seen_ai: set[tuple[str, ...]] = set()
+
+        tools_used: set[str] = set()
+        duration_estimate = 0.0
+        problem_solving_attempted = False
+        bugs_identified = 0
+        bugs_fixed = 0
+        tests_run = False
+        code_written_or_modified = False
+
+        for observations in observation_chunks:
+            if not isinstance(observations, dict):
+                logger.warning(
+                    "Skipping malformed Pass 1 chunk observations: %s",
+                    type(observations).__name__,
+                )
+                continue
+
+            for action in observations.get("candidate_actions", []):
+                sanitized = self._sanitize_candidate_action(action)
+                if not sanitized:
+                    continue
+                key = self._observation_key(
+                    sanitized,
+                    ("segment_ref", "action_type", "verbatim_quote"),
+                )
+                if key in seen_actions:
+                    continue
+                seen_actions.add(key)
+                candidate_actions.append(sanitized)
+
+            for interaction in observations.get("ai_interactions", []):
+                sanitized = self._sanitize_ai_interaction(interaction)
+                if not sanitized:
+                    continue
+                key = self._observation_key(sanitized, ("segment_ref", "summary"))
+                if key in seen_ai:
+                    continue
+                seen_ai.add(key)
+                ai_interactions.append(sanitized)
+
+            summary = observations.get("session_summary", {})
+            if isinstance(summary, dict):
+                tools = summary.get("tools_used", [])
+                if not isinstance(tools, list):
+                    tools = []
+                for tool in tools:
+                    if isinstance(tool, str) and tool.strip():
+                        tools_used.add(tool.strip())
+                try:
+                    duration_estimate = max(
+                        duration_estimate,
+                        float(summary.get("session_duration_estimate_minutes", 0) or 0),
+                    )
+                except (TypeError, ValueError):
+                    pass
+                problem_solving_attempted = (
+                    problem_solving_attempted
+                    or bool(summary.get("problem_solving_attempted"))
+                )
+                tests_run = tests_run or bool(summary.get("tests_run"))
+                code_written_or_modified = (
+                    code_written_or_modified
+                    or bool(summary.get("code_written_or_modified"))
+                )
+                try:
+                    bugs_identified += int(summary.get("bugs_identified", 0) or 0)
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    bugs_fixed += int(summary.get("bugs_fixed", 0) or 0)
+                except (TypeError, ValueError):
+                    pass
+
+        capped_candidate_actions = self._cap_ordered_observations(
+            candidate_actions,
+            _MAX_CANDIDATE_ACTIONS_FOR_SCORING,
+        )
+        if len(capped_candidate_actions) < len(candidate_actions):
+            logger.info(
+                "Capped candidate action observations for scoring: %d -> %d",
+                len(candidate_actions),
+                len(capped_candidate_actions),
+            )
+
+        capped_ai = self._cap_ordered_observations(
+            ai_interactions,
+            _MAX_AI_OBSERVATIONS_FOR_SCORING,
+        )
+        if len(capped_ai) < len(ai_interactions):
+            logger.info(
+                "Capped AI interaction observations for scoring: %d -> %d",
+                len(ai_interactions),
+                len(capped_ai),
+            )
+
+        return {
+            "candidate_actions": capped_candidate_actions,
+            "ai_interactions": capped_ai,
+            "session_summary": {
+                "total_candidate_actions": len(candidate_actions),
+                "candidate_actions_retained_for_scoring": len(capped_candidate_actions),
+                "ai_interactions_retained_for_scoring": len(capped_ai),
+                "session_duration_estimate_minutes": duration_estimate,
+                "tools_used": sorted(tools_used),
+                "problem_solving_attempted": problem_solving_attempted,
+                "bugs_identified": bugs_identified,
+                "bugs_fixed": bugs_fixed,
+                "tests_run": tests_run,
+                "code_written_or_modified": code_written_or_modified,
+            },
+        }
+
+    @staticmethod
+    def _combine_usage(usages: list[dict]) -> dict:
+        return {
+            "input_tokens": sum(int(usage.get("input_tokens", 0) or 0) for usage in usages),
+            "output_tokens": sum(int(usage.get("output_tokens", 0) or 0) for usage in usages),
+            "chunk_count": len(usages),
+        }
+
+    def _run_pass1_chunked(
+        self,
+        challenge_description: str,
+        session_metadata: dict,
+        transcript: str,
+    ) -> tuple[dict, dict]:
+        chunks = self._split_transcript_for_pass1(transcript)
+        if len(chunks) <= 1:
+            return self._run_pass1(challenge_description, session_metadata, transcript)
+
+        original_chunk_count = len(chunks)
+        if len(chunks) > _MAX_PASS1_CHUNKS:
+            chunks = self._cap_ordered_text_chunks(chunks, _MAX_PASS1_CHUNKS)
+            logger.warning(
+                "Capped Pass 1 transcript chunks for oversized session: %d -> %d",
+                original_chunk_count,
+                len(chunks),
+            )
+
+        logger.info(
+            "Chunked pass 1 enabled: transcript_chars=%d chunks=%d target_chars=%d",
+            len(transcript),
+            len(chunks),
+            _TRANSCRIPT_CHUNK_TARGET_CHARS,
+        )
+
+        observation_chunks: list[dict] = []
+        usage_chunks: list[dict] = []
+        for index, chunk in enumerate(chunks, start=1):
+            chunk_metadata = {
+                **session_metadata,
+                "Transcript Chunk": f"{index}/{len(chunks)}",
+                "Chunk Characters": len(chunk),
+            }
+            if original_chunk_count > len(chunks):
+                chunk_metadata["Transcript Chunk Sampling"] = (
+                    f"Retained {len(chunks)} of {original_chunk_count} chunks"
+                )
+            observations, usage = self._run_pass1(
+                challenge_description,
+                chunk_metadata,
+                self._wrap_transcript_chunk(chunk, index, len(chunks)),
+            )
+            observation_chunks.append(observations)
+            usage_chunks.append(usage)
+
+        merged = self._merge_observation_chunks(observation_chunks)
+        usage = self._combine_usage(usage_chunks)
+        logger.info(
+            "Chunked pass 1 merged: candidate_actions=%d ai_interactions=%d",
+            len(merged.get("candidate_actions", [])),
+            len(merged.get("ai_interactions", [])),
+        )
+        return merged, usage
+
     def _clamp_scores(self, data: dict) -> dict:
         """Ensure all scores are within 0-100."""
         overall = data.get("overall_score", 0)
@@ -1121,21 +1650,33 @@ explaining what was absent and what should have been present."""
         This two-pass approach prevents hallucination by ensuring the model
         can only reference facts it explicitly extracted in Pass 1.
         """
-        # Pass 1: Extract observations
-        observations, pass1_usage = self._run_pass1(
-            challenge_description, session_metadata, transcript
-        )
+        # Pass 1: Extract observations. Oversized transcripts are split on
+        # segment boundaries to avoid provider-side prefill/decode deadlines.
+        if len(transcript) > _TRANSCRIPT_CHUNK_THRESHOLD_CHARS:
+            observations, pass1_usage = self._run_pass1_chunked(
+                challenge_description,
+                session_metadata,
+                transcript,
+            )
+        else:
+            observations, pass1_usage = self._run_pass1(
+                challenge_description,
+                session_metadata,
+                transcript,
+            )
+
+        observations_for_scoring = self._fit_observations_to_scoring_budget(observations)
 
         # Pass 2: Score based on observations
         result = self._run_pass2(
-            challenge_description, session_metadata, observations,
+            challenge_description, session_metadata, observations_for_scoring,
             challenge_role=challenge_role, challenge_tech_stack=challenge_tech_stack,
             challenge_seniority=challenge_seniority, challenge_focus_areas=challenge_focus_areas,
             challenge_context=challenge_context,
         )
 
         # Attach observations for transparency/debugging
-        result["_observations"] = observations
+        result["_observations"] = observations_for_scoring
 
         # Aggregate Gemini token usage across both passes
         pass2_usage = result.pop("_pass2_usage", {})
@@ -1149,6 +1690,8 @@ explaining what was absent and what should have been present."""
             "pass1_output": pass1_usage.get("output_tokens", 0),
             "pass2_input": pass2_usage.get("input_tokens", 0),
             "pass2_output": pass2_usage.get("output_tokens", 0),
+            "chunked_pass1": len(transcript) > _TRANSCRIPT_CHUNK_THRESHOLD_CHARS,
+            "pass1_chunks": pass1_usage.get("chunk_count", 1),
         }
         logger.info(
             "Total Gemini usage: input=%d, output=%d tokens",
