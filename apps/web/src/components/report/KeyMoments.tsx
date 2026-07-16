@@ -19,6 +19,9 @@ export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsPr
     <div className="bg-surface border border-white/5 rounded-2xl p-6">
       <h3 className="text-lg font-semibold text-white mb-6">Key Moments</h3>
 
+      {moments.length === 0 ? (
+        <p className="text-sm text-neutral-500">No key moments recorded for this session.</p>
+      ) : (
       <div className="relative">
         {/* Vertical line */}
         <div className="absolute left-4 top-0 bottom-0 w-px bg-white/5" />
@@ -60,6 +63,7 @@ export default function KeyMoments({ moments, onViewInTranscript }: KeyMomentsPr
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }

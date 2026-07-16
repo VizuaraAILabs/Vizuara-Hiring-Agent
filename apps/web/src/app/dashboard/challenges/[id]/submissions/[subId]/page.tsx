@@ -423,17 +423,27 @@ export default function ReportPage() {
 
       {activeTab === 'timeline' && (
         <div className="space-y-6">
-          {analysis.timeline_data.length > 0 && (
-            <TimelineChart data={analysis.timeline_data} />
+          {analysis.timeline_data.length === 0
+            && analysis.prompt_complexity.length === 0
+            && Object.keys(analysis.category_breakdown).length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-neutral-400 text-sm">No timeline activity detected for this session.</p>
+            </div>
+          ) : (
+            <>
+              {analysis.timeline_data.length > 0 && (
+                <TimelineChart data={analysis.timeline_data} />
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {analysis.prompt_complexity.length > 0 && (
+                  <PromptComplexity data={analysis.prompt_complexity} />
+                )}
+                {Object.keys(analysis.category_breakdown).length > 0 && (
+                  <CategoryBreakdown data={analysis.category_breakdown} />
+                )}
+              </div>
+            </>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {analysis.prompt_complexity.length > 0 && (
-              <PromptComplexity data={analysis.prompt_complexity} />
-            )}
-            {Object.keys(analysis.category_breakdown).length > 0 && (
-              <CategoryBreakdown data={analysis.category_breakdown} />
-            )}
-          </div>
         </div>
       )}
 
