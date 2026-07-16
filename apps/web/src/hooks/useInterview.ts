@@ -14,6 +14,7 @@ export interface InterviewMessage {
 export function useInterview(token: string) {
   const [messages, setMessages] = useState<InterviewMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
   const lastSeqRef = useRef<number>(0);
   const isOpenRef = useRef<boolean>(false);
@@ -99,6 +100,7 @@ export function useInterview(token: string) {
     async (content: string, replyToSeq?: number): Promise<boolean> => {
       if (!content.trim() || sending) return false;
       setSending(true);
+      setSendError(null);
 
       // Optimistic update for candidate message
       const tempSeq = Date.now(); // temp unique key
@@ -121,6 +123,8 @@ export function useInterview(token: string) {
         if (!res.ok) {
           // Roll back optimistic update
           setMessages((prev) => prev.filter((m) => m.id !== -tempSeq));
+          const data = await res.json().catch(() => null);
+          setSendError(data?.error || 'Could not send your message. Please try again.');
           return false;
         }
 
@@ -155,6 +159,7 @@ export function useInterview(token: string) {
         return true;
       } catch {
         setMessages((prev) => prev.filter((m) => m.id !== -tempSeq));
+        setSendError('Could not send your message. Check your connection and try again.');
         return false;
       } finally {
         setSending(false);
@@ -163,5 +168,5 @@ export function useInterview(token: string) {
     [token, sending]
   );
 
-  return { messages, sending, hasUnread, markRead, markClosed, sendMessage };
+  return { messages, sending, sendError, hasUnread, markRead, markClosed, sendMessage };
 }

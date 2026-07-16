@@ -14,7 +14,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { messages, sending, hasUnread, markRead, markClosed, sendMessage } = useInterview(token);
+  const { messages, sending, sendError, hasUnread, markRead, markClosed, sendMessage } = useInterview(token);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -37,8 +37,8 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
-    setInput('');
-    await sendMessage(text);
+    const success = await sendMessage(text);
+    if (success) setInput('');
   }, [input, sending, sendMessage]);
 
   const handleKeyDown = useCallback(
@@ -102,6 +102,11 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
 
           {/* Input */}
           <div className="shrink-0 px-3 pb-3 pt-2 border-t border-border">
+            {sendError && (
+              <p className="mb-2 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1.5 text-xs text-red-300">
+                {sendError}
+              </p>
+            )}
             <div className="flex gap-2 items-end">
               <textarea
                 ref={textareaRef}
