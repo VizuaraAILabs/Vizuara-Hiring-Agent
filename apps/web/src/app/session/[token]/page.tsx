@@ -154,6 +154,10 @@ export default function SessionPage() {
                 <span className="text-primary mt-0.5 font-mono text-xs">04</span>
                 <span>The timer starts after your terminal and files are ready.</span>
               </li>
+              <li className="flex gap-3">
+                <span className="text-primary mt-0.5 font-mono text-xs">05</span>
+                <span>The file explorer hides dotfiles (e.g. <strong className="text-white">.env</strong>, <strong className="text-white">.gitignore</strong>). Use the terminal (<strong className="text-white">ls -a</strong>, <strong className="text-white">cat</strong>, <strong className="text-white">vim</strong>) if you need to view or edit them.</span>
+              </li>
             </ul>
           </div>
 
