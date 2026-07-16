@@ -152,7 +152,7 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">04</span>
-                <span>The timer starts when you click Start Challenge.</span>
+                <span>The timer starts after your terminal and files are ready.</span>
               </li>
             </ul>
           </div>
