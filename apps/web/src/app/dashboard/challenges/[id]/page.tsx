@@ -353,6 +353,7 @@ export default function ChallengeDetailPage() {
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
+  const [lifecycleConfirmAction, setLifecycleConfirmAction] = useState<'mark_withdrawn' | 'mark_disqualified' | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(() => searchParams.get('candidateId'));
   const [analytics, setAnalytics] = useState<ChallengeAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -1004,6 +1005,25 @@ export default function ChallengeDetailPage() {
     return session.status === 'pending' && !session.started_at && !session.candidate_lifecycle_status;
   }
 
+  const POST_ASSESSMENT_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
+
+  function hasCompletedAssessment(session: Session) {
+    return POST_ASSESSMENT_STATUSES.has(session.status);
+  }
+
+  function lifecycleConfirmDescription(session: Session | null, action: 'mark_withdrawn' | 'mark_disqualified' | null) {
+    if (!session || !action) return '';
+    const actionWord = action === 'mark_withdrawn' ? 'withdrawn' : 'disqualified';
+
+    if (session.status === 'analyzed') {
+      return `This candidate has already completed the assessment and been scored. Marking them ${actionWord} flags them in the candidate list, but their score and report stay visible and still count toward this challenge's analytics unless you also update their decision label.`;
+    }
+    if (hasCompletedAssessment(session)) {
+      return `This candidate is past the pending stage of the assessment. Marking them ${actionWord} flags them in the candidate list; it does not remove or change their session.`;
+    }
+    return `This flags the candidate as ${actionWord} for this challenge. You can clear this status later if needed.`;
+  }
+
   async function handleLifecycleAction(session: Session, action: LifecycleAction) {
     const key = lifecycleBusyKey(session.id, action);
     setLifecycleBusyIds((current) => new Set(current).add(key));
@@ -1050,6 +1070,12 @@ export default function ChallengeDetailPage() {
   function handleLifecycleSelect(session: Session, value: string) {
     if (!value) return;
     void handleLifecycleAction(session, value as LifecycleAction);
+  }
+
+  async function confirmLifecycleAction() {
+    if (!selectedCandidate || !lifecycleConfirmAction) return;
+    await handleLifecycleAction(selectedCandidate, lifecycleConfirmAction);
+    setLifecycleConfirmAction(null);
   }
 
   function candidateColumnVisible(columnId: CandidateColumnId) {
@@ -2289,7 +2315,7 @@ export default function ChallengeDetailPage() {
                         <button
                           type="button"
                           disabled={selectedWithdrawnBusy}
-                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_withdrawn')}
+                          onClick={() => setLifecycleConfirmAction('mark_withdrawn')}
                           className={selectedActionButtonClass}
                         >
                           {selectedWithdrawnBusy ? (
@@ -2309,7 +2335,7 @@ export default function ChallengeDetailPage() {
                         <button
                           type="button"
                           disabled={selectedDisqualifiedBusy}
-                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_disqualified')}
+                          onClick={() => setLifecycleConfirmAction('mark_disqualified')}
                           className={selectedActionButtonClass}
                         >
                           {selectedDisqualifiedBusy ? (
@@ -2553,6 +2579,18 @@ export default function ChallengeDetailPage() {
         cancelLabel="Close"
         onConfirm={() => setModalMessage(null)}
         onClose={() => setModalMessage(null)}
+      />
+
+      <ConfirmationModal
+        open={Boolean(lifecycleConfirmAction) && Boolean(selectedCandidate)}
+        title={lifecycleConfirmAction === 'mark_withdrawn' ? 'Mark candidate as withdrawn?' : 'Mark candidate as disqualified?'}
+        description={lifecycleConfirmDescription(selectedCandidate, lifecycleConfirmAction)}
+        confirmLabel={lifecycleConfirmAction === 'mark_withdrawn' ? 'Mark Withdrawn' : 'Mark Disqualified'}
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={lifecycleConfirmAction === 'mark_withdrawn' ? selectedWithdrawnBusy : selectedDisqualifiedBusy}
+        onConfirm={() => void confirmLifecycleAction()}
+        onClose={() => setLifecycleConfirmAction(null)}
       />
 
       {reviewPreviewSession && (
