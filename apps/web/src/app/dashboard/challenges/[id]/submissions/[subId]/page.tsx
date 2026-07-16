@@ -178,7 +178,7 @@ export default function ReportPage() {
       setTranscriptNarrative(data.transcript_narrative ?? null);
     } catch (err) {
       console.error('Failed to generate transcript narrative:', err);
-      setNarrativeError('Transcript narrative could not be generated. Please try again.');
+      setNarrativeError(err instanceof Error ? err.message : 'Transcript narrative could not be generated. Please try again.');
     } finally {
       setNarrativeLoading(false);
     }
