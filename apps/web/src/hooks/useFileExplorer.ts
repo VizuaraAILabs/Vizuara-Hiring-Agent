@@ -163,7 +163,7 @@ export function useFileExplorer(token: string) {
   const postFileMutation = useCallback(async <T extends TreeResponse>(
     endpoint: string,
     body: Record<string, unknown>,
-  ): Promise<T | null> => {
+  ): Promise<{ data: T | null; error: string | null }> => {
     try {
       const res = await fetch(
         `${terminalHttpUrl}/api/files/${endpoint}?token=${encodeURIComponent(token)}`,
@@ -181,37 +181,38 @@ export function useFileExplorer(token: string) {
       const data: T = await res.json();
       setTree(data.tree ?? []);
       setOperationError(null);
-      return data;
+      return { data, error: null };
     } catch (err: unknown) {
-      setOperationError(err instanceof Error ? err.message : 'File operation failed');
-      return null;
+      const message = err instanceof Error ? err.message : 'File operation failed';
+      setOperationError(message);
+      return { data: null, error: message };
     }
   }, [terminalHttpUrl, token]);
 
-  const createFile = useCallback(async (filePath: string): Promise<FileContent | null> => {
-    const data = await postFileMutation<CreateFileResponse>('create', {
+  const createFile = useCallback(async (filePath: string): Promise<{ file: FileContent | null; error: string | null }> => {
+    const { data, error } = await postFileMutation<CreateFileResponse>('create', {
       path: filePath,
       content: '',
     });
-    if (!data?.file) return null;
+    if (!data?.file) return { file: null, error };
     selectedFileRef.current = data.file.path;
     setSelectedFile(data.file.path);
     setFileContent(data.file);
     setFileError(null);
     setFileSaveError(null);
     setFileLoading(false);
-    return data.file;
+    return { file: data.file, error: null };
   }, [postFileMutation]);
 
   const renamePath = useCallback(async (
     oldPath: string,
     newPath: string,
-  ): Promise<{ oldPath: string; newPath: string } | null> => {
-    const data = await postFileMutation<TreeResponse & { oldPath: string; newPath: string }>('rename', {
+  ): Promise<{ result: { oldPath: string; newPath: string } | null; error: string | null }> => {
+    const { data, error } = await postFileMutation<TreeResponse & { oldPath: string; newPath: string }>('rename', {
       oldPath,
       newPath,
     });
-    if (!data) return null;
+    if (!data) return { result: null, error };
 
     const current = selectedFileRef.current;
     if (current === oldPath || current?.startsWith(`${oldPath}/`)) {
@@ -222,21 +223,21 @@ export function useFileExplorer(token: string) {
       await selectFile(renamedSelection);
     }
 
-    return { oldPath: data.oldPath, newPath: data.newPath };
+    return { result: { oldPath: data.oldPath, newPath: data.newPath }, error: null };
   }, [postFileMutation, selectFile]);
 
-  const deletePath = useCallback(async (filePath: string): Promise<boolean> => {
-    const data = await postFileMutation<TreeResponse & { deletedPath: string }>('delete', {
+  const deletePath = useCallback(async (filePath: string): Promise<{ ok: boolean; error: string | null }> => {
+    const { data, error } = await postFileMutation<TreeResponse & { deletedPath: string }>('delete', {
       path: filePath,
     });
-    if (!data) return false;
+    if (!data) return { ok: false, error };
 
     const current = selectedFileRef.current;
     if (current === filePath || current?.startsWith(`${filePath}/`)) {
       closeFile();
     }
 
-    return true;
+    return { ok: true, error: null };
   }, [closeFile, postFileMutation]);
 
   const refresh = useCallback(async () => {
