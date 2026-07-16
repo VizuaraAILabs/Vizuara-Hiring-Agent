@@ -197,7 +197,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
           AND started_at IS NULL
           AND candidate_lifecycle_status IS NULL
           AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
-        RETURNING *
+        RETURNING
+          id, challenge_id, candidate_name, candidate_email, token, status,
+          started_at, ended_at, created_at, workspace_snapshot,
+          decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+          invite_email_status, invite_email_sent_at, invite_email_error,
+          candidate_lifecycle_status, candidate_lifecycle_reason,
+          candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
       `;
       if (!sendableSession) {
         return NextResponse.json({ error: 'Invite email is only available for pending candidates who have not started, and no send can already be in progress.' }, { status: 409 });
@@ -239,7 +245,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
               invite_email_sent_at = NOW(),
               invite_email_error = NULL
           WHERE id = ${sendableSession.id}
-          RETURNING *
+          RETURNING
+          id, challenge_id, candidate_name, candidate_email, token, status,
+          started_at, ended_at, created_at, workspace_snapshot,
+          decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+          invite_email_status, invite_email_sent_at, invite_email_error,
+          candidate_lifecycle_status, candidate_lifecycle_reason,
+          candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
         `;
         await writeLifecycleEvent(sql, sessionId, action, session.invite_email_status, 'sent', user.email, reason);
         return NextResponse.json({ session: updated, invite_url: `/session/${updated.token}` });
@@ -250,7 +262,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
           SET invite_email_status = 'failed',
               invite_email_error = ${message}
           WHERE id = ${sendableSession.id}
-          RETURNING *
+          RETURNING
+          id, challenge_id, candidate_name, candidate_email, token, status,
+          started_at, ended_at, created_at, workspace_snapshot,
+          decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+          invite_email_status, invite_email_sent_at, invite_email_error,
+          candidate_lifecycle_status, candidate_lifecycle_reason,
+          candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
         `;
         await writeLifecycleEvent(sql, sessionId, action, session.invite_email_status, 'failed', user.email, reason);
         return NextResponse.json(
@@ -282,7 +300,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
           AND started_at IS NULL
           AND candidate_lifecycle_status IS NULL
           AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
-        RETURNING *
+        RETURNING
+          id, challenge_id, candidate_name, candidate_email, token, status,
+          started_at, ended_at, created_at, workspace_snapshot,
+          decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+          invite_email_status, invite_email_sent_at, invite_email_error,
+          candidate_lifecycle_status, candidate_lifecycle_reason,
+          candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
       `;
       if (!updated) {
         return NextResponse.json({ error: 'Invite link regeneration is only available for pending candidates who have not started.' }, { status: 409 });
@@ -315,7 +339,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       WHERE id = ${sessionId}
         AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
         ${requiresPendingUnstarted ? sql`AND status = 'pending' AND started_at IS NULL` : sql``}
-      RETURNING *
+      RETURNING
+        id, challenge_id, candidate_name, candidate_email, token, status,
+        started_at, ended_at, created_at, workspace_snapshot,
+        decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+        invite_email_status, invite_email_sent_at, invite_email_error,
+        candidate_lifecycle_status, candidate_lifecycle_reason,
+        candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
     `;
     if (!updated) {
       return NextResponse.json({ error: 'Lifecycle change is unavailable for the current candidate/session status.' }, { status: 409 });
