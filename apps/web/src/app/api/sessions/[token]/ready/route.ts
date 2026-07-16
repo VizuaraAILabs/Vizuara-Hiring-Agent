@@ -41,20 +41,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
 
-    if (session.status !== 'active') {
-      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
-    }
-
-    if (session.started_at) {
+    if (session.status === 'active' && session.started_at) {
       return NextResponse.json(session);
+    }
+    if (session.status !== 'pending' && session.status !== 'active') {
+      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
     const now = new Date().toISOString();
     const [updated] = await sql<CandidateSessionUpdate[]>`
       UPDATE sessions
-      SET started_at = ${now}
+      SET status = 'active', started_at = ${now}
       WHERE id = ${session.id}
         AND started_at IS NULL
+        AND status = 'pending'
         AND candidate_lifecycle_status IS NULL
       RETURNING
         id, challenge_id, candidate_name, candidate_email, token, status,

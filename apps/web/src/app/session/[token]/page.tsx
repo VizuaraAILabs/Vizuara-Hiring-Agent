@@ -172,7 +172,7 @@ export default function SessionPage() {
               {starting ? 'Starting workspace...' : 'Start Challenge'}
             </button>
             <p className="mt-3 text-center text-xs text-neutral-600">
-              The terminal workspace opens immediately after startup.
+              Setting up your terminal workspace — this can take a moment during busy periods.
             </p>
           </div>
         </aside>

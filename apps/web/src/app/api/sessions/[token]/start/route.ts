@@ -3,16 +3,11 @@ import sql from '@/lib/db';
 import { databaseUnavailableResponse, isDatabaseConnectionError } from '@/lib/api-errors';
 import { candidateUnavailablePayload } from '@/lib/candidate-unavailable';
 import { validateChallengeAccess } from '@/lib/challenge-access';
-import type { Session, SessionWithChallenge } from '@/types';
+import type { SessionWithChallenge } from '@/types';
 
 type CandidateSessionWithChallenge = Omit<
   SessionWithChallenge,
   'decision_label' | 'recruiter_notes' | 'reviewed_by_email' | 'reviewed_by_name' | 'reviewed_at'
->;
-
-type CandidateSessionUpdate = Pick<
-  Session,
-  'id' | 'challenge_id' | 'candidate_name' | 'candidate_email' | 'token' | 'status' | 'started_at' | 'ended_at' | 'created_at' | 'workspace_snapshot' | 'candidate_lifecycle_status' | 'invite_email_status'
 >;
 
 const COMPLETION_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
@@ -80,22 +75,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
       return NextResponse.json(candidateUnavailablePayload(access.reason), { status: access.status });
     }
 
-    const [updated] = await sql<CandidateSessionUpdate[]>`
-      UPDATE sessions
-      SET status = 'active'
-      WHERE id = ${session.id}
-        AND status = 'pending'
-        AND candidate_lifecycle_status IS NULL
-        AND COALESCE(invite_email_status, 'not_sent') <> 'sending'
-      RETURNING
-        id, challenge_id, candidate_name, candidate_email, token, status,
-        started_at, ended_at, created_at, workspace_snapshot, candidate_lifecycle_status, invite_email_status
-    `;
-    if (!updated) {
-      return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 409 });
-    }
-
-    return NextResponse.json(updated);
+    return NextResponse.json(session);
   } catch (error) {
     console.error('Error starting session:', error);
     if (isDatabaseConnectionError(error)) return databaseUnavailableResponse();
