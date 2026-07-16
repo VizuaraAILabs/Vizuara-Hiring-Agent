@@ -40,6 +40,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting to terminal...');
   const [terminalError, setTerminalError] = useState<string | null>(null);
+  const [claudeGatewayUnavailable, setClaudeGatewayUnavailable] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const spawnAckedRef = useRef(false);
@@ -119,6 +120,9 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
             break;
           case 'output':
             terminalRef.current?.write(msg.data);
+            break;
+          case 'claude_gateway_unavailable':
+            setClaudeGatewayUnavailable(true);
             break;
           case 'exit':
             onExit?.();
@@ -246,5 +250,6 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     connected,
     statusMessage,
     terminalError,
+    claudeGatewayUnavailable,
   };
 }

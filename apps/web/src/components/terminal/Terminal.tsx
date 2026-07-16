@@ -11,6 +11,7 @@ interface TerminalProps {
   onConnectionChange?: (connected: boolean) => void;
   onStatusChange?: (status: string) => void;
   onErrorChange?: (error: string | null) => void;
+  onClaudeGatewayUnavailable?: () => void;
 }
 
 export default function TerminalComponent({
@@ -19,8 +20,9 @@ export default function TerminalComponent({
   onConnectionChange,
   onStatusChange,
   onErrorChange,
+  onClaudeGatewayUnavailable,
 }: TerminalProps) {
-  const { initTerminal, connected, statusMessage, terminalError } = useTerminal({ token, onExit });
+  const { initTerminal, connected, statusMessage, terminalError, claudeGatewayUnavailable } = useTerminal({ token, onExit });
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -34,6 +36,10 @@ export default function TerminalComponent({
   useEffect(() => {
     onErrorChange?.(terminalError);
   }, [terminalError, onErrorChange]);
+
+  useEffect(() => {
+    if (claudeGatewayUnavailable) onClaudeGatewayUnavailable?.();
+  }, [claudeGatewayUnavailable, onClaudeGatewayUnavailable]);
 
   const setRef = useCallback((el: HTMLDivElement | null) => {
     if (el && !initializedRef.current) {

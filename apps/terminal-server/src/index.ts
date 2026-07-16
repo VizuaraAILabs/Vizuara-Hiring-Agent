@@ -978,6 +978,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
         };
       } else {
         console.warn('[Terminal] Claude gateway is not fully configured; sandbox will not receive Claude auth');
+        ws.send(JSON.stringify({ type: 'claude_gateway_unavailable' }));
       }
 
       dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles, claudeGateway);

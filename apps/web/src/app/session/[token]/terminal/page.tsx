@@ -29,6 +29,7 @@ export default function TerminalPage() {
   const [markingReady, setMarkingReady] = useState(false);
   const [readyError, setReadyError] = useState<string | null>(null);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [claudeGatewayNoticeOpen, setClaudeGatewayNoticeOpen] = useState(false);
   const markingReadyRef = useRef(false);
   const workspaceReady = Boolean(
     session?.started_at && terminalConnected && filesReady && !terminalError && !filesError && !readyError
@@ -74,6 +75,10 @@ export default function TerminalPage() {
   const handleFilesReadyChange = useCallback((ready: boolean, fileError?: string | null) => {
     setFilesReady(ready);
     setFilesError(fileError ?? null);
+  }, []);
+
+  const handleClaudeGatewayUnavailable = useCallback(() => {
+    setClaudeGatewayNoticeOpen(true);
   }, []);
 
   useEffect(() => {
@@ -192,6 +197,7 @@ export default function TerminalPage() {
             onConnectionChange={setTerminalConnected}
             onStatusChange={setTerminalStatus}
             onErrorChange={setTerminalError}
+            onClaudeGatewayUnavailable={handleClaudeGatewayUnavailable}
           />
         </div>
       </div>
@@ -208,6 +214,15 @@ export default function TerminalPage() {
         error={endError}
         onConfirm={confirmEndSession}
         onClose={() => setEndConfirmOpen(false)}
+      />
+      <ConfirmationModal
+        open={claudeGatewayNoticeOpen}
+        title="AI assistant unavailable"
+        description="The AI assistant is not configured for this session, so the claude command will not work in your terminal. This is a setup issue on our end, not something you did. Please contact your recruiter or workspace administrator. You can continue working in the terminal without it."
+        confirmLabel="Got it"
+        hideCancel
+        onConfirm={() => setClaudeGatewayNoticeOpen(false)}
+        onClose={() => setClaudeGatewayNoticeOpen(false)}
       />
     </div>
   );
