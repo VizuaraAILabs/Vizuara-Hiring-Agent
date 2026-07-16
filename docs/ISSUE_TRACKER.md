@@ -1,0 +1,37 @@
+**# Issue Tracker**
+
+**## Priority System**
+
+| Priority | Meaning |
+| --- | --- |
+| P0 | Critical security or data-integrity issue that can be exploited or corrupt production data. |
+| P1 | High-impact correctness issue that can cause repeated or missing user rewards. |
+| P2 | Medium-impact reliability issue, repair gap, or misleading user/admin behavior. |
+| P3 | Low-impact correctness, maintainability, or UX polish issue. |
+
+**## Status System**
+
+| Status | Meaning |
+| --- | --- |
+| Open | Not implemented yet. |
+| Draft | Implementation exists on a separate branch and is pending review/merge. |
+| Partially Fixed | Some risk was addressed, but the full issue remains. |
+| Fixed | Implemented and verified. |
+
+**## Open Issues**
+
+**### ArcEval Hiring Agent**
+
+| ID | Priority | Status | Area | Issue |
+| --- | --- | --- | --- | --- |
+| AHA-001 | P0 | Open | Analysis engine security | Remove or authenticate the public Caddy proxy to the analysis engine. `docker/Caddyfile` exposes `/api/analyze/*` directly to `analysis:8000`, while the FastAPI analysis service has permissive CORS and no endpoint-level authentication. A caller with a leaked or guessed `session_id` could queue or rerun expensive analysis work and mutate analysis-related session state outside the recruiter-facing Next API authorization layer. |
+| AHA-002 | P0 | Open | Candidate terminal security | Restrict terminal HTTP and WebSocket access to trusted browser origins. The terminal server currently sends `Access-Control-Allow-Origin: *` for file/editor APIs and accepts WebSocket connections based only on the assessment token in the URL. Because candidate session tokens are bearer links, any site that obtains a token can exercise terminal and file APIs from a browser unless CORS and WebSocket `Origin` checks are enforced. |
+| AHA-003 | P1 | Open | Dependency security | Upgrade vulnerable production dependencies reported by `npm audit --workspaces --omit=dev`. The audit reported 23 vulnerabilities, including critical advisories in `protobufjs` and `websocket-driver`, plus high-severity advisories affecting `next`, `ws`, `@grpc/grpc-js`, `fast-xml-parser`, `form-data`, and `node-forge`. Prioritize packages exposed to candidate and recruiter traffic, especially Next.js and WebSocket handling. |
+| AHA-004 | P1 | Open | Outbound agent security | Make outbound agent authentication fail closed when `ARCEVAL_AGENT_SECRET` is unset. `services/outbound-agent/src/auth.ts` currently authorizes every request if the secret is missing, so a deployment or network exposure mistake could allow unauthenticated `/runs` calls that trigger Claude-powered outbound workflows. |
+| AHA-005 | P1 | Open | Recruiter reporting access | Make super-admin access consistent across challenge, session, and analysis/report APIs. Some challenge routes explicitly allow super admins, but analysis routes such as `/api/analysis/[sessionId]`, workspace snapshot, transcript narrative, enrichment, and integrity endpoints require `user.companyId`, so super admins can reach certain challenge/session surfaces but be blocked from reports and workspaces. Define intended admin behavior and enforce it consistently. |
+| AHA-006 | P2 | Open | Repository data hygiene | Remove tracked local database artifacts from git. The repository tracks SQLite/WAL/SHM files under `apps/web/database` and `database`, despite `.gitignore` entries for database artifacts. These binary files can leak local data or personally identifiable information, create unnecessary churn, and confuse developers about the source of truth for schema and seed data. |
+| AHA-007 | P2 | Open | Deployment safety | Add a CI gate before production deployment. `.github/workflows/deploy.yml` currently SSHes into the VM, pulls `main`, and runs `scripts/deploy.sh` without first enforcing lint, TypeScript builds, Next production build, tests, dependency audit policy, or Docker build validation. Production deploys can therefore ship regressions that local checks would catch. |
+| AHA-008 | P2 | Open | Deployment scripts | Remove stale demo-account seeding and password messaging from production deploy. `scripts/deploy.sh` still seeds `demo@acme.com` and prints a demo password, but password auth has been removed in favor of Firebase/team-member auth. This is misleading for operators and risky if copied into real deployment playbooks. |
+| AHA-009 | P2 | Open | Database migrations | Replace run-all migration execution with a migration ledger or make every migration safely repeatable. The deploy script runs every SQL migration on every deployment, while some older migrations still use plain constraint drops/adds or repeat operations that can fail on repeat execution. Add a durable applied-migrations table or use a migration tool so production deploys are deterministic and auditable. |
+| AHA-010 | P2 | Open | Test infrastructure | Make the Python test suite runnable from a clean developer environment. A repo-root `pytest` run failed during collection because `asyncpg` was not installed in the active environment, and the `refactor-the-monolith` challenge module tests import packages that do not exist before a candidate solution. Split product tests from challenge-fixture tests or document/setup isolated test commands so verification is reliable. |
+| AHA-011 | P3 | Open | Starter file generation | Validate AI-generated starter-file paths before persisting them. Manual starter-file updates reject traversal and absolute paths, but `/api/challenges/[id]/generate-files` currently only checks that Gemini output has string `path` and `content` fields before saving to the database. The terminal seeding path later skips unsafe paths, but invalid data can still live in challenge records and appear in recruiter/admin UI or API responses. |
