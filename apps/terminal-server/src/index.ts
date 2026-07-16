@@ -449,7 +449,35 @@ async function archiveWorkspaceOnce(sessionId: string, workDir: string): Promise
     }
   }
 
-  const snapshot = { archived_at: new Date().toISOString(), tree, files };
+  // Preserve dotfiles (.env, .gitignore, etc.) in the permanent record even though
+  // they're excluded from the candidate/recruiter-facing tree — this is best-effort
+  // and must never fail the archive that recruiters actually rely on.
+  const hiddenFiles: ReturnType<typeof readFileContent>[] = [];
+  try {
+    const fullTree = buildFileTree(workDir, { includeHidden: true });
+    const allPaths: string[] = [];
+    function collectAll(nodes: FileNode[]) {
+      for (const n of nodes) {
+        if (n.type === 'file') allPaths.push(n.path);
+        else if (n.children) collectAll(n.children);
+      }
+    }
+    collectAll(fullTree);
+
+    const visiblePaths = new Set(filePaths);
+    const hiddenPaths = allPaths.filter((p) => !visiblePaths.has(p));
+    for (const p of hiddenPaths) {
+      try {
+        hiddenFiles.push(readFileContent(workDir, p));
+      } catch {
+        // skip binary / unreadable files
+      }
+    }
+  } catch (err) {
+    console.warn(`[Archive] Failed to capture hidden files for session ${sessionId}:`, err);
+  }
+
+  const snapshot = { archived_at: new Date().toISOString(), tree, files, hidden_files: hiddenFiles };
   const snapshotJson = snapshot as unknown as Parameters<typeof sql.json>[0];
   try {
     await sql`

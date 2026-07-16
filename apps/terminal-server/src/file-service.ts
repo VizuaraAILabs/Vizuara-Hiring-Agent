@@ -61,7 +61,8 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   '.lock': 'plaintext',
 };
 
-export function buildFileTree(workDir: string): FileNode[] {
+export function buildFileTree(workDir: string, options: { includeHidden?: boolean } = {}): FileNode[] {
+  const { includeHidden = false } = options;
   let nodeCount = 0;
 
   function walk(dir: string, depth: number, relativePath: string): FileNode[] {
@@ -76,7 +77,7 @@ export function buildFileTree(workDir: string): FileNode[] {
 
     // Filter hidden files and excluded directories
     entries = entries.filter((e) => {
-      if (e.name.startsWith('.')) return false;
+      if (!includeHidden && e.name.startsWith('.')) return false;
       if (e.isDirectory() && EXCLUDED_DIRS.has(e.name)) return false;
       return true;
     });
