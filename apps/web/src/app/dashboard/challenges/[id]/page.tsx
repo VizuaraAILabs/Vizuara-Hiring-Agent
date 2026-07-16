@@ -1107,7 +1107,7 @@ export default function ChallengeDetailPage() {
   const selectedCopyBusy = selectedCandidate ? copyingSessionId === selectedCandidate.id : false;
   const selectedCandidateStatus = selectedCandidate?.candidate_lifecycle_status ?? null;
   const selectedCanMarkNoShow = selectedCandidate && canManageChallenge ? selectedCandidate.status === 'pending' && !selectedCandidate.started_at : false;
-  const selectedCanCopyInviteLink = selectedCandidate && canManageChallenge ? !selectedCandidate.candidate_lifecycle_status : false;
+  const selectedCanCopyInviteLink = selectedCandidate && canManageChallenge ? canManagePendingInvite(selectedCandidate) : false;
 
   const selectedActionButtonClass = 'inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-neutral-600';
 
