@@ -231,8 +231,8 @@ export default function AssessmentsPage() {
 
   const summary = useMemo(() => {
     const analyzed = candidates.filter((candidate) => candidate.status === 'analyzed').length;
-    const active = candidates.filter((candidate) => !candidate.candidate_lifecycle_status).length;
-    return { total: candidates.length, analyzed, active };
+    const eligible = candidates.filter((candidate) => !candidate.candidate_lifecycle_status).length;
+    return { total: candidates.length, analyzed, eligible };
   }, [candidates]);
 
   function candidateColumnVisible(column: CandidateColumnId) {
@@ -283,8 +283,8 @@ export default function AssessmentsPage() {
             <p className="mt-1 text-lg font-semibold text-primary">{summary.analyzed}</p>
           </div>
           <div className="px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-neutral-600">Active</p>
-            <p className="mt-1 text-lg font-semibold text-white">{summary.active}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-neutral-600">Eligible</p>
+            <p className="mt-1 text-lg font-semibold text-white">{summary.eligible}</p>
           </div>
         </div>
       </div>
@@ -444,13 +444,9 @@ export default function AssessmentsPage() {
                       )}
                       {candidateColumnVisible('candidateStatus') && (
                         <td className="px-5 py-4">
-                          {candidate.candidate_lifecycle_status ? (
+                          {candidate.candidate_lifecycle_status && (
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${lifecycleStatusColors[candidate.candidate_lifecycle_status]}`}>
                               {lifecycleStatusLabels[candidate.candidate_lifecycle_status]}
-                            </span>
-                          ) : (
-                            <span className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                              Active
                             </span>
                           )}
                         </td>

@@ -574,8 +574,6 @@ export default function ChallengeDetailPage() {
     disqualified: 'Disqualified',
   };
 
-  const activeCandidateStatusClass = 'border-primary/20 bg-primary/10 text-primary';
-
   function getAnalysisAlertLabel(session: Session) {
     const referenceTime = new Date(session.ended_at ?? session.created_at).getTime();
     const minutes = Number.isFinite(referenceTime)
@@ -2420,13 +2418,9 @@ export default function ChallengeDetailPage() {
                         )}
                         {candidateColumnVisible('candidateStatus') && (
                         <td className="px-5 py-4">
-                          {session.candidate_lifecycle_status ? (
+                          {session.candidate_lifecycle_status && (
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
                               {lifecycleStatusLabels[session.candidate_lifecycle_status]}
-                            </span>
-                          ) : (
-                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${activeCandidateStatusClass}`}>
-                              Active
                             </span>
                           )}
                         </td>
