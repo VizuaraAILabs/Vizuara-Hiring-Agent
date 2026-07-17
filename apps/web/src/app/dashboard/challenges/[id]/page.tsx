@@ -951,7 +951,7 @@ export default function ChallengeDetailPage() {
         await refreshChallengeAfterAnalysisFailure();
         setModalMessage({
           title: 'Analysis Failed',
-          description: err.error || 'Analysis failed. Check console for details.',
+          description: err.error || 'Analysis failed. Please try again, or contact support if this keeps happening.',
         });
         return;
       }
@@ -960,7 +960,7 @@ export default function ChallengeDetailPage() {
       await refreshChallengeAfterAnalysisFailure();
       setModalMessage({
         title: 'Analysis Unavailable',
-        description: 'Failed to connect to analysis engine.',
+        description: 'Analysis service is temporarily unavailable. Please try again shortly.',
       });
     } finally {
       setAnalysisStartingIds((current) => {

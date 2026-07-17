@@ -201,7 +201,7 @@ export default function TranscriptViewer({
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            Download PDF
+            Print / Save as PDF
           </button>
           {downloadError && (
             <p className="text-xs text-amber-300 text-right max-w-55">{downloadError}</p>
