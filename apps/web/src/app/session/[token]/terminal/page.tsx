@@ -18,10 +18,11 @@ function reloadPage() {
   window.location.reload();
 }
 
-function RetryCountdown({ seconds, onExpire }: { seconds: number; onExpire: () => void }) {
+function RetryCountdown({ seconds, onExpire, paused }: { seconds: number; onExpire: () => void; paused?: boolean }) {
   const [remaining, setRemaining] = useState(seconds);
 
   useEffect(() => {
+    if (paused) return;
     const interval = setInterval(() => {
       setRemaining((prev) => {
         if (prev <= 1) {
@@ -32,7 +33,7 @@ function RetryCountdown({ seconds, onExpire }: { seconds: number; onExpire: () =
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [onExpire]);
+  }, [onExpire, paused]);
 
   return <>{remaining}</>;
 }
@@ -205,6 +206,7 @@ export default function TerminalPage() {
           readyError={readyError}
           helperText={null}
           onEndSession={handleEndFromBootFailure}
+          retryPaused={endConfirmOpen}
         />
       )}
       <div className={`h-full flex flex-col ${workspaceReady ? '' : 'invisible'}`}>
@@ -245,7 +247,7 @@ export default function TerminalPage() {
             : 'This will close the candidate workspace and submit the current session for completion. This action cannot be undone.'
         }
         confirmLabel="End Session"
-        cancelLabel="Keep Working"
+        cancelLabel={endReason === 'workspace_failed' ? 'Keep Retrying' : 'Keep Working'}
         variant="danger"
         isLoading={ending}
         error={endError}
@@ -277,6 +279,7 @@ function WorkspaceBootScreen({
   readyError,
   helperText,
   onEndSession,
+  retryPaused,
 }: {
   terminalConnected: boolean;
   terminalStatus: string;
@@ -287,6 +290,7 @@ function WorkspaceBootScreen({
   readyError: string | null;
   helperText: string | null;
   onEndSession?: () => void;
+  retryPaused?: boolean;
 }) {
   const error = terminalError || readyError;
   const message = error
@@ -321,7 +325,7 @@ function WorkspaceBootScreen({
         {error && (
           <>
             <p className="mt-3 text-xs text-neutral-600">
-              Retrying automatically in <RetryCountdown seconds={BOOT_ERROR_RETRY_SECONDS} onExpire={reloadPage} />s...
+              Retrying automatically in <RetryCountdown seconds={BOOT_ERROR_RETRY_SECONDS} onExpire={reloadPage} paused={retryPaused} />s...
             </p>
             <div className="mt-5 flex items-center gap-3">
               <button
