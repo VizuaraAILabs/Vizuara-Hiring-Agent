@@ -144,7 +144,7 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">02</span>
-                <span>The sandbox runs as a <strong className="text-white">non-root user</strong>. Commands requiring sudo or system-level package installation are not available.</span>
+                <span>Your workspace runs <strong className="text-white">without admin/root access</strong>. Commands requiring sudo or system-level package installation are not available.</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">03</span>
@@ -156,7 +156,7 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">05</span>
-                <span>The file explorer hides dotfiles (e.g. <strong className="text-white">.env</strong>, <strong className="text-white">.gitignore</strong>). Use the terminal (<strong className="text-white">ls -a</strong>, <strong className="text-white">cat</strong>, <strong className="text-white">vim</strong>) if you need to view or edit them.</span>
+                <span>The file explorer hides hidden files. Use the terminal (<strong className="text-white">ls -a</strong>, <strong className="text-white">cat</strong>, <strong className="text-white">nano</strong>) if you need to view or edit them.</span>
               </li>
             </ul>
           </div>
