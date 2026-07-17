@@ -582,7 +582,7 @@ export default function ChallengeDetailPage() {
       : 0;
 
     if (session.status === 'analysis failed') return 'Failed - retry available';
-    if (session.status === 'completed' && minutes >= 5) return 'Analysis not started';
+    if (session.status === 'completed' && minutes >= 5) return 'Ready to analyze';
     return null;
   }
 
