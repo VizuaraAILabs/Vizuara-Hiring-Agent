@@ -15,6 +15,7 @@ interface ConfirmationModalProps {
   confirmationValue?: string;
   isLoading?: boolean;
   error?: string | null;
+  hideCancel?: boolean;
   secondaryAction?: {
     label: string;
     onClick: () => void;
@@ -35,6 +36,7 @@ export default function ConfirmationModal({
   confirmationValue,
   isLoading = false,
   error,
+  hideCancel = false,
   secondaryAction,
   children,
   onConfirm,
@@ -43,6 +45,7 @@ export default function ConfirmationModal({
   const titleId = useId();
   const descriptionId = useId();
   const primaryActionRef = useRef<HTMLButtonElement | null>(null);
+  const confirmActionRef = useRef<HTMLButtonElement | null>(null);
   const confirmationInputRef = useRef<HTMLInputElement | null>(null);
   const [typedValue, setTypedValue] = useState('');
   const requiresTypedConfirmation = Boolean(confirmationValue);
@@ -61,6 +64,8 @@ export default function ConfirmationModal({
     queueMicrotask(() => {
       if (confirmationValue) {
         confirmationInputRef.current?.focus();
+      } else if (hideCancel) {
+        confirmActionRef.current?.focus();
       } else {
         primaryActionRef.current?.focus();
       }
@@ -79,7 +84,7 @@ export default function ConfirmationModal({
       document.removeEventListener('keydown', handleKeyDown);
       previousActiveElement?.focus();
     };
-  }, [confirmationValue, isLoading, onClose, open]);
+  }, [confirmationValue, hideCancel, isLoading, onClose, open]);
 
   if (!open) return null;
 
@@ -166,15 +171,17 @@ export default function ConfirmationModal({
         )}
 
         <div className="flex items-center justify-end gap-3 border-t border-white/5 px-6 py-4">
-          <button
-            ref={primaryActionRef}
-            type="button"
-            onClick={handleClose}
-            disabled={isLoading}
-            className="h-9 rounded-lg px-4 text-sm font-medium text-neutral-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {cancelLabel}
-          </button>
+          {!hideCancel && (
+            <button
+              ref={primaryActionRef}
+              type="button"
+              onClick={handleClose}
+              disabled={isLoading}
+              className="h-9 rounded-lg px-4 text-sm font-medium text-neutral-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cancelLabel}
+            </button>
+          )}
           {secondaryAction && (
             <button
               type="button"
@@ -186,6 +193,7 @@ export default function ConfirmationModal({
             </button>
           )}
           <button
+            ref={confirmActionRef}
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm || isLoading}

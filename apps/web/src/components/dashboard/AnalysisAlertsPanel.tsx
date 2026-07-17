@@ -207,7 +207,7 @@ export default function AnalysisAlertsPanel() {
                     </button>
                   ) : (
                     <span className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-neutral-500">
-                      Monitor
+                      In progress
                     </span>
                   )}
                   <Link

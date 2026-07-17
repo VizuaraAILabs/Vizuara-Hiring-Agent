@@ -166,9 +166,9 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     setCreateError(null);
 
     void createFile(filePath)
-      .then((created) => {
-        if (!created) {
-          setCreateError('File creation failed. Check the file tree message and try again.');
+      .then(({ file, error }) => {
+        if (!file) {
+          setCreateError(error || 'File creation failed. Please try again.');
           return;
         }
         setHasUnsavedChanges(false);
@@ -215,9 +215,9 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     const nextPath = base ? `${base}/${nextName}` : nextName;
 
     void renamePath(renameTarget.path, nextPath)
-      .then((renamed) => {
-        if (!renamed) {
-          setRenameError('Rename failed. Check the file tree message and try again.');
+      .then(({ result, error }) => {
+        if (!result) {
+          setRenameError(error || 'Rename failed. Please try again.');
           return;
         }
         if (renameTarget.affectsOpenFile) setHasUnsavedChanges(false);
@@ -246,9 +246,9 @@ export default function FileExplorer({ token, onReadyChange }: FileExplorerProps
     setDeleteError(null);
 
     void deletePath(deleteTarget.path)
-      .then((deleted) => {
-        if (!deleted) {
-          setDeleteError('Delete failed. Check the file tree message and try again.');
+      .then(({ ok, error }) => {
+        if (!ok) {
+          setDeleteError(error || 'Delete failed. Please try again.');
           return;
         }
         if (deleteTarget.affectsOpenFile) setHasUnsavedChanges(false);

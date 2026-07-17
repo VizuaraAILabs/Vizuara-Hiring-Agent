@@ -106,9 +106,13 @@ export function useSession(token: string) {
     }
   };
 
-  const endSession = async () => {
+  const endSession = async (reason?: string) => {
     try {
-      const res = await fetch(`/api/sessions/${token}/end`, { method: 'POST' });
+      const res = await fetch(`/api/sessions/${token}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
       if (res.ok) {
         const updated = await res.json();
         setSession((prev) => prev ? { ...prev, ...updated } : null);

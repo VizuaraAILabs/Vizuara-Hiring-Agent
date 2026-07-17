@@ -14,6 +14,30 @@ const FileExplorer = dynamic(() => import('@/components/terminal/FileExplorer'),
 const InterviewWidget = dynamic(() => import('@/components/terminal/InterviewWidget'), { ssr: false });
 const COMPLETION_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
 
+function reloadPage() {
+  window.location.reload();
+}
+
+function RetryCountdown({ seconds, onExpire, paused }: { seconds: number; onExpire: () => void; paused?: boolean }) {
+  const [remaining, setRemaining] = useState(seconds);
+
+  useEffect(() => {
+    if (paused) return;
+    const interval = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev <= 1) {
+          onExpire();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [onExpire, paused]);
+
+  return <>{remaining}</>;
+}
+
 export default function TerminalPage() {
   const params = useParams();
   const router = useRouter();
@@ -29,6 +53,7 @@ export default function TerminalPage() {
   const [markingReady, setMarkingReady] = useState(false);
   const [readyError, setReadyError] = useState<string | null>(null);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [claudeGatewayNoticeOpen, setClaudeGatewayNoticeOpen] = useState(false);
   const markingReadyRef = useRef(false);
   const workspaceReady = Boolean(
     session?.started_at && terminalConnected && filesReady && !terminalError && !filesError && !readyError
@@ -40,8 +65,17 @@ export default function TerminalPage() {
     }
   }, [router, session, token]);
 
+  const [endReason, setEndReason] = useState<'candidate_ended' | 'workspace_failed'>('candidate_ended');
+
   const handleEnd = useCallback(async () => {
     if (ending) return;
+    setEndReason('candidate_ended');
+    setEndConfirmOpen(true);
+  }, [ending]);
+
+  const handleEndFromBootFailure = useCallback(async () => {
+    if (ending) return;
+    setEndReason('workspace_failed');
     setEndConfirmOpen(true);
   }, [ending]);
 
@@ -50,19 +84,19 @@ export default function TerminalPage() {
     setEnding(true);
     setEndError(null);
 
-    const success = await endSession();
+    const success = await endSession(endReason);
     if (success) {
       router.push(`/session/${token}`);
     } else {
       setEndError('Failed to end session. Please try again.');
       setEnding(false);
     }
-  }, [ending, endSession, router, token]);
+  }, [ending, endReason, endSession, router, token]);
 
   const handleExpired = useCallback(async () => {
     if (ending) return;
     setEnding(true);
-    const success = await endSession();
+    const success = await endSession('timer_expired');
     if (success) {
       router.push(`/session/${token}`);
     } else {
@@ -74,6 +108,10 @@ export default function TerminalPage() {
   const handleFilesReadyChange = useCallback((ready: boolean, fileError?: string | null) => {
     setFilesReady(ready);
     setFilesError(fileError ?? null);
+  }, []);
+
+  const handleClaudeGatewayUnavailable = useCallback(() => {
+    setClaudeGatewayNoticeOpen(true);
   }, []);
 
   useEffect(() => {
@@ -142,7 +180,7 @@ export default function TerminalPage() {
     );
   }
 
-  if (error || !session || session.status !== 'active') {
+  if (error || !session || (session.status !== 'active' && session.status !== 'pending')) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="text-center max-w-md px-5">
@@ -167,6 +205,8 @@ export default function TerminalPage() {
           markingReady={markingReady}
           readyError={readyError}
           helperText={null}
+          onEndSession={handleEndFromBootFailure}
+          retryPaused={endConfirmOpen}
         />
       )}
       <div className={`h-full flex flex-col ${workspaceReady ? '' : 'invisible'}`}>
@@ -192,6 +232,7 @@ export default function TerminalPage() {
             onConnectionChange={setTerminalConnected}
             onStatusChange={setTerminalStatus}
             onErrorChange={setTerminalError}
+            onClaudeGatewayUnavailable={handleClaudeGatewayUnavailable}
           />
         </div>
       </div>
@@ -200,18 +241,33 @@ export default function TerminalPage() {
       <ConfirmationModal
         open={endConfirmOpen}
         title="End Session?"
-        description="This will close the candidate workspace and submit the current session for completion. This action cannot be undone."
+        description={
+          endReason === 'workspace_failed'
+            ? 'Only end the session if the workspace keeps failing to start after retrying. This will submit the session as complete with no work recorded, and cannot be undone.'
+            : 'This will close the candidate workspace and submit the current session for completion. This action cannot be undone.'
+        }
         confirmLabel="End Session"
-        cancelLabel="Keep Working"
+        cancelLabel={endReason === 'workspace_failed' ? 'Keep Retrying' : 'Keep Working'}
         variant="danger"
         isLoading={ending}
         error={endError}
         onConfirm={confirmEndSession}
         onClose={() => setEndConfirmOpen(false)}
       />
+      <ConfirmationModal
+        open={claudeGatewayNoticeOpen}
+        title="AI assistant unavailable"
+        description="The AI assistant isn't available right now, so the claude command won't work in your terminal. This isn't something you did — please contact your recruiter. You can continue working in the terminal without it."
+        confirmLabel="Got it"
+        hideCancel
+        onConfirm={() => setClaudeGatewayNoticeOpen(false)}
+        onClose={() => setClaudeGatewayNoticeOpen(false)}
+      />
     </div>
   );
 }
+
+const BOOT_ERROR_RETRY_SECONDS = 15;
 
 function WorkspaceBootScreen({
   terminalConnected,
@@ -222,6 +278,8 @@ function WorkspaceBootScreen({
   markingReady,
   readyError,
   helperText,
+  onEndSession,
+  retryPaused,
 }: {
   terminalConnected: boolean;
   terminalStatus: string;
@@ -231,6 +289,8 @@ function WorkspaceBootScreen({
   markingReady: boolean;
   readyError: string | null;
   helperText: string | null;
+  onEndSession?: () => void;
+  retryPaused?: boolean;
 }) {
   const error = terminalError || readyError;
   const message = error
@@ -262,6 +322,34 @@ function WorkspaceBootScreen({
               ? `${filesError}. Retrying file load...`
               : helperText || 'Preparing your terminal and files. Your assessment timer will start only after the workspace is ready.')}
         </p>
+        {error && (
+          <>
+            <p className="mt-3 text-xs text-neutral-600">
+              Retrying automatically in <RetryCountdown seconds={BOOT_ERROR_RETRY_SECONDS} onExpire={reloadPage} paused={retryPaused} />s...
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={reloadPage}
+                className="cursor-pointer rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
+              >
+                Reload workspace
+              </button>
+              {onEndSession && (
+                <button
+                  type="button"
+                  onClick={onEndSession}
+                  className="cursor-pointer rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
+                >
+                  End session
+                </button>
+              )}
+            </div>
+            <p className="mt-4 max-w-md text-xs leading-5 text-neutral-600">
+              If this keeps happening, contact your recruiter.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

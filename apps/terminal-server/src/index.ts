@@ -32,7 +32,7 @@ const TERMINAL_SERVER_ID = process.env.TERMINAL_SERVER_ID || `${os.hostname()}:$
 const TERMINAL_RUNTIME_LEASE_SECONDS = parseInt(process.env.TERMINAL_RUNTIME_LEASE_SECONDS || '90');
 const TERMINAL_RUNTIME_HEARTBEAT_MS = Math.max(5_000, Math.floor((TERMINAL_RUNTIME_LEASE_SECONDS * 1000) / 3));
 const CUSTOMER_SAFE_TERMINAL_ERROR =
-  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your recruiter.';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const CLAUDE_GATEWAY_BASE_URL = process.env.CLAUDE_GATEWAY_BASE_URL || `http://localhost:${PORT}/claude-gateway`;
 const CLAUDE_GATEWAY_TOKEN_SECRET = process.env.CLAUDE_GATEWAY_TOKEN_SECRET || '';
@@ -125,6 +125,19 @@ function normalizeEditorFilePath(value: unknown): string | null {
   }
 
   return segments.join('/');
+}
+
+const CANDIDATE_SAFE_FILE_ERRORS: Record<string, string> = {
+  'Path traversal detected': "This file path isn't allowed.",
+  'Invalid active file path': "This file path isn't allowed.",
+  'Invalid path': "This file path isn't allowed.",
+  'Missing path parameter': 'No file was specified.',
+  'Missing file content': 'No file content was provided.',
+  'Request body too large': 'The file is too large to save.',
+};
+
+function toCandidateSafeFileError(message: string): string {
+  return CANDIDATE_SAFE_FILE_ERRORS[message] ?? message;
 }
 
 function readJsonBody(req: IncomingMessage, maxBytes = MAX_JSON_BODY_BYTES): Promise<Record<string, unknown>> {
@@ -449,7 +462,35 @@ async function archiveWorkspaceOnce(sessionId: string, workDir: string): Promise
     }
   }
 
-  const snapshot = { archived_at: new Date().toISOString(), tree, files };
+  // Preserve dotfiles (.env, .gitignore, etc.) in the permanent record even though
+  // they're excluded from the candidate/recruiter-facing tree — this is best-effort
+  // and must never fail the archive that recruiters actually rely on.
+  const hiddenFiles: ReturnType<typeof readFileContent>[] = [];
+  try {
+    const fullTree = buildFileTree(workDir, { includeHidden: true });
+    const allPaths: string[] = [];
+    function collectAll(nodes: FileNode[]) {
+      for (const n of nodes) {
+        if (n.type === 'file') allPaths.push(n.path);
+        else if (n.children) collectAll(n.children);
+      }
+    }
+    collectAll(fullTree);
+
+    const visiblePaths = new Set(filePaths);
+    const hiddenPaths = allPaths.filter((p) => !visiblePaths.has(p));
+    for (const p of hiddenPaths) {
+      try {
+        hiddenFiles.push(readFileContent(workDir, p));
+      } catch {
+        // skip binary / unreadable files
+      }
+    }
+  } catch (err) {
+    console.warn(`[Archive] Failed to capture hidden files for session ${sessionId}:`, err);
+  }
+
+  const snapshot = { archived_at: new Date().toISOString(), tree, files, hidden_files: hiddenFiles };
   const snapshotJson = snapshot as unknown as Parameters<typeof sql.json>[0];
   try {
     await sql`
@@ -695,7 +736,7 @@ const server = http.createServer(async (req, res) => {
       const filePath = url.searchParams.get('path');
       if (!filePath) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing path parameter' }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError('Missing path parameter') }));
         return;
       }
 
@@ -709,7 +750,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -744,7 +785,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -777,7 +818,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -809,7 +850,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -839,7 +880,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -871,7 +912,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   if (!sessionInfo) {
     ws.send(JSON.stringify({
       type: 'error',
-      message: 'This assessment link is invalid or expired. Please request a new link from your assessment administrator.',
+      message: 'This assessment link is invalid or expired. Please request a new link from your recruiter.',
     }));
     ws.close();
     return;
@@ -978,6 +1019,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
         };
       } else {
         console.warn('[Terminal] Claude gateway is not fully configured; sandbox will not receive Claude auth');
+        ws.send(JSON.stringify({ type: 'claude_gateway_unavailable' }));
       }
 
       dockerSession = await dockerManager.spawn(sessionId, starterFilesDir, starterFiles, claudeGateway);

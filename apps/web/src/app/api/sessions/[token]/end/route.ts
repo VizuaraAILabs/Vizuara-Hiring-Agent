@@ -13,9 +13,17 @@ type CandidateSessionWithLimit = CandidateSession & {
   time_limit_min: number;
 };
 
+const END_REASONS = new Set(['candidate_ended', 'timer_expired', 'workspace_failed']);
+
+function normalizeEndReason(value: unknown): string {
+  return typeof value === 'string' && END_REASONS.has(value) ? value : 'candidate_ended';
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const endReason = normalizeEndReason(body.reason);
 
     const [session] = await sql<CandidateSessionWithLimit[]>`
       SELECT
@@ -34,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       return NextResponse.json(candidateUnavailablePayload('revoked'), { status: 403 });
     }
 
-    if (session.status !== 'active') {
+    if (session.status !== 'active' && session.status !== 'pending') {
       return NextResponse.json(candidateUnavailablePayload('session_not_active'), { status: 400 });
     }
 
@@ -47,7 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     const [updated] = await sql<CandidateSession[]>`
       UPDATE sessions
-      SET status = 'completed', ended_at = ${effectiveEndedAt}
+      SET status = 'completed', ended_at = ${effectiveEndedAt}, end_reason = ${endReason}
       WHERE id = ${session.id}
       RETURNING
         id, challenge_id, candidate_name, candidate_email, token, status,

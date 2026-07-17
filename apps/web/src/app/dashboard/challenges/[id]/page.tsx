@@ -353,6 +353,7 @@ export default function ChallengeDetailPage() {
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
+  const [lifecycleConfirmAction, setLifecycleConfirmAction] = useState<'mark_withdrawn' | 'mark_disqualified' | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(() => searchParams.get('candidateId'));
   const [analytics, setAnalytics] = useState<ChallengeAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -574,8 +575,6 @@ export default function ChallengeDetailPage() {
     disqualified: 'Disqualified',
   };
 
-  const activeCandidateStatusClass = 'border-primary/20 bg-primary/10 text-primary';
-
   function getAnalysisAlertLabel(session: Session) {
     const referenceTime = new Date(session.ended_at ?? session.created_at).getTime();
     const minutes = Number.isFinite(referenceTime)
@@ -583,7 +582,7 @@ export default function ChallengeDetailPage() {
       : 0;
 
     if (session.status === 'analysis failed') return 'Failed - retry available';
-    if (session.status === 'completed' && minutes >= 5) return 'Analysis not started';
+    if (session.status === 'completed' && minutes >= 5) return 'Ready to analyze';
     return null;
   }
 
@@ -952,7 +951,7 @@ export default function ChallengeDetailPage() {
         await refreshChallengeAfterAnalysisFailure();
         setModalMessage({
           title: 'Analysis Failed',
-          description: err.error || 'Analysis failed. Check console for details.',
+          description: err.error || 'Analysis failed. Please try again, or contact support if this keeps happening.',
         });
         return;
       }
@@ -961,7 +960,7 @@ export default function ChallengeDetailPage() {
       await refreshChallengeAfterAnalysisFailure();
       setModalMessage({
         title: 'Analysis Unavailable',
-        description: 'Failed to connect to analysis engine.',
+        description: 'Analysis service is temporarily unavailable. Please try again shortly.',
       });
     } finally {
       setAnalysisStartingIds((current) => {
@@ -1004,6 +1003,25 @@ export default function ChallengeDetailPage() {
 
   function canManagePendingInvite(session: Session) {
     return session.status === 'pending' && !session.started_at && !session.candidate_lifecycle_status;
+  }
+
+  const POST_ASSESSMENT_STATUSES = new Set(['completed', 'queued', 'analyzing', 'analyzed', 'analysis failed']);
+
+  function hasCompletedAssessment(session: Session) {
+    return POST_ASSESSMENT_STATUSES.has(session.status);
+  }
+
+  function lifecycleConfirmDescription(session: Session | null, action: 'mark_withdrawn' | 'mark_disqualified' | null) {
+    if (!session || !action) return '';
+    const actionWord = action === 'mark_withdrawn' ? 'withdrawn' : 'disqualified';
+
+    if (session.status === 'analyzed') {
+      return `This candidate has already completed the assessment and been scored. Marking them ${actionWord} flags them in the candidate list, but their score and report stay visible and still count toward this challenge's analytics unless you also update their decision label.`;
+    }
+    if (hasCompletedAssessment(session)) {
+      return `This candidate is past the pending stage of the assessment. Marking them ${actionWord} flags them in the candidate list; it does not remove or change their session.`;
+    }
+    return `This flags the candidate as ${actionWord} for this challenge. You can clear this status later if needed.`;
   }
 
   async function handleLifecycleAction(session: Session, action: LifecycleAction) {
@@ -1052,6 +1070,12 @@ export default function ChallengeDetailPage() {
   function handleLifecycleSelect(session: Session, value: string) {
     if (!value) return;
     void handleLifecycleAction(session, value as LifecycleAction);
+  }
+
+  async function confirmLifecycleAction() {
+    if (!selectedCandidate || !lifecycleConfirmAction) return;
+    await handleLifecycleAction(selectedCandidate, lifecycleConfirmAction);
+    setLifecycleConfirmAction(null);
   }
 
   function candidateColumnVisible(columnId: CandidateColumnId) {
@@ -1109,7 +1133,7 @@ export default function ChallengeDetailPage() {
   const selectedCopyBusy = selectedCandidate ? copyingSessionId === selectedCandidate.id : false;
   const selectedCandidateStatus = selectedCandidate?.candidate_lifecycle_status ?? null;
   const selectedCanMarkNoShow = selectedCandidate && canManageChallenge ? selectedCandidate.status === 'pending' && !selectedCandidate.started_at : false;
-  const selectedCanCopyInviteLink = selectedCandidate && canManageChallenge ? !selectedCandidate.candidate_lifecycle_status : false;
+  const selectedCanCopyInviteLink = selectedCandidate && canManageChallenge ? canManagePendingInvite(selectedCandidate) : false;
 
   const selectedActionButtonClass = 'inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-neutral-900 px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:border-neutral-800 disabled:bg-neutral-950 disabled:text-neutral-600';
 
@@ -2291,7 +2315,7 @@ export default function ChallengeDetailPage() {
                         <button
                           type="button"
                           disabled={selectedWithdrawnBusy}
-                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_withdrawn')}
+                          onClick={() => setLifecycleConfirmAction('mark_withdrawn')}
                           className={selectedActionButtonClass}
                         >
                           {selectedWithdrawnBusy ? (
@@ -2311,7 +2335,7 @@ export default function ChallengeDetailPage() {
                         <button
                           type="button"
                           disabled={selectedDisqualifiedBusy}
-                          onClick={() => handleLifecycleSelect(selectedCandidate, 'mark_disqualified')}
+                          onClick={() => setLifecycleConfirmAction('mark_disqualified')}
                           className={selectedActionButtonClass}
                         >
                           {selectedDisqualifiedBusy ? (
@@ -2420,13 +2444,9 @@ export default function ChallengeDetailPage() {
                         )}
                         {candidateColumnVisible('candidateStatus') && (
                         <td className="px-5 py-4">
-                          {session.candidate_lifecycle_status ? (
+                          {session.candidate_lifecycle_status && (
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${lifecycleStatusColors[session.candidate_lifecycle_status]}`}>
                               {lifecycleStatusLabels[session.candidate_lifecycle_status]}
-                            </span>
-                          ) : (
-                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${activeCandidateStatusClass}`}>
-                              Active
                             </span>
                           )}
                         </td>
@@ -2559,6 +2579,18 @@ export default function ChallengeDetailPage() {
         cancelLabel="Close"
         onConfirm={() => setModalMessage(null)}
         onClose={() => setModalMessage(null)}
+      />
+
+      <ConfirmationModal
+        open={Boolean(lifecycleConfirmAction) && Boolean(selectedCandidate)}
+        title={lifecycleConfirmAction === 'mark_withdrawn' ? 'Mark candidate as withdrawn?' : 'Mark candidate as disqualified?'}
+        description={lifecycleConfirmDescription(selectedCandidate, lifecycleConfirmAction)}
+        confirmLabel={lifecycleConfirmAction === 'mark_withdrawn' ? 'Mark Withdrawn' : 'Mark Disqualified'}
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={lifecycleConfirmAction === 'mark_withdrawn' ? selectedWithdrawnBusy : selectedDisqualifiedBusy}
+        onConfirm={() => void confirmLifecycleAction()}
+        onClose={() => setLifecycleConfirmAction(null)}
       />
 
       {reviewPreviewSession && (

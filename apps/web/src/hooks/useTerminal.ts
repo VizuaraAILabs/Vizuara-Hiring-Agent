@@ -10,7 +10,9 @@ interface UseTerminalOptions {
 }
 
 const CUSTOMER_SAFE_TERMINAL_ERROR =
-  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your recruiter.';
+
+const MAX_UNREACHABLE_CONNECT_ATTEMPTS = 6;
 
 function toCustomerSafeTerminalError(message: unknown): string {
   if (typeof message !== 'string' || !message.trim()) {
@@ -40,11 +42,14 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
   const [connected, setConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting to terminal...');
   const [terminalError, setTerminalError] = useState<string | null>(null);
+  const [claudeGatewayUnavailable, setClaudeGatewayUnavailable] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const spawnAckedRef = useRef(false);
   const fatalErrorRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
+  const hasCommunicatedRef = useRef(false);
+  const unreachableAttemptsRef = useRef(0);
 
   const sendResize = useCallback(() => {
     const terminal = terminalRef.current;
@@ -74,6 +79,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     wsRef.current = ws;
     spawnAckedRef.current = false;
     fatalErrorRef.current = false;
+    hasCommunicatedRef.current = false;
     setTerminalError(null);
     setStatusMessage('Connecting to terminal...');
 
@@ -92,6 +98,7 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     };
 
     ws.onmessage = (event) => {
+      hasCommunicatedRef.current = true;
       try {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
@@ -120,6 +127,9 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
           case 'output':
             terminalRef.current?.write(msg.data);
             break;
+          case 'claude_gateway_unavailable':
+            setClaudeGatewayUnavailable(true);
+            break;
           case 'exit':
             onExit?.();
             break;
@@ -140,6 +150,20 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     ws.onclose = () => {
       setConnected(false);
       if (fatalErrorRef.current) return;
+
+      // Only count attempts where the server never responded at all — a genuine
+      // "unreachable" streak, not a mid-session drop after real communication.
+      if (hasCommunicatedRef.current) {
+        unreachableAttemptsRef.current = 0;
+      } else {
+        unreachableAttemptsRef.current += 1;
+        if (unreachableAttemptsRef.current >= MAX_UNREACHABLE_CONNECT_ATTEMPTS) {
+          fatalErrorRef.current = true;
+          setTerminalError(CUSTOMER_SAFE_TERMINAL_ERROR);
+          return;
+        }
+      }
+
       // If the server acked a spawn but hasn't sent 'connected' yet, wait longer
       // before reconnecting so we don't interrupt an in-progress container spawn.
       const delay = spawnAckedRef.current ? 5000 : 2000;
@@ -151,8 +175,9 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
       }, delay);
     };
 
-    ws.onerror = (err) => {
-      console.error('[Terminal] WebSocket error:', err);
+    ws.onerror = () => {
+      // The browser already logs the failed connection attempt to the console;
+      // onclose (fired right after) owns the actual reconnect/cap decision.
     };
   }, [token, onExit, refitTerminal]);
 
@@ -246,5 +271,6 @@ export function useTerminal({ token, onExit }: UseTerminalOptions) {
     connected,
     statusMessage,
     terminalError,
+    claudeGatewayUnavailable,
   };
 }

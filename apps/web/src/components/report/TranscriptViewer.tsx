@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,9 +18,12 @@ interface TranscriptViewerProps {
   candidateName?: string;
 }
 
-function handleDownloadPDF(narrative: string, candidateName: string) {
+function handleDownloadPDF(narrative: string, candidateName: string, onError: (message: string) => void) {
   const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
+  if (!printWindow) {
+    onError('Pop-up blocked — please allow pop-ups for this site to download the narrative.');
+    return;
+  }
 
   // Minimal markdown renderer for the print window (no external deps)
   const escaped = narrative
@@ -107,7 +110,7 @@ function handleDownloadPDF(narrative: string, candidateName: string) {
 
   const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+  printWindow.location.href = url;
   // Revoke after a short delay — enough time for the browser to load the blob
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
@@ -120,6 +123,7 @@ export default function TranscriptViewer({
   candidateName = 'Candidate',
 }: TranscriptViewerProps) {
   const topRef = useRef<HTMLDivElement>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (narrative && topRef.current) {
@@ -175,26 +179,34 @@ export default function TranscriptViewer({
             AI-generated documentation of what the candidate did
           </p>
         </div>
-        <button
-          onClick={() => handleDownloadPDF(narrative, candidateName)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer border border-white/5 shrink-0"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="w-4 h-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              setDownloadError(null);
+              handleDownloadPDF(narrative, candidateName, setDownloadError);
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer border border-white/5"
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Download PDF
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Print / Save as PDF
+          </button>
+          {downloadError && (
+            <p className="text-xs text-amber-300 text-right max-w-55">{downloadError}</p>
+          )}
+        </div>
       </div>
 
       {/* Rendered markdown */}

@@ -82,7 +82,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ se
         reviewed_by_name = ${user.name},
         reviewed_at = NOW()
       WHERE id = ${sessionId}
-      RETURNING *
+      RETURNING
+        id, challenge_id, candidate_name, candidate_email, token, status,
+        started_at, ended_at, created_at, workspace_snapshot,
+        decision_label, recruiter_notes, reviewed_by_email, reviewed_by_name, reviewed_at,
+        invite_email_status, invite_email_sent_at, invite_email_error,
+        candidate_lifecycle_status, candidate_lifecycle_reason,
+        candidate_lifecycle_updated_at, candidate_lifecycle_updated_by_email
     `;
 
     return NextResponse.json(updated);

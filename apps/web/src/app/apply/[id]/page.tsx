@@ -167,8 +167,7 @@ export default function ApplyPage() {
 
           <div className="flex flex-col justify-center p-6 md:p-8">
             <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-600">Step 1 of 2</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Enter Your Details</h2>
+              <h2 className="text-2xl font-semibold text-white">Enter Your Details</h2>
               <p className="mt-3 text-sm leading-6 text-neutral-500">
                 Use the same name and email you want associated with this assessment submission.
               </p>

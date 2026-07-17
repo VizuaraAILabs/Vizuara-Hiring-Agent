@@ -52,6 +52,8 @@ export default function ReportPage() {
   const [integritySummary, setIntegritySummary] = useState<IntegritySummary | null>(null);
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityError, setIntegrityError] = useState<string | null>(null);
+  const [retryingAnalysis, setRetryingAnalysis] = useState(false);
+  const [retryAnalysisError, setRetryAnalysisError] = useState<string | null>(null);
 
   const handleEnrichDimensions = useCallback(async () => {
     setEnrichingDimensions(true);
@@ -76,51 +78,79 @@ export default function ReportPage() {
     }
   }, [sessionId]);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const analysisRes = await fetch(`/api/analysis/${sessionId}`);
-        if (analysisRes.ok) {
-          const data = await analysisRes.json();
-          setAnalysis(data);
-          if (data.transcript_narrative) {
-            setTranscriptNarrative(data.transcript_narrative);
-          }
-
-          // If any dimension is missing observed_points, enrich in the background
-          const details: Record<string, { observed_points?: unknown[] }> =
-            data.dimension_details ?? {};
-          const needsEnrichment = Object.values(details).some(
-            (d) => !d?.observed_points?.length,
-          );
-          if (needsEnrichment) {
-            void handleEnrichDimensions();
-          }
+  const loadReportData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const analysisRes = await fetch(`/api/analysis/${sessionId}`);
+      if (analysisRes.ok) {
+        const data = await analysisRes.json();
+        setAnalysis(data);
+        if (data.transcript_narrative) {
+          setTranscriptNarrative(data.transcript_narrative);
         }
 
-        const challengeRes = await fetch(`/api/challenges/${challengeId}`);
-        if (challengeRes.ok) {
-          const challengeData = await challengeRes.json();
-          setChallenge(challengeData);
-          const sess = challengeData.sessions?.find((s: Session) => s.id === sessionId);
-          if (sess) setSession(sess);
-
-          if (sess?.token) {
-            const interactionsRes = await fetch(`/api/sessions/${sess.token}/interactions`);
-            if (interactionsRes.ok) {
-              setInteractions(await interactionsRes.json());
-            }
-          }
+        // If any dimension is missing observed_points, enrich in the background
+        const details: Record<string, { observed_points?: unknown[] }> =
+          data.dimension_details ?? {};
+        const needsEnrichment = Object.values(details).some(
+          (d) => !d?.observed_points?.length,
+        );
+        if (needsEnrichment) {
+          void handleEnrichDimensions();
         }
-      } catch (err) {
-        console.error('Failed to load report data:', err);
-      } finally {
-        setLoading(false);
       }
-    }
 
-    loadData();
+      const challengeRes = await fetch(`/api/challenges/${challengeId}`);
+      if (challengeRes.ok) {
+        const challengeData = await challengeRes.json();
+        setChallenge(challengeData);
+        const sess = challengeData.sessions?.find((s: Session) => s.id === sessionId);
+        if (sess) setSession(sess);
+
+        if (sess?.token) {
+          const interactionsRes = await fetch(`/api/sessions/${sess.token}/interactions`);
+          if (interactionsRes.ok) {
+            setInteractions(await interactionsRes.json());
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load report data:', err);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, [sessionId, challengeId, handleEnrichDimensions]);
+
+  useEffect(() => {
+    void loadReportData();
+  }, [loadReportData]);
+
+  // While analysis is queued/running, poll quietly so the page updates without a manual refresh.
+  useEffect(() => {
+    if (session?.status !== 'queued' && session?.status !== 'analyzing') return;
+    const interval = setInterval(() => {
+      void loadReportData(false);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [session?.status, loadReportData]);
+
+  async function handleRetryAnalysis() {
+    if (retryingAnalysis) return;
+    setRetryingAnalysis(true);
+    setRetryAnalysisError(null);
+    try {
+      const res = await fetch(`/api/analysis/${sessionId}`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to start analysis.');
+      }
+      await loadReportData(false);
+    } catch (err) {
+      setRetryAnalysisError(err instanceof Error ? err.message : 'Failed to start analysis.');
+    } finally {
+      setRetryingAnalysis(false);
+    }
+  }
 
   const handleViewInTranscript = (index: number) => {
     setHighlightIndex(index);
@@ -148,7 +178,7 @@ export default function ReportPage() {
       setTranscriptNarrative(data.transcript_narrative ?? null);
     } catch (err) {
       console.error('Failed to generate transcript narrative:', err);
-      setNarrativeError('Transcript narrative could not be generated. Please try again.');
+      setNarrativeError(err instanceof Error ? err.message : 'Transcript narrative could not be generated. Please try again.');
     } finally {
       setNarrativeLoading(false);
     }
@@ -212,19 +242,84 @@ export default function ReportPage() {
   }
 
   if (!analysis || !session) {
+    if (!session) {
+      return (
+        <ReportUnavailable
+          title="Report Not Available"
+          message="This session could not be found."
+          challengeId={challengeId}
+        />
+      );
+    }
+
+    if (session.status === 'pending' || session.status === 'active') {
+      return (
+        <ReportUnavailable
+          title="Not Submitted Yet"
+          message="This candidate hasn't completed the assessment yet, so there's nothing to analyze."
+          challengeId={challengeId}
+        />
+      );
+    }
+
+    if (session.status === 'queued' || session.status === 'analyzing') {
+      return (
+        <ReportUnavailable
+          title="Analysis In Progress"
+          message={
+            session.status === 'queued'
+              ? "This submission is queued for analysis. This page updates automatically once it's ready."
+              : "Analysis is running now. This page updates automatically once it's ready."
+          }
+          challengeId={challengeId}
+        />
+      );
+    }
+
+    if (session.status === 'analysis failed') {
+      return (
+        <ReportUnavailable
+          title="Analysis Failed"
+          message="The last analysis attempt for this submission didn't complete."
+          challengeId={challengeId}
+          retryLabel="Retry analysis"
+          retrying={retryingAnalysis}
+          retryError={retryAnalysisError}
+          onRetry={() => void handleRetryAnalysis()}
+        />
+      );
+    }
+
+    if (interactions.length === 0) {
+      return (
+        <ReportUnavailable
+          title="No Activity Recorded"
+          message="This session ended with no recorded activity, so there's nothing to analyze."
+          challengeId={challengeId}
+        />
+      );
+    }
+
+    if (session.status === 'completed') {
+      return (
+        <ReportUnavailable
+          title="Analysis Not Started"
+          message="Analysis hasn't been triggered yet for this submission."
+          challengeId={challengeId}
+          retryLabel="Run analysis"
+          retrying={retryingAnalysis}
+          retryError={retryAnalysisError}
+          onRetry={() => void handleRetryAnalysis()}
+        />
+      );
+    }
+
     return (
-      <div className="text-center py-20">
-        <h2 className="text-xl font-serif italic text-white mb-2">Report Not Available</h2>
-        <p className="text-neutral-500 mb-4">
-          The analysis may still be in progress or hasn&apos;t been triggered yet.
-        </p>
-        <Link
-          href={`/dashboard/challenges/${challengeId}`}
-          className="text-primary hover:text-primary-light text-sm"
-        >
-          Back to challenge
-        </Link>
-      </div>
+      <ReportUnavailable
+        title="Report Not Available"
+        message="The analysis may still be in progress or hasn't been triggered yet."
+        challengeId={challengeId}
+      />
     );
   }
 
@@ -328,17 +423,27 @@ export default function ReportPage() {
 
       {activeTab === 'timeline' && (
         <div className="space-y-6">
-          {analysis.timeline_data.length > 0 && (
-            <TimelineChart data={analysis.timeline_data} />
+          {analysis.timeline_data.length === 0
+            && analysis.prompt_complexity.length === 0
+            && Object.keys(analysis.category_breakdown).length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-neutral-400 text-sm">No timeline activity detected for this session.</p>
+            </div>
+          ) : (
+            <>
+              {analysis.timeline_data.length > 0 && (
+                <TimelineChart data={analysis.timeline_data} />
+              )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {analysis.prompt_complexity.length > 0 && (
+                  <PromptComplexity data={analysis.prompt_complexity} />
+                )}
+                {Object.keys(analysis.category_breakdown).length > 0 && (
+                  <CategoryBreakdown data={analysis.category_breakdown} />
+                )}
+              </div>
+            </>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {analysis.prompt_complexity.length > 0 && (
-              <PromptComplexity data={analysis.prompt_complexity} />
-            )}
-            {Object.keys(analysis.category_breakdown).length > 0 && (
-              <CategoryBreakdown data={analysis.category_breakdown} />
-            )}
-          </div>
         </div>
       )}
 
@@ -402,6 +507,52 @@ export default function ReportPage() {
           />
         </div>
       */}
+    </div>
+  );
+}
+
+function ReportUnavailable({
+  title,
+  message,
+  challengeId,
+  retryLabel,
+  retrying,
+  retryError,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  challengeId: string;
+  retryLabel?: string;
+  retrying?: boolean;
+  retryError?: string | null;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="text-center py-20">
+      <h2 className="text-xl font-serif italic text-white mb-2">{title}</h2>
+      <p className="text-neutral-500 mb-4">{message}</p>
+      {retryError && (
+        <p className="text-red-400 text-sm mb-4">{retryError}</p>
+      )}
+      {onRetry && retryLabel && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-primary-light disabled:opacity-60 disabled:cursor-not-allowed mb-4"
+        >
+          {retrying ? 'Working...' : retryLabel}
+        </button>
+      )}
+      <div>
+        <Link
+          href={`/dashboard/challenges/${challengeId}`}
+          className="text-primary hover:text-primary-light text-sm"
+        >
+          Back to challenge
+        </Link>
+      </div>
     </div>
   );
 }

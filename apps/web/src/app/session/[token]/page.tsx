@@ -114,7 +114,7 @@ export default function SessionPage() {
           </div>
         </section>
 
-        <aside className="flex flex-col gap-5 lg:sticky lg:top-10 lg:max-h-[calc(100vh-5rem)]">
+        <aside className="flex flex-col gap-5">
           <div className="p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-600">Ready Check</p>
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -144,7 +144,7 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">02</span>
-                <span>The sandbox runs as a <strong className="text-white">non-root user</strong>. Commands requiring sudo or system-level package installation are not available.</span>
+                <span>Your workspace runs <strong className="text-white">without admin/root access</strong>. Commands requiring sudo or system-level package installation are not available.</span>
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">03</span>
@@ -152,7 +152,11 @@ export default function SessionPage() {
               </li>
               <li className="flex gap-3">
                 <span className="text-primary mt-0.5 font-mono text-xs">04</span>
-                <span>The timer starts when you click Start Challenge.</span>
+                <span>The timer starts after your terminal and files are ready.</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-primary mt-0.5 font-mono text-xs">05</span>
+                <span>The file explorer hides hidden files. Use the terminal (<strong className="text-white">ls -a</strong>, <strong className="text-white">cat</strong>, <strong className="text-white">nano</strong>) if you need to view or edit them.</span>
               </li>
             </ul>
           </div>
@@ -172,7 +176,7 @@ export default function SessionPage() {
               {starting ? 'Starting workspace...' : 'Start Challenge'}
             </button>
             <p className="mt-3 text-center text-xs text-neutral-600">
-              The terminal workspace opens immediately after startup.
+              Setting up your terminal workspace — during busy periods you may be placed in a queue before it&apos;s ready.
             </p>
           </div>
         </aside>

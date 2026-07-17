@@ -17,6 +17,7 @@ const navItems = [
   { label: 'Companies', href: '/dashboard/admin', icon: 'CO', adminOnly: true },
   { label: 'All Challenges', href: '/dashboard/admin/challenges', icon: '{}', adminOnly: true },
   { label: 'Analysis Ops', href: '/dashboard/admin/analysis-failures', icon: '!!', adminOnly: true },
+  { label: 'Session Endings', href: '/dashboard/admin/session-endings', icon: 'SE', adminOnly: true },
   { label: 'Outbound', href: '/dashboard/admin/outbound', icon: 'OB', adminOnly: true },
   { label: 'Usage & Costs', href: '/dashboard/admin/costs', icon: '$', adminOnly: true },
   { label: 'Feedback', href: '/dashboard/admin/feedback', icon: '!', adminOnly: true },
