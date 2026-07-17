@@ -255,7 +255,7 @@ export default function TerminalPage() {
       <ConfirmationModal
         open={claudeGatewayNoticeOpen}
         title="AI assistant unavailable"
-        description="The AI assistant is not configured for this session, so the claude command will not work in your terminal. This is a setup issue on our end, not something you did. Please contact your recruiter or workspace administrator. You can continue working in the terminal without it."
+        description="The AI assistant isn't available right now, so the claude command won't work in your terminal. This isn't something you did — please contact your recruiter. You can continue working in the terminal without it."
         confirmLabel="Got it"
         hideCancel
         onConfirm={() => setClaudeGatewayNoticeOpen(false)}
@@ -342,7 +342,7 @@ function WorkspaceBootScreen({
               )}
             </div>
             <p className="mt-4 max-w-md text-xs leading-5 text-neutral-600">
-              If this keeps happening, contact your recruiter or workspace administrator.
+              If this keeps happening, contact your recruiter.
             </p>
           </>
         )}

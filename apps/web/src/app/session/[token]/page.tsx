@@ -176,7 +176,7 @@ export default function SessionPage() {
               {starting ? 'Starting workspace...' : 'Start Challenge'}
             </button>
             <p className="mt-3 text-center text-xs text-neutral-600">
-              Setting up your terminal workspace — this can take a moment during busy periods.
+              Setting up your terminal workspace — during busy periods you may be placed in a queue before it's ready.
             </p>
           </div>
         </aside>

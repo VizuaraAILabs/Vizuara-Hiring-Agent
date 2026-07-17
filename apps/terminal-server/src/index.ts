@@ -32,7 +32,7 @@ const TERMINAL_SERVER_ID = process.env.TERMINAL_SERVER_ID || `${os.hostname()}:$
 const TERMINAL_RUNTIME_LEASE_SECONDS = parseInt(process.env.TERMINAL_RUNTIME_LEASE_SECONDS || '90');
 const TERMINAL_RUNTIME_HEARTBEAT_MS = Math.max(5_000, Math.floor((TERMINAL_RUNTIME_LEASE_SECONDS * 1000) / 3));
 const CUSTOMER_SAFE_TERMINAL_ERROR =
-  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your recruiter.';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const CLAUDE_GATEWAY_BASE_URL = process.env.CLAUDE_GATEWAY_BASE_URL || `http://localhost:${PORT}/claude-gateway`;
 const CLAUDE_GATEWAY_TOKEN_SECRET = process.env.CLAUDE_GATEWAY_TOKEN_SECRET || '';
@@ -899,7 +899,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
   if (!sessionInfo) {
     ws.send(JSON.stringify({
       type: 'error',
-      message: 'This assessment link is invalid or expired. Please request a new link from your assessment administrator.',
+      message: 'This assessment link is invalid or expired. Please request a new link from your recruiter.',
     }));
     ws.close();
     return;

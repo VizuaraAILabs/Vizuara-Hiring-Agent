@@ -10,7 +10,7 @@ interface UseTerminalOptions {
 }
 
 const CUSTOMER_SAFE_TERMINAL_ERROR =
-  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your assessment administrator.';
+  'We could not open your assessment workspace. Please refresh and try again. If the problem continues, contact your recruiter.';
 
 function toCustomerSafeTerminalError(message: unknown): string {
   if (typeof message !== 'string' || !message.trim()) {
