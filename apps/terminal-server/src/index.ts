@@ -127,6 +127,19 @@ function normalizeEditorFilePath(value: unknown): string | null {
   return segments.join('/');
 }
 
+const CANDIDATE_SAFE_FILE_ERRORS: Record<string, string> = {
+  'Path traversal detected': "This file path isn't allowed.",
+  'Invalid active file path': "This file path isn't allowed.",
+  'Invalid path': "This file path isn't allowed.",
+  'Missing path parameter': 'No file was specified.',
+  'Missing file content': 'No file content was provided.',
+  'Request body too large': 'The file is too large to save.',
+};
+
+function toCandidateSafeFileError(message: string): string {
+  return CANDIDATE_SAFE_FILE_ERRORS[message] ?? message;
+}
+
 function readJsonBody(req: IncomingMessage, maxBytes = MAX_JSON_BODY_BYTES): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -723,7 +736,7 @@ const server = http.createServer(async (req, res) => {
       const filePath = url.searchParams.get('path');
       if (!filePath) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing path parameter' }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError('Missing path parameter') }));
         return;
       }
 
@@ -737,7 +750,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -772,7 +785,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -805,7 +818,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -837,7 +850,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }
@@ -867,7 +880,7 @@ const server = http.createServer(async (req, res) => {
           : message === 'Path traversal detected' || message === 'Invalid active file path' ? 403
           : 400;
         res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: message }));
+        res.end(JSON.stringify({ error: toCandidateSafeFileError(message) }));
       }
       return;
     }

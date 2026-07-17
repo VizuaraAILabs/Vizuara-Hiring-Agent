@@ -65,7 +65,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
               <InterviewerAvatar />
               <div>
                 <div className="text-sm font-semibold text-white leading-none">Interviewer</div>
-                <div className="text-xs text-neutral-500 mt-0.5">Watching your session</div>
+                <div className="text-xs text-neutral-500 mt-0.5">AI interviewer</div>
               </div>
             </div>
             <button
@@ -87,7 +87,7 @@ export default function InterviewWidget({ token }: InterviewWidgetProps) {
                   <InterviewerIcon className="text-primary" size={20} />
                 </div>
                 <p className="text-sm text-neutral-400 leading-relaxed">
-                  Your interviewer is watching. They&apos;ll ask questions as you work — or you can ask
+                  Your AI interviewer is following along and may ask questions as you work — or you can ask
                   them about the problem.
                 </p>
               </div>
