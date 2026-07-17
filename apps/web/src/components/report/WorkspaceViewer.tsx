@@ -109,6 +109,7 @@ function TreeNode({
 export default function WorkspaceViewer({ snapshot, loading, error, sessionId }: WorkspaceViewerProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [zipDownloading, setZipDownloading] = useState(false);
+  const [zipError, setZipError] = useState<string | null>(null);
   const highlightedViewerRef = useRef<HTMLDivElement>(null);
   const viewerTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [highlightedCode, setHighlightedCode] = useState<{ key: string; html: string | null } | null>(null);
@@ -167,9 +168,13 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
     if (files.length === 0 || zipDownloading) return;
 
     setZipDownloading(true);
+    setZipError(null);
     try {
       const response = await fetch(`/api/analysis/${sessionId}/workspace/download`);
-      if (!response.ok) return;
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to download workspace files.');
+      }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -180,6 +185,8 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      setZipError(err instanceof Error ? err.message : 'Failed to download workspace files.');
     } finally {
       setZipDownloading(false);
     }
@@ -221,23 +228,31 @@ export default function WorkspaceViewer({ snapshot, loading, error, sessionId }:
             {archivedAtLabel}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleDownloadZip}
-          className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-            files.length === 0 || zipDownloading
-              ? 'cursor-not-allowed border-white/5 bg-white/2 text-neutral-700'
-              : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'
-          }`}
-          disabled={files.length === 0 || zipDownloading}
-        >
-          {zipDownloading ? (
-            <ArcSpinner label="Downloading ZIP" sizeClassName="h-4 w-4" />
-          ) : (
-            <Download size={16} />
+        <div className="flex flex-col items-end gap-1.5">
+          <button
+            type="button"
+            onClick={handleDownloadZip}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+              files.length === 0 || zipDownloading
+                ? 'cursor-not-allowed border-white/5 bg-white/2 text-neutral-700'
+                : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'
+            }`}
+            disabled={files.length === 0 || zipDownloading}
+          >
+            {zipDownloading ? (
+              <ArcSpinner label="Downloading ZIP" sizeClassName="h-4 w-4" />
+            ) : (
+              <Download size={16} />
+            )}
+            {zipDownloading ? 'Downloading...' : 'Download ZIP'}
+          </button>
+          {zipDownloading && (
+            <p className="text-xs text-neutral-600 text-right">This may take a few minutes</p>
           )}
-          {zipDownloading ? 'Downloading...' : 'Download ZIP'}
-        </button>
+          {zipError && (
+            <p className="text-xs text-amber-300 text-right max-w-55">{zipError}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex h-150">
