@@ -18,6 +18,8 @@ export function useInterview(token: string) {
   const [hasUnread, setHasUnread] = useState(false);
   const lastSeqRef = useRef<number>(0);
   const isOpenRef = useRef<boolean>(false);
+  const sendingRef = useRef(false);
+  const pendingSendRef = useRef<{ content: string } | null>(null);
 
   // Poll for new interview interactions every 5 seconds
   useEffect(() => {
@@ -65,7 +67,14 @@ export function useInterview(token: string) {
         setMessages((prev) => {
           // Avoid duplicates (poll might race with optimistic update)
           const existingSeqs = new Set(prev.map((m) => m.sequence_num));
-          const deduped = newMessages.filter((m) => !existingSeqs.has(m.sequence_num));
+          const pending = pendingSendRef.current;
+          const deduped = newMessages.filter((m) => {
+            if (existingSeqs.has(m.sequence_num)) return false;
+            // A send is still in flight for this exact message — let sendMessage's
+            // own response reconcile it instead of inserting a second copy here.
+            if (pending && m.role === 'candidate' && m.content === pending.content) return false;
+            return true;
+          });
           return deduped.length > 0 ? [...prev, ...deduped] : prev;
         });
 
@@ -98,19 +107,22 @@ export function useInterview(token: string) {
 
   const sendMessage = useCallback(
     async (content: string, replyToSeq?: number): Promise<boolean> => {
-      if (!content.trim() || sending) return false;
+      if (!content.trim() || sendingRef.current) return false;
+      sendingRef.current = true;
       setSending(true);
       setSendError(null);
 
       // Optimistic update for candidate message
       const tempSeq = Date.now(); // temp unique key
+      const trimmedContent = content.trim();
       const optimisticMsg: InterviewMessage = {
         id: -tempSeq,
         sequence_num: tempSeq,
         timestamp: new Date().toISOString(),
         role: 'candidate',
-        content: content.trim(),
+        content: trimmedContent,
       };
+      pendingSendRef.current = { content: trimmedContent };
       setMessages((prev) => [...prev, optimisticMsg]);
 
       try {
@@ -133,6 +145,9 @@ export function useInterview(token: string) {
         // Replace optimistic with confirmed candidate message + AI reply
         setMessages((prev) => {
           const withoutOptimistic = prev.filter((m) => m.id !== -tempSeq);
+          // The poll may have already inserted these (real sequence_num) while this
+          // request was in flight — don't append a second copy if so.
+          const existingSeqs = new Set(withoutOptimistic.map((m) => m.sequence_num));
           const confirmedCandidate: InterviewMessage = {
             id: -(candidate_sequence_num as number),
             sequence_num: candidate_sequence_num as number,
@@ -148,12 +163,14 @@ export function useInterview(token: string) {
             role: 'interviewer',
             content: reply as string,
           } : null;
+          const toAppend = [confirmedCandidate, aiMsg]
+            .filter((m): m is InterviewMessage => m !== null && !existingSeqs.has(m.sequence_num));
           // Advance lastSeq past both messages so poll doesn't re-fetch them
           lastSeqRef.current = Math.max(
             lastSeqRef.current,
             (sequence_num ?? candidate_sequence_num) as number
           );
-          return aiMsg ? [...withoutOptimistic, confirmedCandidate, aiMsg] : [...withoutOptimistic, confirmedCandidate];
+          return [...withoutOptimistic, ...toAppend];
         });
 
         return true;
@@ -162,10 +179,12 @@ export function useInterview(token: string) {
         setSendError('Could not send your message. Check your connection and try again.');
         return false;
       } finally {
+        pendingSendRef.current = null;
+        sendingRef.current = false;
         setSending(false);
       }
     },
-    [token, sending]
+    [token]
   );
 
   return { messages, sending, sendError, hasUnread, markRead, markClosed, sendMessage };
