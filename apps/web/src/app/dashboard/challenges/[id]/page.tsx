@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Archive, Ban, BarChart3, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Trash2, UserMinus, UserX, Users } from 'lucide-react';
+import { Archive, Ban, BarChart3, CalendarClock, Copy, Download, FileText, FolderCode, Link2, MailCheck, MailPlus, MailX, MessageSquareText, Pencil, Power, RotateCcw, Save, Send, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Trash2, UserMinus, UserX, Users } from 'lucide-react';
 import { formatDateTime, getDecisionColor, getDecisionLabel } from '@/lib/utils';
 import { DEFAULT_INVITE_EMAIL_BODY, DEFAULT_INVITE_EMAIL_SUBJECT, INVITE_EMAIL_MERGE_FIELDS } from '@/lib/invite-email';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import StarterFilesEditor from '@/components/dashboard/StarterFilesEditor';
 import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
+import RenameChallengeModal from '@/components/dashboard/RenameChallengeModal';
 import ArcSpinner from '@/components/ArcSpinner';
 import { useSubscription } from '@/context/SubscriptionContext';
 import { useAuth } from '@/context/AuthContext';
@@ -350,6 +351,7 @@ export default function ChallengeDetailPage() {
   const [closeAccessModalOpen, setCloseAccessModalOpen] = useState(false);
   const [archiveModalOpen, setArchiveModalOpen] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [analysisNow, setAnalysisNow] = useState(() => Date.now());
   const [lifecycleBusyIds, setLifecycleBusyIds] = useState<Set<string>>(new Set());
   const [lifecycleMessage, setLifecycleMessage] = useState<{ sessionId: string; message: string; tone: 'success' | 'error' } | null>(null);
@@ -1115,6 +1117,16 @@ export default function ChallengeDetailPage() {
 
   if (!challenge) return <p className="text-neutral-500">Challenge not found</p>;
 
+  const challengeIsArchived = Boolean(challenge.archived_at);
+  const challengeIsExpired = !challengeIsArchived && Boolean(challenge.ends_at) && new Date(challenge.ends_at as string).getTime() <= analysisNow;
+  const challengeIsOpenForCandidates = !challengeIsArchived && !challengeIsExpired && Boolean(challenge.is_active);
+  const challengeStatusLabel = challengeIsExpired ? 'Expired' : challengeIsOpenForCandidates ? 'Open' : 'Closed';
+  const challengeStatusClass = challengeIsExpired
+    ? 'bg-amber-500/10 text-amber-300'
+    : challengeIsOpenForCandidates
+      ? 'bg-primary/10 text-primary'
+      : 'bg-neutral-800 text-neutral-400';
+
   const selectedCandidate = selectedCandidateId
     ? challenge.sessions.find((session) => session.id === selectedCandidateId) ?? null
     : null;
@@ -1149,9 +1161,8 @@ export default function ChallengeDetailPage() {
                   Archived
                 </span>
               )}
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                }`}>
-                {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${challengeStatusClass}`}>
+                {challengeStatusLabel}
               </span>
               {challenge.cohort_label && (
                 <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-neutral-400">
@@ -1168,6 +1179,14 @@ export default function ChallengeDetailPage() {
 
           {canManageChallenge && (
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRenameModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-surface px-4 py-2 text-sm font-semibold text-neutral-300 transition-colors hover:border-white/20 hover:text-white"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Rename
+            </button>
             <button
               type="button"
               onClick={() => setDuplicateModalOpen(true)}
@@ -1275,22 +1294,22 @@ export default function ChallengeDetailPage() {
             <div className="overflow-hidden rounded-2xl border border-primary/20 bg-[#0f1210]">
               <div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                    }`}>
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${challengeStatusClass}`}>
                     <Link2 className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-white">Shareable Link</p>
                     <p className="mt-0.5 text-xs text-neutral-500">
-                      {Boolean(challenge.is_active)
-                        ? 'Public registration path'
-                        : 'New candidates cannot enter while this assessment is closed'}
+                      {challengeIsExpired
+                        ? 'New candidates cannot enter — this assessment\'s access window has ended'
+                        : challengeIsOpenForCandidates
+                          ? 'Public registration path'
+                          : 'New candidates cannot enter while this assessment is closed'}
                     </p>
                   </div>
                 </div>
-                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${Boolean(challenge.is_active) ? 'bg-primary/10 text-primary' : 'bg-neutral-800 text-neutral-400'
-                  }`}>
-                  {Boolean(challenge.is_active) ? 'Open' : 'Closed'}
+                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${challengeStatusClass}`}>
+                  {challengeStatusLabel}
                 </span>
               </div>
               <div className="flex flex-col gap-3 p-5 lg:flex-row">
@@ -2673,7 +2692,7 @@ export default function ChallengeDetailPage() {
             description={
               challenge.archived_at
                 ? `"${challenge.title}" will return to the dashboard according to its current access state.`
-                : Boolean(challenge.is_active)
+                : challengeIsOpenForCandidates
                   ? `"${challenge.title}" may still accept candidates. Archiving only hides it from the main dashboard unless you close it too.`
                   : `"${challenge.title}" will move out of the main dashboard. Candidate history and reports stay preserved.`
             }
@@ -2682,13 +2701,23 @@ export default function ChallengeDetailPage() {
             onConfirm={() => handleArchiveChallenge(false)}
             onClose={() => setArchiveModalOpen(false)}
             secondaryAction={
-              !challenge.archived_at && Boolean(challenge.is_active)
+              !challenge.archived_at && challengeIsOpenForCandidates
                 ? {
                   label: 'Close and Archive',
                   onClick: () => handleArchiveChallenge(true),
                 }
                 : undefined
             }
+          />
+
+          <RenameChallengeModal
+            open={renameModalOpen}
+            source={{ id: challenge.id, title: challenge.title }}
+            onClose={() => setRenameModalOpen(false)}
+            onRenamed={(_challengeId, title) => {
+              setChallenge((current) => current ? { ...current, title } : current);
+              setRenameModalOpen(false);
+            }}
           />
 
           <DuplicateChallengeModal
@@ -2700,6 +2729,7 @@ export default function ChallengeDetailPage() {
               hasAllowedEmails: Boolean(challenge.allowed_emails?.length),
               hasAccessWindow: Boolean(challenge.starts_at || challenge.ends_at),
               hasCohortLabel: Boolean(challenge.cohort_label),
+              isActive: Boolean(challenge.is_active),
             }}
             onClose={() => setDuplicateModalOpen(false)}
             onDuplicated={(duplicatedChallengeId) => {

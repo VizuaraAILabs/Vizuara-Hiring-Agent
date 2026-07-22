@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Archive, Copy, RotateCcw } from 'lucide-react';
+import { Archive, Copy, Pencil, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -45,6 +45,7 @@ interface ChallengeCardProps {
     isActive: boolean;
     isArchived: boolean;
   }) => void;
+  onRename?: (challenge: { id: string; title: string }) => void;
   onDuplicate?: (challenge: {
     id: string;
     title: string;
@@ -52,6 +53,7 @@ interface ChallengeCardProps {
     hasAllowedEmails: boolean;
     hasAccessWindow: boolean;
     hasCohortLabel: boolean;
+    isActive: boolean;
   }) => void;
 }
 
@@ -70,6 +72,7 @@ export default function ChallengeCard({
   has_access_window = false,
   created_at,
   onArchiveToggle,
+  onRename,
   onDuplicate,
 }: ChallengeCardProps) {
   const { user } = useAuth();
@@ -107,6 +110,21 @@ export default function ChallengeCard({
           <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusClass}`}>
             {statusLabel}
           </span>
+          {canManageActions && onRename && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRename({ id, title });
+              }}
+              className="rounded-lg border border-white/10 bg-[#0a0a0a] p-1.5 text-neutral-500 transition-colors hover:border-white/20 hover:text-white"
+              title="Rename assessment"
+              aria-label="Rename assessment"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
           {canManageActions && onArchiveToggle && (
             <button
               type="button"
@@ -135,6 +153,7 @@ export default function ChallengeCard({
                   hasAllowedEmails: has_allowed_emails,
                   hasAccessWindow: has_access_window,
                   hasCohortLabel: Boolean(cohort_label),
+                  isActive,
                 });
               }}
               className="rounded-lg border border-white/10 bg-[#0a0a0a] p-1.5 text-neutral-500 transition-colors hover:border-white/20 hover:text-white"

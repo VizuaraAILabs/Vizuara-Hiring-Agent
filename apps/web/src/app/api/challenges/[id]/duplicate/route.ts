@@ -86,7 +86,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         focus_areas,
         context,
         cohort_label,
-        archived_at
+        archived_at,
+        invite_email_subject,
+        invite_email_body
       )
       VALUES (
         ${duplicateId},
@@ -94,7 +96,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ${title},
         ${source.description},
         ${source.time_limit_min},
-        FALSE,
+        ${source.is_active},
         ${copyStarterFiles ? source.starter_files_dir : null},
         ${copyStarterFiles ? serializeStarterFiles(source.starter_files) : null},
         NULL,
@@ -107,7 +109,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ${source.focus_areas},
         ${source.context},
         ${copyCohortLabel ? source.cohort_label : null},
-        NULL
+        NULL,
+        ${source.invite_email_subject ?? null},
+        ${source.invite_email_body ?? null}
       )
       RETURNING *
     `;
