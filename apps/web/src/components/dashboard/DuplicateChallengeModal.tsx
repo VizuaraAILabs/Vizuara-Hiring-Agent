@@ -10,6 +10,7 @@ interface DuplicateChallengeSource {
   hasAllowedEmails?: boolean;
   hasAccessWindow?: boolean;
   hasCohortLabel?: boolean;
+  isActive?: boolean;
 }
 
 interface DuplicateChallengeModalProps {
@@ -96,6 +97,13 @@ export default function DuplicateChallengeModal({
       onClose={onClose}
     >
       <div className="space-y-5">
+        <p className="rounded-xl border border-white/5 bg-[#0a0a0a] px-3 py-2.5 text-sm text-neutral-300">
+          The copy will be created as{' '}
+          <span className={source.isActive ? 'font-medium text-primary' : 'font-medium text-neutral-400'}>
+            {source.isActive ? 'Active' : 'Closed'}
+          </span>
+          , matching the current state of &quot;{source.title}&quot;.
+        </p>
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-[0.16em] text-neutral-600">
             New Title

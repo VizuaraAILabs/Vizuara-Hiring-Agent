@@ -4,6 +4,7 @@ import ChallengeCard from '@/components/dashboard/ChallengeCard';
 import ConcentricArcLoader from '@/components/dashboard/ConcentricArcLoader';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import DuplicateChallengeModal from '@/components/dashboard/DuplicateChallengeModal';
+import RenameChallengeModal from '@/components/dashboard/RenameChallengeModal';
 import AnalysisAlertsPanel from '@/components/dashboard/AnalysisAlertsPanel';
 import { useAuth } from '@/context/AuthContext';
 import { useSubscription } from '@/context/SubscriptionContext';
@@ -34,6 +35,7 @@ type DuplicateSource = {
   hasAllowedEmails: boolean;
   hasAccessWindow: boolean;
   hasCohortLabel: boolean;
+  isActive: boolean;
 };
 
 type ChallengeView = 'active' | 'closed' | 'archived' | 'all';
@@ -176,6 +178,7 @@ export default function DashboardPage() {
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<DuplicateSource | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -320,6 +323,7 @@ export default function DashboardPage() {
                 setArchiveTarget(target);
               } : undefined}
               onDuplicate={canCreateChallenge ? setDuplicateSource : undefined}
+              onRename={canCreateChallenge ? setRenameTarget : undefined}
             />
           ))}
         </div>
@@ -362,6 +366,17 @@ export default function DashboardPage() {
             onDuplicated={(challengeId) => {
               setDuplicateSource(null);
               router.push(`/dashboard/challenges/${challengeId}`);
+            }}
+          />
+          <RenameChallengeModal
+            open={Boolean(renameTarget)}
+            source={renameTarget}
+            onClose={() => setRenameTarget(null)}
+            onRenamed={(challengeId, title) => {
+              setChallenges((current) =>
+                current.map((challenge) => challenge.id === challengeId ? { ...challenge, title } : challenge)
+              );
+              setRenameTarget(null);
             }}
           />
         </>
