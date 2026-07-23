@@ -1,6 +1,7 @@
 'use client';
 
 import FPLLogo from '@/components/FPLLogo';
+import PartnershipModal from '@/components/PartnershipModal';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -354,6 +355,8 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] overflow-hidden">
+      <PartnershipModal />
+
       {/* Navigation is rendered by the global Header component in layout.tsx */}
 
       {/* Hero Section */}
@@ -445,57 +448,6 @@ export default function LandingPage() {
               allowFullScreen
               className="absolute inset-0 w-full h-full"
             />
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Anthropic Partnership */}
-      <section className="relative px-6 py-20 border-t border-white/5">
-        <div className="absolute inset-0 bg-dots opacity-20" />
-        <div className="absolute top-1/2 left-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-[100px] pointer-events-none" />
-
-        <motion.div
-          initial={{ opacity: 0, y: 28 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.65 }}
-          className="relative max-w-5xl mx-auto overflow-hidden rounded-3xl border border-white/10 bg-surface"
-        >
-          <div className="grid items-center lg:grid-cols-[0.8fr_1.2fr]">
-            <div className="p-8 sm:p-12 lg:p-14">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                <span className="font-mono text-[11px] font-medium tracking-[0.16em] text-primary uppercase">
-                  Anthropic partnership
-                </span>
-              </div>
-              <h2 className="mb-5 text-4xl leading-tight font-serif italic sm:text-5xl">
-                Building the future of{' '}
-                <span className="gradient-text">AI-native hiring</span>
-              </h2>
-              <p className="max-w-lg text-base leading-relaxed text-neutral-400 sm:text-lg">
-                Vizuara, the creator of ArcEval, is proud to partner with Anthropic. ArcEval
-                helps companies identify engineers who can reason, build, and collaborate
-                effectively with AI.
-              </p>
-            </div>
-
-            <div className="relative min-h-70 self-stretch overflow-hidden border-t border-white/10 bg-black lg:min-h-105 lg:border-t-0 lg:border-l">
-              <video
-                className="absolute inset-0 h-full w-full object-cover"
-                autoPlay
-                muted
-                loop
-                playsInline
-                controls
-                preload="metadata"
-                aria-label="ArcEval and Anthropic partnership animation"
-              >
-                <source src="/anthropic-partnership-animation.mp4" type="video/mp4" />
-                Your browser does not support embedded video.
-              </video>
-              <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-surface/30 via-transparent to-transparent lg:from-surface/20" />
-            </div>
           </div>
         </motion.div>
       </section>
